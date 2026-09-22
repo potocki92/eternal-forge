@@ -1,13 +1,16 @@
 # Eternal Forge — Software Architecture
 
-Status: PARTIALLY IMPLEMENTED (Phase 0) / EVOLVING
+Status: PARTIALLY IMPLEMENTED (Phases 0–1) / EVOLVING
 
 The architectural style, boundaries and package layout described here are
-IMPLEMENTED as of Phase 0. Everything gameplay-related — Game Core simulation,
-domain events, CQRS, offline processing, leaderboards — is PLANNED.
+IMPLEMENTED as of Phase 0. The headless Game Core simulation (HugeNumber, RNG,
+versioned rules, combat, stages, rewards) is IMPLEMENTED as of Phase 1. Domain
+events, CQRS, persistence of gameplay state, offline processing and
+leaderboards are PLANNED.
 
-See "Phase 0 implementation status" at the end of this document for exactly what
-exists today, and `docs/adr/` for the decisions behind it.
+See "Phase 0 implementation status" and "Phase 1 implementation status" at the
+end of this document for exactly what exists today, and `docs/adr/` for the
+decisions behind it.
 
 ---
 
@@ -114,6 +117,12 @@ Must not know about:
 - Prisma,
 - Redis,
 - Supabase.
+
+Status: IMPLEMENTED (Phase 1) — see "Phase 1 implementation status".
+
+Allowed consumers of the pure `HugeNumber` value type (ADR-013): `packages/contracts`
+for the wire schema, and `apps/web` for parsing, comparison and formatting input
+only. Neither may use Game Core to decide a gameplay outcome (ADR-003).
 
 ---
 
@@ -297,6 +306,9 @@ Domain gameplay must not call Math.random directly.
 
 The RNG seed should allow combat reproduction.
 
+Status: IMPLEMENTED (Phase 1). xoshiro128** seeded from a server-chosen string
+through cyrb128; child seeds via `deriveSeed`. See ADR-015.
+
 ---
 
 # Rules version
@@ -310,6 +322,11 @@ a replay created before a balance patch may otherwise produce a different
 result after formulas change.
 
 Exact implementation should remain simple until needed.
+
+Status: IMPLEMENTED (Phase 1). `GAME_RULES_VERSION` names the rule set new
+results are produced under; `getGameRules(version)` returns a frozen, versioned
+rule set, and every simulation result records the version it ran under. See
+ADR-015.
 
 ---
 
@@ -331,6 +348,10 @@ Requirements:
 - formatting separate from arithmetic.
 
 Do not couple UI formatting with mathematical representation.
+
+Status: IMPLEMENTED (Phase 1) per ADR-013: an 18-digit decimal `bigint`
+coefficient and a signed 32-bit exponent, half-to-even rounding, a canonical
+string form and a two-part persistence form. Formatting is not part of it.
 
 ---
 
@@ -546,6 +567,9 @@ What exists in the repository today.
 
 ## NOT IMPLEMENTED
 
+As of Phase 0 — Phase 1 has since implemented HugeNumber, RNG, combat, stages
+and rewards; see "Phase 1 implementation status".
+
 Everything gameplay-related. Specifically, and deliberately: HugeNumber, RNG,
 combat, stages, rewards, items, effects, skills, passives, prestige, offline
 progression, leaderboards, guilds, arena, seasons, authentication, persistence
@@ -562,3 +586,40 @@ leaderboard ordering key were decided in ADR-013 (accepted 2026-09-22): a decima
 `bigint` coefficient with 18 significant digits plus a signed 32-bit exponent,
 a canonical string on the wire, two columns in PostgreSQL and an integer
 projection as the Redis score.
+
+---
+
+# Phase 1 implementation status
+
+What Phase 1 added to `packages/game-core`. It is still the only package with
+gameplay code; no application calls it yet.
+
+## IMPLEMENTED
+
+- `huge-number/` — `HugeNumber` (ADR-013): arithmetic, comparison, integer
+  `pow`, `floor`, canonical `parse`/`toString`, lenient `fromDecimal` for
+  content data, `toParts`/`fromParts` for the future persistence columns.
+- `rng/` — `Rng`, `Xoshiro128StarStar`, `createRng`, `deriveSeed` (ADR-015).
+- `rules/` and `rules-version.ts` — the `GameRules` model, `RULES_V1`, the
+  version registry and `GAME_RULES_VERSION = 1`.
+- `stats/` — `CombatStats`, shared by characters and enemies, with validation
+  and rule caps. Rates are integer basis points.
+- `character/`, `enemy/`, `stage/` — `createCharacter(level)`, `resolveStage`,
+  and the single stage-scaling module that turns archetype data into enemies.
+- `rewards/` — gold and experience per cleared stage.
+- `combat/` — `simulateCombat({ player, enemy, seed, rulesVersion })` returning
+  a `CombatResult` with an ordered event log for a future CombatScene.
+- `simulation/` — `simulateStages`, the headless stage ladder.
+- Guard rails: ESLint and the source-scanning guard test now also ban the
+  implementation-approximated `Math` functions.
+- Tooling outside the shipped build: `bench/` (`pnpm … run bench`) and
+  `scripts/simulate-stages.ts` (`pnpm … run simulate`).
+
+## NOT IMPLEMENTED
+
+Everything that needs persistence, identity or presentation: authentication,
+player state, applying rewards to an account, level-up from experience, items,
+effects, skills, passives, offline progression, prestige, rankings, PvP and any
+combat UI. The Zod wire schema for `HugeNumber`, the PostgreSQL columns and the
+Redis ranking projection are deferred as recorded in ADR-013.
+

@@ -358,6 +358,26 @@ If any answer is uncertain, the feature is not finished.
   never includes the driver's message, which can contain a connection string.
 - `.env` is git-ignored; `.env.example` carries placeholders only.
 
+## IMPLEMENTED (Phase 1) — in Game Core
+
+These are properties of the pure engine. They start protecting players only
+once a server endpoint calls the engine (Phase 2 onwards).
+
+- Deterministic simulation. `simulateCombat` and `simulateStages` are pure
+  functions of `(input, seed, rulesVersion)`, so any result the server stores
+  can be recomputed and checked (ADR-005, ADR-015).
+- Seeds are opaque strings the caller supplies. Game Core has no way to obtain
+  one from a client; keeping seeds server-side is the caller's obligation
+  (ADR-005).
+- Invalid numbers are rejected, never repaired. Negative health, damage or
+  rewards, non-integer rates, `NaN`, `Infinity`, unsafe integers, malformed
+  or out-of-range HugeNumber strings, and unsupported rule versions all throw a
+  typed `GameCoreError`. HugeNumber overflow is an error, never `Infinity`.
+- Work is bounded. A seed is at most 256 characters and decimal input at most
+  512 characters. The attack-speed cap and the time limit bound a combat, and
+  a stage simulation handles at most 10 000 stages per call. A caller cannot
+  make one call do unbounded work.
+
 ## PLANNED
 
 - Authentication, authorization and ownership checks — Phase 2.

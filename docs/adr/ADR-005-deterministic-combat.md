@@ -41,6 +41,10 @@ Simulations are deterministic functions of `(input, seed, rulesVersion)`.
 Phase 0 introduces the constant and the guard rails only; the RNG and the
 simulation land in Phase 1.
 
+Implementation note (2026-09-22): Phase 1 implemented this decision. The
+generator, the seed format, the rule-set registry and the combat timeline are
+recorded in ADR-015.
+
 ## Consequences
 
 - Bug reports reduce to a seed and an input, which makes regression tests cheap
