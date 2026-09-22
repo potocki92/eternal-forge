@@ -84,6 +84,10 @@ describe('game-core package boundary', () => {
   it('never reads ambient randomness, time or globals', () => {
     const forbiddenPatterns: readonly (readonly [RegExp, string])[] = [
       [/Math\s*\.\s*random/u, 'use the deterministic RNG abstraction'],
+      [
+        /Math\s*\.\s*(?:a?(?:sin|cos|tan)h?|atan2|cbrt|exp|expm1|hypot|log(?:10|1p|2)?|pow)\b/u,
+        'engine-approximated Math functions are not deterministic across runtimes',
+      ],
       [/Date\s*\.\s*now/u, 'pass time in explicitly'],
       [/new\s+Date\s*\(\s*\)/u, 'pass time in explicitly'],
       [/\bprocess\s*\.\s*env\b/u, 'game-core must not read configuration'],

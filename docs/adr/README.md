@@ -20,8 +20,9 @@ record; it is never edited away (CLAUDE.md — "ADR").
 | [010](ADR-010-configuration-boundary.md)   | Validated configuration with a server/client split      | Accepted           |
 | [011](ADR-011-prisma-driver-adapter.md)    | Prisma 7 with the `pg` driver adapter                   | Accepted (amended) |
 | [012](ADR-012-deployment-topology.md)      | Deployment topology                                     | Partially accepted |
-| [013](ADR-013-large-number-persistence.md) | Large-number persistence and ranking order              | Proposed           |
+| [013](ADR-013-large-number-persistence.md) | Large-number persistence and ranking order              | Accepted           |
 | [014](ADR-014-code-generation-task.md)     | Code generation as an explicit Turborepo task           | Accepted           |
+| [015](ADR-015-rng-rule-sets-combat-timeline.md) | Deterministic RNG, versioned rule sets and the combat timeline | Accepted |
 
 ## Format
 

@@ -2,15 +2,77 @@
 
 ## Status
 
-Proposed — decision required before Phase 1 completes.
+Accepted — 2026-09-22.
 
-A concrete recommendation was added on 2026-09-22 (section "Recommendation").
-It is **not accepted** and nothing in it is implemented. It becomes the decision
-only after explicit user approval of the open questions listed at its end.
+History, kept because ADRs are append-only:
+
+1. Proposed on 2026-09-22 with three open questions ("Decision (proposed)").
+2. A concrete recommendation with six open questions was added the same day
+   ("Recommendation").
+3. The user approved the recommendation on 2026-09-22 and answered all six
+   questions. The answers are recorded in "Final decision" below. Where the
+   final decision is more specific than the recommendation, the final decision
+   wins.
 
 ## Date
 
 2026-09-22
+
+## Final decision (accepted 2026-09-22)
+
+The recommendation below is adopted as written, with these answers to its open
+questions:
+
+1. **Precision — APPROVED.** 18 significant decimal digits. Integers up to
+   `10^18 − 1` are exact.
+2. **Range — APPROVED.** Signed 32-bit scientific exponent. Overflow above
+   `2^31 − 1` is a deterministic error, never `Infinity`. Values below the
+   smallest exponent flush to zero; there are no subnormals. The exponent
+   `−2^31` is reserved as the zero sentinel.
+3. **Storage — APPROVED.** Two columns, `<name>_coef bigint` and
+   `<name>_exp integer`, with the `CHECK` constraint in section 3. SQL does no
+   arithmetic on these values.
+4. **Package edges — APPROVED, with a boundary.** `packages/contracts` may depend
+   on `packages/game-core` for the pure `HugeNumber` value type and its
+   canonical serialisation. `apps/web` may use only pure representation
+   operations of `HugeNumber`: parsing, serialisation, comparison and the data
+   a formatter needs. This does **not** permit gameplay logic in the frontend.
+   Combat, rewards, progression and the economy stay server-authoritative
+   (ADR-003). Formatting (`12.4K`, `5.28M`) remains presentation code in the UI
+   layer (docs/UI_SYSTEM.md).
+5. **Ledger — APPROVED.** A signed quantity is persisted as a non-negative
+   magnitude plus a direction. The current balance may be stored as state; the
+   ledger is the auditable history. Replaying the ledger through `HugeNumber`
+   is a reconciliation and audit procedure. It is **not** run on ordinary
+   requests.
+6. **Tooling — APPROVED.** `fast-check` is a devDependency of
+   `packages/game-core`.
+
+### Implemented in Phase 1
+
+- The in-memory representation, arithmetic (`add`, `sub`, `mul`, `div`, integer
+  `pow`, `floor`), comparison, the canonical string and the two-part
+  `toParts`/`fromParts` form the persistence columns will map to
+  (`packages/game-core/src/huge-number`).
+- Golden vectors whose expected values come from an independent oracle,
+  Python's `decimal` module at 18 digits with `ROUND_HALF_EVEN`, rather than
+  from the implementation under test. Changing a vector is a rules change.
+- Property tests with `fast-check` against an independent exact reference
+  implementation.
+
+### Deferred to the phase that first needs it
+
+- **Zod wire schema in `packages/contracts`.** Added with the first endpoint
+  that carries a `HugeNumber` (Phase 2 or 3). Game Core already exports
+  `HugeNumber.isCanonical`, so the schema will be a thin wrapper with no
+  duplicated format rules.
+- **PostgreSQL columns and the `ORDER BY` integration test.** Added with the
+  first table that persists a `HugeNumber`.
+- **Redis integer score projection (section 5).** Added with the first
+  `HugeNumber`-valued leaderboard (Phase 10 at the earliest). The formula in
+  section 5 is the accepted design.
+- **Fractional powers, `log10` and `sqrt`.** Added, in integer arithmetic, when
+  the first mechanic needs them.
 
 ## Context
 
@@ -59,7 +121,7 @@ ordering key:
    at the granularity a ladder needs while the authoritative comparison stays
    exact.
 
-## Recommendation (2026-09-22) — pending user approval
+## Recommendation (2026-09-22) — accepted, see "Final decision"
 
 This section refines "Decision (proposed)" above into a concrete design. It does
 not replace it: the three questions and the projection principle still hold. It
@@ -272,7 +334,7 @@ on `Math.log10`, and it is harder to specify and test exactly.
 
 ### Open questions for the user
 
-Approving the recommendation means answering these:
+Answered on 2026-09-22 (see "Final decision"). The questions were:
 
 1. **Precision.** Is 18 significant digits acceptable? That means exact integers
    up to `10^18 − 1`, and a coefficient that fits `bigint` in both JS and
@@ -291,8 +353,24 @@ Approving the recommendation means answering these:
 
 ## Consequences
 
-- Deferring this past Phase 1 means either rewriting `HugeNumber`'s serialisation
-  or migrating every persisted large value later.
+- Every gameplay quantity that can grow without bound is a `HugeNumber`. No
+  module implements its own large-number arithmetic.
+- `HugeNumber` results are bit-identical across Node versions, operating systems
+  and browsers, because they use only `bigint` operations the language specifies
+  exactly. The rounding rule and the `pow` algorithm are part of the game rules:
+  changing either requires a `GAME_RULES_VERSION` bump (ADR-005).
+- Arithmetic is slower than a `float64` mantissa. The Phase 1 benchmark records
+  the cost. Correctness and auditability rank above raw speed.
+- Persisted values are non-negative by constraint. Signed ledger entries store
+  magnitude plus direction.
+- SQL cannot sum these columns. Reconciliation replays the ledger in
+  `HugeNumber`, as an audit procedure and not on ordinary requests.
+- `packages/contracts` and `apps/web` gain an allowed edge to
+  `packages/game-core`, limited to the pure value type. Game Core has no runtime
+  dependencies, so the edge brings no transitive framework or infrastructure
+  code with it.
+- The decision was taken before Phase 1 completed, so no persisted value has to
+  migrate.
 - Any leaderboard over a `HugeNumber` quantity needs the exact value in
   PostgreSQL regardless of which projection is chosen; Redis holds the ordering,
   not the truth. This is consistent with ADR-006.

@@ -79,6 +79,37 @@ The Game Core determines combat outcome.
 
 Visual combat represents that outcome.
 
+## Combat rules v1 — IMPLEMENTED (Phase 1)
+
+The first executable rules, in `packages/game-core` (`RULES_V1`). Mechanics are
+listed here; the numbers are provisional balance and live only in the rule set.
+
+- Both sides start at full health and attack automatically.
+- Stats: Health, Damage, Attack Speed, Critical Chance, Critical Damage. Rates
+  are integer basis points (10 000 = 100%, or one attack per second).
+- A side's `k`-th attack lands at exactly `k / attacksPerSecond` seconds.
+  Simultaneous attacks resolve player first.
+- Each attack rolls once for a critical hit. A critical hit deals
+  `damage × critDamage`.
+- Attack speed and critical chance above their caps have no effect.
+- Health never drops below zero. Combat ends when either side reaches zero.
+- A combat still undecided at the time limit is lost. An enemy the player
+  cannot kill in time is a progression wall.
+- Armor, armor penetration, damage types and effects are PLANNED (Phase 6).
+
+Stage and reward rules v1 — IMPLEMENTED (Phase 1):
+
+- Every stage is an independent combat at full health.
+- Enemy health and damage are `base × growth^(stage − 1) × archetype
+  multiplier`, computed in one scaling module.
+- Every 10th stage is a boss stage with a separate archetype. Bosses have more
+  health and damage but, in v1, no mechanics beyond numbers.
+- Clearing a stage yields gold and experience,
+  `floor(base × growth^(stage − 1))`, multiplied for bosses. A loss yields
+  nothing.
+- A character's health and damage grow per level. Level-ups from experience
+  are PLANNED (Phase 3); Phase 1 only computes the rewards.
+
 ---
 
 # Stage progression

@@ -114,14 +114,19 @@ Do not assume amount always fits a JavaScript integer.
 
 HugeNumber persistence format must be deliberately designed.
 
-Status: UNRESOLVED. This is tracked as ADR-013 and must be decided before Phase 1
-completes, because the in-memory representation constrains both the storage
-format and any ranking key derived from it.
+Status: DECIDED — ADR-013, accepted 2026-09-22. The columns themselves are
+PLANNED and arrive with the first table that persists a HugeNumber.
 
-The recommendation in ADR-013 is not yet accepted. It proposes two columns per
-value, `<name>_coef bigint` and `<name>_exp integer`, non-negative by
-constraint and ordered by `(exp, coef)`. Signed quantities such as ledger
-entries store a magnitude plus a direction.
+Each persisted HugeNumber uses two columns, `<name>_coef bigint` and
+`<name>_exp integer`, non-negative by constraint and ordered by `(exp, coef)`.
+Zero is `coef = 0` with the sentinel `exp = -2147483648`. They map one-to-one to
+`HugeNumber.toParts()` / `HugeNumber.fromParts()` in Game Core, so the
+repository layer never re-implements normalisation.
+
+Signed quantities such as ledger entries store a non-negative magnitude plus a
+direction. The current balance may be stored as state; the ledger is the
+auditable history. SQL cannot sum these columns, so reconciliation replays the
+ledger through HugeNumber — as an audit procedure, not on ordinary requests.
 
 A consequence that is easy to discover too late: Redis sorted sets score members
 with an IEEE-754 double. A leaderboard over a HugeNumber quantity — Boss Damage,

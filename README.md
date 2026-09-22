@@ -5,8 +5,10 @@ theorycrafting, competitive rankings and effectively unlimited growth.
 
 > The repository is named `external-forge`; the product is **Eternal Forge**.
 
-**Current phase: Phase 0 — Foundation.** No gameplay is implemented yet. See
-[`docs/ROADMAP.md`](docs/ROADMAP.md) for what exists and what comes next.
+**Current phase: Phase 1 — Game Core Foundation** (complete, awaiting
+approval). The deterministic, headless simulation exists: `HugeNumber`, a seeded
+RNG, versioned rules, combat, stages and rewards. It has no UI, no persistence
+and no player accounts yet. See [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ---
 
@@ -51,6 +53,8 @@ Then open:
 | `pnpm run db:generate`                          | Regenerates the Prisma client                         |
 | `pnpm run db:migrate`                           | Creates and applies a development migration           |
 | `pnpm --filter @eternal-forge/worker run smoke` | Enqueues a job and waits for the worker to process it |
+| `pnpm --filter @eternal-forge/game-core run simulate -- --level 1 --seed demo` | Headless stage run: `Stage 1 — WIN` … `Stage N — LOSS` |
+| `pnpm --filter @eternal-forge/game-core run bench` | HugeNumber and combat benchmarks (not part of `test` or CI) |
 
 `pnpm run verify` is the same gate CI enforces, minus the end-to-end suite,
 which needs browsers installed (`pnpm --filter @eternal-forge/web exec playwright
@@ -88,7 +92,13 @@ docs/adr/     Architecture Decision Records
   it never decides damage, rewards, drops or rankings
   ([ADR-003](docs/adr/ADR-003-server-authoritative.md)).
 - **`packages/game-core` is framework-free** and deterministic. Lint rules and a
-  guard test enforce it ([ADR-002](docs/adr/ADR-002-game-core.md)).
+  guard test enforce it ([ADR-002](docs/adr/ADR-002-game-core.md)). The same
+  input, seed and rules version always produce the same result
+  ([ADR-005](docs/adr/ADR-005-deterministic-combat.md),
+  [ADR-015](docs/adr/ADR-015-rng-rule-sets-combat-timeline.md)).
+- **Large numbers are `HugeNumber`**: exact decimal arithmetic with 18
+  significant digits, never `float64` for gameplay values
+  ([ADR-013](docs/adr/ADR-013-large-number-persistence.md)).
 - **PostgreSQL is the source of truth.** Redis is cache, locks, live ladders and
   the queue — never the record of anything a player can lose
   ([ADR-004](docs/adr/ADR-004-postgresql.md), [ADR-006](docs/adr/ADR-006-redis.md)).

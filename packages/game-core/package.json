@@ -22,7 +22,9 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "clean": "rm -rf dist .turbo *.tsbuildinfo"
+    "clean": "rm -rf dist .turbo *.tsbuildinfo",
+    "bench": "vitest bench --run",
+    "simulate": "tsx scripts/simulate-stages.ts"
   },
   "dependencies": {},
   "devDependencies": {
@@ -30,6 +32,8 @@
     "@eternal-forge/typescript-config": "workspace:*",
     "@types/node": "catalog:",
     "eslint": "catalog:",
+    "fast-check": "catalog:",
+    "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

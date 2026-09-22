@@ -4,20 +4,16 @@ Last updated: 2026-09-22
 
 # Current Phase
 
-PHASE 0 — FOUNDATION
+PHASE 1 — GAME CORE FOUNDATION
 
 Status:
 
-IN PROGRESS — local re-validation passed; awaiting green GitHub Actions on
-`main`, then user approval
+COMPLETE — awaiting user approval. Validated locally; see "Validation" under
+Phase 1.
 
-Phase 0 was marked COMPLETE on 2026-09-22, but the first CI run on `main` after
-the merge failed (`Lint, typecheck, unit tests, build`). Green CI is a
-completion requirement, so the status was reverted until CI passes on GitHub.
-See "CI re-validation" under Phase 0.
-
-One task could not be executed from the development environment and is carried
-forward; see "Carried forward" under Phase 0.
+Phase 0 is COMPLETE: GitHub Actions is green on `main` and the user approved
+completion on 2026-09-22. One owner-only task (the Vercel deployment) is carried
+forward and does not block Game Core work.
 
 Claude must NOT begin another phase without explicit user approval.
 
@@ -25,7 +21,7 @@ Claude must NOT begin another phase without explicit user approval.
 
 # Phase 0 — Foundation
 
-Status: IN PROGRESS — awaiting green GitHub Actions (one task carried forward)
+Status: COMPLETE — approved by the user on 2026-09-22 (one owner-only task carried forward)
 
 Goal:
 
@@ -63,8 +59,9 @@ Tasks:
 - [x] validate build
 - [x] fix CI on a clean checkout — Prisma generation is a Turborepo task (ADR-014)
 - [x] re-validate locally, including on a fresh clone with no generated client
-- [ ] GitHub Actions green on `main` — PENDING, not yet observed
-- [ ] deploy initial web application to Vercel — CARRIED FORWARD
+- [x] GitHub Actions green on `main` — run #4 on `7d6306b` (merge of PR #2):
+      quality, end-to-end and backing-services smoke all passed
+- [ ] deploy initial web application to Vercel — CARRIED FORWARD, owner action
 
 CI re-validation (2026-09-22):
 
@@ -87,8 +84,12 @@ worker job round trip).
 The self-review removed unused workspace dependencies: `game-core` and `zod`
 from `apps/api`; `game-core`, `database` and `contracts` from `apps/worker`.
 
-Phase 0 is complete only when the CI run for this change is green on GitHub
-**and** the user approves.
+Green CI on GitHub (2026-09-22):
+
+CI run #4 on `main` (commit `7d6306b`, the merge of PR #2) passed every job:
+format check, lint, typecheck, unit tests and build; the Playwright suite; and
+the PostgreSQL/Redis backing-services smoke. The user then approved Phase 0 as
+complete.
 
 Carried forward:
 
@@ -96,58 +97,116 @@ Carried forward:
 which the development environment does not have. Everything needed is in the
 repository: `apps/web/vercel.json`, and the project settings are documented in
 ADR-012. The step is a dashboard action — import the repository, set the root
-directory to `apps/web` — not a code change.
-
-Do NOT implement gameplay.
-
-Completion requires user approval.
+directory to `apps/web` — not a code change. It is the account owner's task and,
+by the user's decision of 2026-09-22, does not block Game Core work.
 
 ---
 
 # Phase 1 — Game Core Foundation
 
-Status: NOT STARTED — blocked on user approval
+Status: COMPLETE — awaiting user approval (2026-09-22)
 
 Goal:
 
 Create the first deterministic headless game simulation.
 
 Entry requirement: ADR-013 (large-number representation, persistence format and
-leaderboard ordering key) must be decided before this phase completes, because
-HugeNumber's representation constrains both storage and every ranking derived
-from it.
+leaderboard ordering key) — MET. Accepted by the user on 2026-09-22 with all six
+open questions answered.
 
-ADR-013 now contains a concrete recommendation with six open questions. It is
-still Proposed and needs the user's answers before `HugeNumber` is implemented.
+Tasks:
 
-Implement:
+- [x] HugeNumber — 18-digit decimal `bigint` coefficient, signed 32-bit
+      exponent, half-to-even rounding, overflow error, underflow to zero (ADR-013)
+- [x] canonical serialization — strict `parse`/`toString`, `toJSON`,
+      `toParts`/`fromParts` for the two persistence columns
+- [x] deterministic RNG — xoshiro128\*\* with string seeds and `deriveSeed` (ADR-015)
+- [x] GAME_RULES_VERSION — bumped 0 → 1; versioned, frozen rule sets with a
+      registry (ADR-015)
+- [x] Character — stats derived from level by rule data
+- [x] Enemy — archetype data scaled to a stage
+- [x] Stats — shared `CombatStats`, validation, rule caps
+- [x] Damage — normal and critical hits
+- [x] Attack Speed — exact rational attack timeline, no floating point
+- [x] Critical Chance — one RNG draw per attack
+- [x] Critical Damage
+- [x] CombatResult — outcome, end reason, duration, per-side summary, event log
+- [x] Stage — unbounded stage numbers, boss every 10th stage
+- [x] Stage Scaling — one centralised module
+- [x] basic Rewards — gold and experience for a win, boss multiplier
+- [x] simulateCombat — `simulateCombat({ player, enemy, seed, rulesVersion })`
+- [x] simulateStages — headless ladder, stops at the first loss
+- [x] CLI demonstration — `pnpm --filter @eternal-forge/game-core run simulate`
+- [x] benchmark — `pnpm --filter @eternal-forge/game-core run bench`, outside
+      `test` and CI
+- [x] purity guard extended — engine-approximated `Math` functions banned by
+      ESLint and by the source-scanning guard test
+- [x] documentation — ADR-013 accepted, ADR-015 added, ARCHITECTURE,
+      GAME_DESIGN, SECURITY, DATABASE, UI_SYSTEM, README updated
 
-- HugeNumber
-- deterministic RNG
-- Character
-- Enemy
-- Stats
-- Damage
-- Attack Speed
-- Critical Chance
-- Critical Damage
-- CombatResult
-- Stage
-- Stage Scaling
-- basic Rewards
-- simulateCombat
-- simulateStages
+Target — MET:
 
-Target:
-
-A CLI/test simulation can produce:
-
-Stage 1 WIN
-Stage 2 WIN
+```
+$ pnpm --filter @eternal-forge/game-core run simulate -- --level 1 --seed demo
+Stage    1      — WIN  (husk,   4.00 s, +5e0 gold, +3e0 xp)
+Stage    2      — WIN  (husk,   4.00 s, +5e0 gold, +3e0 xp)
 ...
-Stage N LOSS
+Stage    9      — WIN  (husk,  10.00 s, +1.2e1 gold, +6e0 xp)
+Stage   10 boss — LOSS (PLAYER_DEFEATED, warden,  11.43 s)
+```
 
-No combat UI yet.
+The same transcript is asserted by `test/simulation.golden.test.ts`.
+
+Validation (2026-09-22, local):
+
+- format check, lint, typecheck, production build: pass (whole workspace).
+- Unit and integration tests: 421 pass across the workspace, 338 of them in
+  `packages/game-core`:
+  - 146 HugeNumber golden vectors. The expected values were produced by
+    Python's `decimal` module (18 digits, `ROUND_HALF_EVEN`), an oracle
+    independent of the implementation.
+  - 17 fast-check properties. They check `add`, `sub`, `mul` and `div` against
+    an independent string-rounding reference, plus round-trips, ordering
+    (including SQL `(exp, coef)` order) and algebraic identities. They run
+    2 000 cases each in CI and passed a one-off run of 100 000 cases each.
+  - xoshiro128\*\* matches the published reference output. Seed hashing matches
+    an independent Python implementation.
+  - Combat timelines verified by hand, and reproducibility: same input and seed
+    give an identical result, checked with `toEqual` and byte-identical JSON.
+  - Golden SHA-256 fingerprints of whole combat and stage-run results. The
+    compiled package under plain Node reproduces the same fingerprints.
+- Playwright end-to-end: pass (mobile and desktop).
+- Game Core purity: no runtime dependencies. No imports outside the package, no
+  `Math.random`, `Date.now`, approximated `Math` functions, `process.env` or
+  globals. ESLint and the guard test both enforce this.
+
+Benchmark (2026-09-22, development container, Node 22, `vitest bench`):
+
+| Operation                                     | Throughput     |
+| --------------------------------------------- | -------------- |
+| `add`, small integers (exact)                 | ~6.4 M ops/s   |
+| `add`, 18 digits, rounding                    | ~3.3 M ops/s   |
+| `add`, exponent 10^6, rounding                | ~2.4 M ops/s   |
+| `mul`, 18 × 18 digits, rounding               | ~2.8 M ops/s   |
+| `compare`, different exponents               | ~11.6 M ops/s  |
+| `compare`, equal exponents                    | ~7.9 M ops/s   |
+| `div`                                         | ~3.6 M ops/s   |
+| `pow(1.12, 100 000)` (stage scaling)          | ~157 k ops/s   |
+| `simulateCombat`, regular stage               | ~200 k/s       |
+| `simulateCombat`, boss to time limit/defeat   | ~84 k/s        |
+| `simulateStages`, 100 stages                  | ~1.9 ms / run  |
+
+Absolute numbers depend on the machine. No optimisation was attempted:
+correctness and determinism came first, and nothing in Phase 1 is
+throughput-bound.
+
+Not in this phase, by design: authentication, player persistence, applying
+rewards to an account, level-up from experience, items, skills, offline
+progress, prestige, rankings, PvP and any combat UI. Deferred from ADR-013: the
+Zod wire schema, the PostgreSQL columns and their `ORDER BY` test, and the
+Redis score projection.
+
+Completion requires user approval. Phase 2 must not start without it.
 
 ---
 

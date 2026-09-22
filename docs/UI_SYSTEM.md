@@ -436,5 +436,11 @@ Formatting is presentation logic and belongs in the UI layer. Arithmetic belongs
 to `HugeNumber` in Game Core.
 
 The two are related by more than style: the representation chosen for
-`HugeNumber` determines what the formatter receives. That decision is open and
-tracked in ADR-013; the formatter is written once it is settled, not before.
+`HugeNumber` determines what the formatter receives. ADR-013 settled it on
+2026-09-22: an 18-digit decimal coefficient and a scientific exponent, exposed by
+`HugeNumber.toParts()`, and a canonical string on the wire. The web application
+may import `HugeNumber` for parsing, comparison and those parts. It must not use
+Game Core to compute gameplay outcomes (ADR-003).
+
+Status: PLANNED. The formatter is written with the first screen that displays a
+HugeNumber (Phase 3), in the UI layer, not in Game Core.
