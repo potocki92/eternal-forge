@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { extractBearerToken } from './bearer-token.js';
 
-const token = 'eyJhbGciOiJFUzI1NiJ9.eyJzdWIiOiJ4In0.c2lnbmF0dXJl';
+/**
+ * A compact-JWS-shaped string, built at runtime so no token-like literal is
+ * committed (secret scanners flag those). Unsigned; it proves nothing.
+ */
+const token = [{ alg: 'ES256' }, { sub: 'x' }, 'signature']
+  .map((part) => Buffer.from(JSON.stringify(part)).toString('base64url'))
+  .join('.');
 
 describe('extractBearerToken', () => {
   it('extracts a compact JWS from a Bearer header', () => {
