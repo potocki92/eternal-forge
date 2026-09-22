@@ -188,9 +188,6 @@ importers:
       '@eternal-forge/database':
         specifier: workspace:*
         version: link:../../packages/database
-      '@eternal-forge/game-core':
-        specifier: workspace:*
-        version: link:../../packages/game-core
       '@nestjs/common':
         specifier: 'catalog:'
         version: 12.0.4(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -215,9 +212,6 @@ importers:
       rxjs:
         specifier: 'catalog:'
         version: 7.8.2
-      zod:
-        specifier: 'catalog:'
-        version: 4.6.5
     devDependencies:
       '@eternal-forge/eslint-config':
         specifier: workspace:*
@@ -340,15 +334,6 @@ importers:
       '@eternal-forge/config':
         specifier: workspace:*
         version: link:../../packages/config
-      '@eternal-forge/contracts':
-        specifier: workspace:*
-        version: link:../../packages/contracts
-      '@eternal-forge/database':
-        specifier: workspace:*
-        version: link:../../packages/database
-      '@eternal-forge/game-core':
-        specifier: workspace:*
-        version: link:../../packages/game-core
       bullmq:
         specifier: 'catalog:'
         version: 6.3.8(ioredis@6.0.0)(pg@8.23.0)
