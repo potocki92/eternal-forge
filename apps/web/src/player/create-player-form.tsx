@@ -20,7 +20,10 @@ const NAME_HINT = `${PLAYER_NAME_MIN_LENGTH}–${PLAYER_NAME_MAX_LENGTH} letters
  * First-run onboarding: name the profile and the main character.
  *
  * Validated with the same shared schema the API applies, so the player sees
- * the real rule before submitting; the API remains the authority.
+ * the real rule before submitting; the API remains the authority. There is
+ * deliberately no native `maxLength`: it counts UTF-16 units before trimming,
+ * so it would block valid names (surrounding spaces, astral-plane scripts)
+ * that the rule — code points after NFC and trimming — accepts.
  */
 export function CreatePlayerForm() {
   const provision = useProvisionPlayer();
@@ -69,7 +72,6 @@ export function CreatePlayerForm() {
           label="Display name"
           name="displayName"
           autoComplete="nickname"
-          maxLength={PLAYER_NAME_MAX_LENGTH}
           hint={NAME_HINT}
           error={fieldErrors.displayName}
           disabled={provision.isPending}
@@ -79,7 +81,6 @@ export function CreatePlayerForm() {
           label="Hero name"
           name="characterName"
           autoComplete="off"
-          maxLength={PLAYER_NAME_MAX_LENGTH}
           error={fieldErrors.characterName}
           disabled={provision.isPending}
           required

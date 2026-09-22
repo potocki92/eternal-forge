@@ -269,10 +269,10 @@ Validation (2026-09-22, local, development container with PostgreSQL 16 and
 Redis 7):
 
 - format check, lint, typecheck, production build: pass (whole workspace).
-- Unit and application tests: 532 pass across the workspace (Phase 1: 421).
+- Unit and application tests: 536 pass across the workspace (Phase 1: 421).
   New or changed: `api` 82 (token verifier with real ES256/HS256 keys and a
   real HTTP key-set server; guard and HTTP authorization with an in-memory
-  repository; use cases), `contracts` 33, `config` 33, `web` 23, `ui` 14.
+  repository; use cases), `contracts` 33, `config` 33, `web` 27, `ui` 14.
   `game-core` 338, unchanged.
 - PostgreSQL integration (`pnpm run test:integration`): 22 pass — provisioning,
   25 concurrent provisioning calls converging on one profile and one character,
