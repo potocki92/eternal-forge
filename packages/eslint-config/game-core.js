@@ -35,6 +35,32 @@ const FORBIDDEN_IMPORTS = [
   },
 ];
 
+/** `Math` functions whose results the specification allows engines to approximate. */
+const APPROXIMATED_MATH_FUNCTIONS = [
+  'acos',
+  'acosh',
+  'asin',
+  'asinh',
+  'atan',
+  'atan2',
+  'atanh',
+  'cbrt',
+  'cos',
+  'cosh',
+  'exp',
+  'expm1',
+  'hypot',
+  'log',
+  'log10',
+  'log1p',
+  'log2',
+  'pow',
+  'sin',
+  'sinh',
+  'tan',
+  'tanh',
+];
+
 export const gameCoreConfig = [
   ...baseConfig,
   {
@@ -54,6 +80,13 @@ export const gameCoreConfig = [
           property: 'now',
           message: 'Pass time in explicitly; game-core must not read the ambient clock.',
         },
+        // ECMAScript lets engines approximate these, so results may differ
+        // between runtimes. Authoritative arithmetic uses HugeNumber (ADR-013).
+        ...APPROXIMATED_MATH_FUNCTIONS.map((property) => ({
+          object: 'Math',
+          property,
+          message: `Math.${property} is implementation-approximated; use HugeNumber or integer arithmetic.`,
+        })),
       ],
       'no-restricted-globals': [
         'error',
