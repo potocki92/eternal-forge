@@ -6,7 +6,7 @@ The architectural style, boundaries and package layout described here are
 IMPLEMENTED as of Phase 0. The headless Game Core simulation (HugeNumber, RNG,
 versioned rules, combat, stages, rewards) is IMPLEMENTED as of Phase 1.
 Authentication, player identity persistence and the first authenticated API are
-IN PROGRESS in Phase 2. Domain events, CQRS infrastructure, persistence of
+IMPLEMENTED in Phase 2 (awaiting approval). Domain events, CQRS infrastructure, persistence of
 gameplay progress, offline processing and leaderboards are PLANNED.
 
 See the "Phase N implementation status" sections at the end of this document
@@ -633,8 +633,7 @@ Redis ranking projection are deferred as recorded in ADR-013.
 
 # Phase 2 implementation status
 
-Status: IN PROGRESS — implemented and validated locally; awaiting green CI and
-user approval. Decisions: ADR-016 (authentication) and ADR-017 (player identity
+Status: IMPLEMENTED — CI green on PR #4; awaiting user approval. Decisions: ADR-016 (authentication) and ADR-017 (player identity
 persistence).
 
 ## Request flow

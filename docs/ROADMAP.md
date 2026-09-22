@@ -8,8 +8,8 @@ PHASE 2 — AUTHENTICATION & PLAYER
 
 Status:
 
-IN PROGRESS — implementation complete and validated locally; awaiting green CI
-on the pull request and user approval. See "Validation" under Phase 2.
+COMPLETE — awaiting user approval. GitHub Actions is green on PR #4 (run
+35783641779 on `1d564ff`). See "Validation" under Phase 2.
 
 Phase 1 is COMPLETE / APPROVED: GitHub Actions is green on `main` (run #6 on
 `a09b2a3`, the merge of PR #3) and the user approved completion on 2026-09-22.
@@ -216,9 +216,8 @@ Approved by the user on 2026-09-22; Phase 2 started on the same date.
 
 # Phase 2 — Authentication & Player
 
-Status: IN PROGRESS — implemented and validated locally (2026-09-22); awaiting
-green CI on the pull request and user approval. Phase 3 must not start without
-that approval.
+Status: COMPLETE — awaiting user approval (2026-09-22). Phase 3 must not start
+without that approval.
 
 Goal:
 
@@ -262,7 +261,14 @@ Tasks:
       drift check, service-role canary check on the browser bundle
 - [x] documentation — ADR-016, ADR-017, ADR-010 amendment, ARCHITECTURE,
       DATABASE, SECURITY, UI_SYSTEM, README
-- [ ] GitHub Actions green on the pull request
+- [x] GitHub Actions green on the pull request — PR #4, run 35783641779 on
+      `1d564ff`: quality (format, lint, typecheck, unit tests, build),
+      PostgreSQL integration and smoke, Playwright end-to-end. The separate
+      GitGuardian app check reports two synthetic, unsigned JWT test fixtures in
+      earlier commits of the branch; they are not credentials, no longer exist in
+      the tree, and the incident needs dismissal by the owner
+- [x] review — Codex finding (name fields' native `maxLength` disagreed with the
+      shared code-point rule) fixed in `1d564ff` with regression tests
 - [ ] user approval
 
 Validation (2026-09-22, local, development container with PostgreSQL 16 and
