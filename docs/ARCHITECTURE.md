@@ -554,8 +554,11 @@ of player state, domain events, CQRS infrastructure, rate limiting and PixiJS.
 ## Open architectural decisions
 
 - Hosting for `apps/api` and `apps/worker` (ADR-012, deferred to Phase 2).
-- `HugeNumber` representation, persistence format and leaderboard ordering key
-  (ADR-013, required before Phase 1 completes). A recommendation is recorded
-  there: a decimal `bigint` coefficient with 18 significant digits plus a 32-bit
-  exponent, a canonical string on the wire, two columns in PostgreSQL and an
-  integer projection as the Redis score. It is not yet accepted.
+
+## Decided since Phase 0
+
+- The `HugeNumber` representation, persistence format and
+leaderboard ordering key were decided in ADR-013 (accepted 2026-09-22): a decimal
+`bigint` coefficient with 18 significant digits plus a signed 32-bit exponent,
+a canonical string on the wire, two columns in PostgreSQL and an integer
+projection as the Redis score.

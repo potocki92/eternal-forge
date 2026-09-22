@@ -4,20 +4,15 @@ Last updated: 2026-09-22
 
 # Current Phase
 
-PHASE 0 — FOUNDATION
+PHASE 1 — GAME CORE FOUNDATION
 
 Status:
 
-IN PROGRESS — local re-validation passed; awaiting green GitHub Actions on
-`main`, then user approval
+IN PROGRESS — started 2026-09-22 after user approval
 
-Phase 0 was marked COMPLETE on 2026-09-22, but the first CI run on `main` after
-the merge failed (`Lint, typecheck, unit tests, build`). Green CI is a
-completion requirement, so the status was reverted until CI passes on GitHub.
-See "CI re-validation" under Phase 0.
-
-One task could not be executed from the development environment and is carried
-forward; see "Carried forward" under Phase 0.
+Phase 0 is COMPLETE: GitHub Actions is green on `main` and the user approved
+completion on 2026-09-22. One owner-only task (the Vercel deployment) is carried
+forward and does not block Game Core work.
 
 Claude must NOT begin another phase without explicit user approval.
 
@@ -25,7 +20,7 @@ Claude must NOT begin another phase without explicit user approval.
 
 # Phase 0 — Foundation
 
-Status: IN PROGRESS — awaiting green GitHub Actions (one task carried forward)
+Status: COMPLETE — approved by the user on 2026-09-22 (one owner-only task carried forward)
 
 Goal:
 
@@ -63,8 +58,9 @@ Tasks:
 - [x] validate build
 - [x] fix CI on a clean checkout — Prisma generation is a Turborepo task (ADR-014)
 - [x] re-validate locally, including on a fresh clone with no generated client
-- [ ] GitHub Actions green on `main` — PENDING, not yet observed
-- [ ] deploy initial web application to Vercel — CARRIED FORWARD
+- [x] GitHub Actions green on `main` — run #4 on `7d6306b` (merge of PR #2):
+      quality, end-to-end and backing-services smoke all passed
+- [ ] deploy initial web application to Vercel — CARRIED FORWARD, owner action
 
 CI re-validation (2026-09-22):
 
@@ -87,8 +83,12 @@ worker job round trip).
 The self-review removed unused workspace dependencies: `game-core` and `zod`
 from `apps/api`; `game-core`, `database` and `contracts` from `apps/worker`.
 
-Phase 0 is complete only when the CI run for this change is green on GitHub
-**and** the user approves.
+Green CI on GitHub (2026-09-22):
+
+CI run #4 on `main` (commit `7d6306b`, the merge of PR #2) passed every job:
+format check, lint, typecheck, unit tests and build; the Playwright suite; and
+the PostgreSQL/Redis backing-services smoke. The user then approved Phase 0 as
+complete.
 
 Carried forward:
 
@@ -96,29 +96,22 @@ Carried forward:
 which the development environment does not have. Everything needed is in the
 repository: `apps/web/vercel.json`, and the project settings are documented in
 ADR-012. The step is a dashboard action — import the repository, set the root
-directory to `apps/web` — not a code change.
-
-Do NOT implement gameplay.
-
-Completion requires user approval.
+directory to `apps/web` — not a code change. It is the account owner's task and,
+by the user's decision of 2026-09-22, does not block Game Core work.
 
 ---
 
 # Phase 1 — Game Core Foundation
 
-Status: NOT STARTED — blocked on user approval
+Status: IN PROGRESS — started 2026-09-22 after user approval
 
 Goal:
 
 Create the first deterministic headless game simulation.
 
 Entry requirement: ADR-013 (large-number representation, persistence format and
-leaderboard ordering key) must be decided before this phase completes, because
-HugeNumber's representation constrains both storage and every ranking derived
-from it.
-
-ADR-013 now contains a concrete recommendation with six open questions. It is
-still Proposed and needs the user's answers before `HugeNumber` is implemented.
+leaderboard ordering key) — MET. Accepted by the user on 2026-09-22 with all six
+open questions answered.
 
 Implement:
 
