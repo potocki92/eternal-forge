@@ -4,6 +4,10 @@
 
 Proposed — decision required before Phase 1 completes.
 
+A concrete recommendation was added on 2026-09-22 (section "Recommendation").
+It is **not accepted** and nothing in it is implemented. It becomes the decision
+only after explicit user approval of the open questions listed at its end.
+
 ## Date
 
 2026-09-22
@@ -54,6 +58,236 @@ ordering key:
    in PostgreSQL and used to break ties on read. A projection preserves ordering
    at the granularity a ladder needs while the authoritative comparison stays
    exact.
+
+## Recommendation (2026-09-22) — pending user approval
+
+This section refines "Decision (proposed)" above into a concrete design. It does
+not replace it: the three questions and the projection principle still hold. It
+changes one expectation. The mantissa should be **decimal and integral**, not a
+binary floating-point number. The reasons are under "Why not a binary
+mantissa" below.
+
+### 1. In-memory representation
+
+`HugeNumber` is an immutable value `sign × c × 10^(e − 17)`, where:
+
+- `c` is a `bigint` coefficient with **P = 18** significant decimal digits,
+  normalised so that `10^17 ≤ c < 10^18`. Zero is the single value `c = 0`.
+- `e` is the **scientific exponent** (`1500` → `e = 3`), bounded to the signed
+  32-bit range. The lowest value, `−2^31`, is reserved for zero.
+- Every operation whose exact result needs more than 18 digits rounds
+  **half-to-even**. The rounding happens once, at the end of the operation, and
+  that rule is part of the game rules (ADR-005).
+- An exponent above the bound is a deterministic overflow error. It is never
+  `Infinity`. An exponent below the bound rounds to zero.
+
+What this gives:
+
+- Every integer up to `10^18 − 1` is exact. That is 100× above
+  `Number.MAX_SAFE_INTEGER` and covers the whole early and mid-game economy with
+  no rounding at all. `1,234,567 + 1` is `1,234,568`, not `1234567.9999999998`.
+- Beyond that, values carry 18 significant digits. A `float64` mantissa carries
+  15–17.
+- Values up to about `10^2,147,483,647`. No realistic stage-scaling curve reaches
+  that.
+- Every operation is `bigint` addition, multiplication, division and comparison
+  with an explicit rounding step. The ECMAScript specification defines all of
+  these exactly. No `Math.*` function is involved.
+
+Values from content data, such as a multiplier of `1.07`, enter as decimal
+strings and are parsed exactly. `HugeNumber.fromNumber` accepts only safe
+integers, so a binary float never becomes an authoritative value by accident.
+
+### 2. Canonical serialisation
+
+The value crosses JSON, logs and fixtures as a **canonical string**. It is never
+a JSON number, and it is never a `bigint`, which JSON cannot carry.
+
+```
+zero      → "0"
+otherwise → -?D(.F)?eX
+  D  one digit 1–9
+  F  0–17 digits, not ending in 0
+  X  0, or a signed integer with no leading zeros and no "+"
+regex     ^(?:0|-?[1-9](?:\.[0-9]{0,16}[1-9])?e(?:0|-?[1-9][0-9]*))$
+examples  1500 → "1.5e3"   5 → "5e0"   0.25 → "2.5e-1"
+          123456789012345678901 → "1.23456789012345679e20"
+```
+
+Each value has exactly one string, so equality of serialised values means
+equality of values. `parse` accepts only the canonical form, and
+`serialize(parse(s)) === s` holds by construction. The form is valid input to
+`Number()`, PostgreSQL `numeric` and most tools, and a person can read it.
+
+`packages/contracts` exposes the wire type as a Zod string schema, with the
+format owned by Game Core. The open questions below cover the new package edge
+this implies.
+
+### 3. PostgreSQL storage
+
+Each persisted `HugeNumber` uses **two columns**. They are the normalised
+representation itself:
+
+```
+<name>_coef  bigint   NOT NULL   -- c, 18 digits, or 0
+<name>_exp   integer  NOT NULL   -- e, or −2147483648 for zero
+CHECK ( (<name>_coef = 0 AND <name>_exp = -2147483648)
+     OR (<name>_coef BETWEEN 100000000000000000 AND 999999999999999999
+         AND <name>_exp > -2147483648) )
+```
+
+- Persisted `HugeNumber` values are **non-negative** by constraint. That covers
+  every resource, damage total and ranking metric. A signed quantity, such as a
+  ledger entry, stores a non-negative magnitude plus a `direction` column. This
+  is the usual ledger practice and needs no signed encoding.
+- **Ordering is `(exp, coef)` lexicographic**, which is exactly numeric order
+  for non-negative values. A plain composite B-tree index serves top-N reads and
+  `ORDER BY … DESC` directly.
+- Prisma maps `bigint` to a JS `bigint` and `integer` to a `number`, both
+  natively. `numeric` and Prisma's `Decimal` are not involved. The repository
+  layer maps the two columns to and from `HugeNumber`, as ADR-004 requires for
+  every persistence model anyway.
+- Storage is 12 bytes and the wire size is constant at any magnitude.
+
+A consequence to accept deliberately: **SQL cannot do arithmetic on these
+columns.** `SUM(amount)` over a ledger is not available. Above `10^18`, no
+bounded-precision format could make it exact anyway: the balance is the result
+of a sequence of rounded operations. Ledger reconciliation therefore replays the
+entries through `HugeNumber` in their recorded order, and determinism makes
+that reproducible. Below `10^18` the replay is exact.
+
+### 4. Comparison and sorting
+
+- In memory, `compare(a, b)` checks sign, then exponent, then coefficient. It
+  is exact and total. `equals` is structural because the representation is
+  canonical.
+- In SQL, ordering is by `(exp, coef)` as above.
+- Ties on the exact value are broken by `achieved_at`, earlier first, then by
+  the player's id. This makes every ranking a strict total order, and the order
+  can be reproduced from PostgreSQL alone.
+
+### 5. Redis leaderboards over a `HugeNumber`
+
+The sorted-set score is an **integer projection** built without a logarithm.
+For a non-negative, integer-valued metric:
+
+```
+score(0) = 0
+score(v) = (e + 1) · 10^6 + floor(c / 10^12)        for v ≥ 1
+```
+
+- It is non-decreasing in `v`. It is exact, because it is an integer below
+  `2^53`: the maximum is about `2.15 × 10^15`. It keeps the exponent and the
+  first six significant digits.
+- The general rule: choose the digit count `D` so that
+  `(E_max + 2) · 10^D < 2^53`. With the full 32-bit exponent, `D = 6`. A ladder
+  whose metric is known to stay below a smaller exponent may use more digits.
+- Two players collide only when they share the exponent and the first six
+  digits. The read path fetches the requested page widened to whole
+  equal-score groups at both boundaries. It then orders those groups by the
+  exact `(exp, coef, achieved_at, id)` from PostgreSQL.
+- Integer-range ladders such as Highest Stage use the raw value as the score.
+- Redis still holds only the ordering, never the value (ADR-006). A lost sorted
+  set is rebuilt from PostgreSQL.
+
+### 6. Determinism across backend, worker and tests
+
+- `HugeNumber` arithmetic uses only `bigint` operations with specified results
+  and a single, explicit rounding rule. It is bit-identical across Node
+  versions, operating systems, Vitest workers and browsers.
+- **Golden vectors.** `packages/game-core` commits a fixture of
+  `(operation, a, b) → canonical result` covering rounding boundaries, carries,
+  exponent overflow and underflow, and zero. If any vector changes, that is a
+  rules change. It requires a `GAME_RULES_VERSION` bump and is reviewed as one.
+- **Invariant tests:**
+  - canonical round-trip;
+  - `compare` agrees with `(exp, coef)` ordering;
+  - the Redis score never contradicts `compare`;
+  - the usual algebraic properties, where rounding permits them.
+
+  A property-testing library (`fast-check`) would be a new devDependency and is
+  listed below for approval.
+- **One integration test against real PostgreSQL** in the backing-services job.
+  It writes values across the whole range and asserts that `ORDER BY` agrees
+  with `compare`.
+- Integer powers use square-and-multiply with a fixed rounding schedule. That
+  algorithm is part of the rules. Fractional powers, `log10` and `sqrt` are
+  implemented deterministically in integer arithmetic when the first mechanic
+  needs them, not before. Where their result is authoritative, they never
+  delegate to `Math.pow`, `Math.log10` or `Math.exp`: the specification allows
+  those to be implementation-approximated.
+- A Phase 1 micro-benchmark records throughput for `add` and `mul`. If it falls
+  short of what the simulation needs, the fix is an optimisation inside the
+  representation, such as skipping renormalisation on hot paths. The semantics
+  above do not change.
+
+### Why not a binary mantissa
+
+A normalised `float64` mantissa with an integer exponent is the idle-genre
+default, as in `break_infinity.js`. It is fast. It is the wrong trade here, for
+three reasons:
+
+- It makes small integers inexact once normalised, and those are the values
+  players read most closely.
+- It makes a ledger disagree with the balance it records.
+- Its normalisation step relies on `Math.log10` and `Math.pow`, which the
+  language does not require to be identical across engines or versions.
+
+The project ranks correctness and auditability above raw speed (CLAUDE.md —
+"Development philosophy").
+
+### Alternatives considered for this recommendation
+
+**`decimal.js` wrapped behind `HugeNumber`.** Viable, and the fallback if
+hand-written transcendental functions prove costly. It is deterministic and
+already ships deterministic `ln`, `exp` and `pow`. It is not preferred for three
+reasons:
+
+- It would be Game Core's first runtime dependency.
+- Its precision and rounding are global mutable configuration, isolated only
+  through `Decimal.clone()`.
+- Its arbitrary-length digit arrays are more machinery than an 18-digit
+  coefficient needs.
+
+The public API, serialisation and storage above do not depend on this choice.
+
+**PostgreSQL `numeric` in a single column.** Exact, orderable and summable in
+SQL. The costs:
+
+- A hard ceiling near `10^131072`.
+- A text wire format that grows linearly with the exponent. `1e100000` is
+  returned as a 100,001-character string on every read.
+- Conversion through Prisma's `Decimal`.
+
+This is the right choice only if SQL-side arithmetic is judged worth those
+costs.
+
+**A lexicographically sortable text encoding.** Rejected. Its correctness
+depends on collation (`COLLATE "C"`) and on fixed-width exponent encoding
+surviving every future change, and it supports no arithmetic.
+
+**`log10(value)` as a `double` score.** Rejected in favour of the integer
+projection. It has about the same collision rate at large exponents, it depends
+on `Math.log10`, and it is harder to specify and test exactly.
+
+### Open questions for the user
+
+Approving the recommendation means answering these:
+
+1. **Precision.** Is 18 significant digits acceptable? That means exact integers
+   up to `10^18 − 1`, and a coefficient that fits `bigint` in both JS and
+   PostgreSQL.
+2. **Range.** Is a 32-bit scientific exponent acceptable, meaning values up to
+   about `10^2,147,483,647`, with overflow as a hard error?
+3. **Storage.** Two columns (`bigint` + `integer`), rather than `numeric`,
+   accepting that SQL cannot do arithmetic on these values?
+4. **Package edges.** May `packages/contracts` and `apps/web` depend on
+   `packages/game-core` for the value type? Game Core has no runtime
+   dependencies, so nothing leaks. The alternative is duplicating the canonical
+   regex, guarded by a cross-check test.
+5. **Ledger.** Store a non-negative magnitude plus a direction, and reconcile by
+   deterministic replay rather than `SUM`?
+6. **Tooling.** Add `fast-check` as a devDependency of `packages/game-core`?
 
 ## Consequences
 

@@ -22,9 +22,9 @@
     "prisma"
   ],
   "scripts": {
-    "build": "pnpm run db:generate && tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json",
     "dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
-    "typecheck": "pnpm run db:generate && tsc --noEmit",
+    "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
     "clean": "rm -rf dist generated .turbo *.tsbuildinfo",

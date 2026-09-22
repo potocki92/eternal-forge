@@ -118,6 +118,11 @@ Status: UNRESOLVED. This is tracked as ADR-013 and must be decided before Phase 
 completes, because the in-memory representation constrains both the storage
 format and any ranking key derived from it.
 
+The recommendation in ADR-013 is not yet accepted. It proposes two columns per
+value, `<name>_coef bigint` and `<name>_exp integer`, non-negative by
+constraint and ordered by `(exp, coef)`. Signed quantities such as ledger
+entries store a magnitude plus a direction.
+
 A consequence that is easy to discover too late: Redis sorted sets score members
 with an IEEE-754 double. A leaderboard over a HugeNumber quantity — Boss Damage,
 for example — therefore cannot use the raw value as a sorted-set score without

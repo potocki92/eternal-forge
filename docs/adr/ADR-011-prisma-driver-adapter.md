@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted
+Accepted. The consequence on where `prisma generate` runs is amended by
+[ADR-014](ADR-014-code-generation-task.md).
 
 ## Date
 
@@ -51,6 +52,9 @@ resolvable from the generated directory unless the owning package declares it.
 - `prisma generate` runs as part of `build` and `typecheck` in
   `packages/database`, because the generated client is a compile-time
   dependency of the package's own sources.
+  _Amended by ADR-014:_ this left `lint` and `test` without the generated client
+  on a clean checkout. Generation is now a Turborepo task that every task
+  reading the package's sources depends on.
 - The generated client is CommonJS and is consumed from ESM through Node's
   interop. This was verified to resolve at runtime, not just to typecheck.
 

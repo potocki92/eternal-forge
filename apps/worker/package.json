@@ -18,9 +18,6 @@
   },
   "dependencies": {
     "@eternal-forge/config": "workspace:*",
-    "@eternal-forge/contracts": "workspace:*",
-    "@eternal-forge/database": "workspace:*",
-    "@eternal-forge/game-core": "workspace:*",
     "bullmq": "catalog:",
     "ioredis": "catalog:",
     "pino": "catalog:",
