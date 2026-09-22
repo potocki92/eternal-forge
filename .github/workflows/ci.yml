@@ -50,7 +50,35 @@ jobs:
   e2e:
     name: End-to-end (Playwright)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
+
+    # The suite runs the production web build against the real API and
+    # PostgreSQL. Only the identity provider is a test double
+    # (apps/web/e2e/support/fake-supabase-auth.ts), so no Supabase project or
+    # credential is involved (ADR-016).
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: forge
+          POSTGRES_PASSWORD: forge
+          POSTGRES_DB: eternal_forge
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U forge -d eternal_forge"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://forge:forge@127.0.0.1:5432/eternal_forge
+      DIRECT_URL: postgresql://forge:forge@127.0.0.1:5432/eternal_forge
+      REDIS_URL: redis://127.0.0.1:6379
+
     steps:
       - uses: actions/checkout@v5
 
@@ -68,7 +96,23 @@ jobs:
         run: pnpm --filter @eternal-forge/web exec playwright install --with-deps chromium
 
       - name: Build
+        # A canary service-role key is present during the build. The next step
+        # proves it — and the names of privileged variables — never reach the
+        # browser bundle (docs/SECURITY.md — "Supabase").
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ci-canary-service-role-key-must-never-ship
         run: pnpm run build
+
+      - name: Verify no server secret reached the browser bundle
+        run: |
+          if grep -rlE 'ci-canary-service-role-key-must-never-ship|SUPABASE_SERVICE_ROLE_KEY|SUPABASE_JWT_SECRET' apps/web/.next/static; then
+            echo "A server-only secret or variable name was found in the browser bundle."
+            exit 1
+          fi
+          echo "Browser bundle is free of server-only configuration."
+
+      - name: Apply database migrations
+        run: pnpm run db:deploy
 
       - name: Run end-to-end suite
         run: pnpm run test:e2e
@@ -82,13 +126,14 @@ jobs:
           retention-days: 7
 
   integration-smoke:
-    name: Backing services smoke
+    name: PostgreSQL integration and backing services smoke
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
-    # Proves the API and the worker actually reach PostgreSQL and Redis. Unit
-    # tests deliberately fake both, so without this job a broken connection
-    # would not be caught until deployment.
+    # Runs the repository and API integration tests against a real PostgreSQL,
+    # then proves the built API and worker actually reach PostgreSQL and Redis.
+    # Unit tests deliberately fake both, so without this job a broken query or
+    # connection would not be caught until deployment.
     services:
       postgres:
         image: postgres:16-alpine
@@ -112,6 +157,8 @@ jobs:
       DIRECT_URL: postgresql://forge:forge@127.0.0.1:5432/eternal_forge
       REDIS_URL: redis://127.0.0.1:6379
       API_PORT: '3001'
+      # Only the issuer and key-set location; nothing here is a credential.
+      SUPABASE_URL: https://ci-placeholder.supabase.co
 
     steps:
       - uses: actions/checkout@v5
@@ -128,6 +175,17 @@ jobs:
 
       - name: Validate Prisma schema
         run: pnpm --filter @eternal-forge/database run db:validate
+
+      - name: Apply database migrations
+        run: pnpm run db:deploy
+
+      - name: Check migrations match the schema
+        run: |
+          pnpm --filter @eternal-forge/database exec prisma migrate diff \
+            --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+
+      - name: PostgreSQL integration tests
+        run: pnpm run test:integration
 
       - name: Build
         run: pnpm run build

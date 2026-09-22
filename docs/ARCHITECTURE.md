@@ -1,16 +1,16 @@
 # Eternal Forge — Software Architecture
 
-Status: PARTIALLY IMPLEMENTED (Phases 0–1) / EVOLVING
+Status: PARTIALLY IMPLEMENTED (Phases 0–2) / EVOLVING
 
 The architectural style, boundaries and package layout described here are
 IMPLEMENTED as of Phase 0. The headless Game Core simulation (HugeNumber, RNG,
-versioned rules, combat, stages, rewards) is IMPLEMENTED as of Phase 1. Domain
-events, CQRS, persistence of gameplay state, offline processing and
-leaderboards are PLANNED.
+versioned rules, combat, stages, rewards) is IMPLEMENTED as of Phase 1.
+Authentication, player identity persistence and the first authenticated API are
+IN PROGRESS in Phase 2. Domain events, CQRS infrastructure, persistence of
+gameplay progress, offline processing and leaderboards are PLANNED.
 
-See "Phase 0 implementation status" and "Phase 1 implementation status" at the
-end of this document for exactly what exists today, and `docs/adr/` for the
-decisions behind it.
+See the "Phase N implementation status" sections at the end of this document
+for exactly what exists today, and `docs/adr/` for the decisions behind it.
 
 ---
 
@@ -139,6 +139,10 @@ InventoryResponse
 CombatResponse
 LeaderboardResponse
 
+Status: IMPLEMENTED for health, the shared API error body (`ApiErrorResponse`
+with a machine-readable `code`), the player-name rule and the player contracts
+(`PlayerStateResponse`, `ProvisionPlayerRequest`, `CharacterResponse`).
+
 ---
 
 # packages/database
@@ -162,8 +166,9 @@ settings; each application constructs its own. See ADR-006.
 
 Do not leak Prisma types into Domain.
 
-Status: IMPLEMENTED as infrastructure. The Prisma schema declares no models yet;
-tables arrive with the phase that needs them. See ADR-011.
+Status: IMPLEMENTED. Phase 2 added the first models, `Profile` and
+`Character`, with a versioned migration (ADR-011, ADR-017). Further tables
+arrive with the phase that needs them.
 
 ---
 
@@ -173,8 +178,8 @@ Reusable application UI.
 
 Does not contain core gameplay rules.
 
-Status: IMPLEMENTED — design tokens plus the `Button`, `Panel` and
-`StatusBadge` primitives. Further components are created by the feature that
+Status: IMPLEMENTED — design tokens plus the `Alert`, `Button`, `Panel`,
+`Skeleton`, `StatusBadge` and `TextField` primitives. Further components are created by the feature that
 needs them (docs/UI_SYSTEM.md).
 
 Unlike the other packages, `packages/ui` exports TypeScript source rather than a
@@ -623,3 +628,86 @@ effects, skills, passives, offline progression, prestige, rankings, PvP and any
 combat UI. The Zod wire schema for `HugeNumber`, the PostgreSQL columns and the
 Redis ranking projection are deferred as recorded in ADR-013.
 
+
+---
+
+# Phase 2 implementation status
+
+Status: IN PROGRESS — implemented and validated locally; awaiting green CI and
+user approval. Decisions: ADR-016 (authentication) and ADR-017 (player identity
+persistence).
+
+## Request flow
+
+```
+Browser ──(email/password)──> Supabase Auth ──> access token (JWT)
+   │
+   │  Authorization: Bearer <access token>
+   v
+apps/api
+  AuthGuard (global, default-deny) ── AccessTokenVerifier port
+                                      └─ JoseAccessTokenVerifier (JWKS / legacy HS256)
+  PlayerController (thin: validate with shared Zod contract, call use case, map)
+  GetPlayerStateUseCase / ProvisionPlayerUseCase / GetOwnedCharacterUseCase
+  PlayerRepository port
+  PrismaPlayerRepository ──> PostgreSQL (profiles, characters; RLS enabled)
+```
+
+## Module layout (apps/api)
+
+```
+common/clock/        Clock port and a global ClockModule
+common/http/         ApiException, AllExceptionsFilter, ZodValidationPipe, request ids
+auth/
+  application/       AuthenticatedIdentity, AccessTokenVerifier port
+  infrastructure/    JoseAccessTokenVerifier
+  presentation/      AuthGuard, @Public(), @CurrentIdentity(), bearer extraction
+player/
+  domain/            Profile, Character, Player, PlayerName (value object)
+  application/       use cases, PlayerRepository port
+  infrastructure/    PrismaPlayerRepository
+  presentation/      PlayerController, domain → contract mapping
+```
+
+## Endpoints
+
+| Method | Path                               | Auth     | Result                                                              |
+| ------ | ---------------------------------- | -------- | ------------------------------------------------------------------- |
+| GET    | `/health`, `/health/ready`         | public   | unchanged                                                           |
+| GET    | `/player/state`                    | required | 200 `PlayerStateResponse`, or 404 `PLAYER_NOT_PROVISIONED`          |
+| POST   | `/player`                          | required | idempotent provisioning; 201 created, 200 already existed           |
+| GET    | `/player/characters/:characterId`  | required | 200 own character; 404 `NOT_FOUND` for missing *or someone else's* |
+
+Every error body follows `ApiErrorResponse`: `statusCode`, `code`, `error`,
+`requestId`, optional `issues`. 401 responses carry an RFC 6750
+`WWW-Authenticate` challenge; 503 `AUTH_UNAVAILABLE` means the signing keys could
+not be fetched, not that the session is invalid.
+
+## Web application
+
+- `AuthProvider` (React context) mirrors the Supabase session: loading,
+  authenticated (user id) or unauthenticated (with a reason). It clears the whole
+  TanStack Query cache whenever the user changes or signs out.
+- `authorizedJson` attaches the bearer token, refreshes once on 401 and ends the
+  session locally if the API still refuses.
+- Routes: `/login`, `/register` (guest only), `/play` (requires sign-in; player
+  shell or first-run "Name your hero" onboarding). Route guards are navigation,
+  not security.
+
+## Tests
+
+- Unit and application tests run without services.
+- `apps/api` HTTP tests run the real guard, verifier, controller and filter
+  with an in-memory repository.
+- `apps/api/test-integration` runs the Prisma repository and the full HTTP path
+  against a real PostgreSQL (`pnpm run test:integration`), including
+  concurrency, constraints and Row Level Security.
+- Playwright runs the production web build against the real API and PostgreSQL,
+  with a GoTrue test double as identity provider (ADR-016).
+
+## NOT IMPLEMENTED
+
+Gameplay persistence (experience, gold, stage progression), level-up, combat UI,
+rate limiting, account deletion, email change and password reset screens,
+display-name uniqueness, and a production host for the API (ADR-012 remains
+open).

@@ -1,6 +1,6 @@
 # Eternal Forge — Security Model
 
-Status: PARTIALLY IMPLEMENTED (Phase 0) / EVOLVING
+Status: PARTIALLY IMPLEMENTED (Phases 0–2) / EVOLVING
 
 The principles below are binding from the first line of gameplay code. A
 per-control implementation status is listed at the end of this document.
@@ -378,14 +378,84 @@ once a server endpoint calls the engine (Phase 2 onwards).
   a stage simulation handles at most 10 000 stages per call. A caller cannot
   make one call do unbounded work.
 
+## IMPLEMENTED (Phase 2) — authentication and player identity
+
+See ADR-016 and ADR-017.
+
+- **Identity from verified tokens only.** The API verifies Supabase access
+  tokens locally: signature, algorithm allow-list, issuer, audience, expiry,
+  UUID subject, `role = authenticated`, not anonymous. No endpoint accepts a
+  player, profile, character or auth-user id as proof of identity; the
+  provisioning body is a strict schema that rejects extra fields.
+- **Default deny.** A global guard protects every route; only the health
+  endpoints are `@Public()`.
+- **No algorithm confusion.** HS256 is refused unless a legacy secret is
+  configured; `none` is never accepted. The public anon key and the
+  service-role key are refused by the role check.
+- **Least privilege.** No Phase 2 process holds the service-role key. The API
+  needs only the project URL, from which it derives the issuer and the public
+  key set. `SUPABASE_URL` must be `https` in production, because signing keys
+  are fetched from it.
+- **Service-role key never in the browser.** Server-only configuration schemas
+  live in a module the client entry point cannot reach. CI builds the web
+  application with a canary service-role key present and fails if the value, or
+  the names of privileged variables, appear anywhere in the browser bundle.
+- **Ownership in SQL.** The repository port has no by-id-only reads; character
+  lookup filters on id *and* owner. Another player's character is
+  indistinguishable from a missing one (404), so ids cannot be probed.
+- **Row Level Security** enabled on `profiles` and `characters` with no
+  policies (deny by default); `anon`/`authenticated` privileges revoked on
+  Supabase. Verified by an integration test that queries as a non-owner role.
+- **Input validation** with the shared Zod contracts at the controller; the
+  domain re-validates names; PostgreSQL CHECK constraints re-validate lengths
+  and ranges. Validation errors report field paths and rule messages, never the
+  submitted value.
+- **Transport of tokens.** `Authorization: Bearer` only — never query strings
+  (logs, history) or cookies (CSRF). Oversized or malformed headers are
+  rejected before verification.
+- **Errors.** 401s carry an RFC 6750 challenge and a generic message. A key-set
+  outage returns 503 `AUTH_UNAVAILABLE` instead of logging players out. Only
+  messages the API writes for players (`ApiException`) reach the client; every
+  other error — including framework errors such as a JSON parse failure, which
+  would quote the request body — is reduced to the standard status phrase. The
+  exception filter logs the request *path*, not the URL, so query strings never
+  reach logs.
+- **Logging.** Redaction now also covers `token`, `access_token` and
+  `refresh_token` fields; the guard logs rejection reasons, never tokens.
+- **Provisioning** is transactional and idempotent under concurrency (unique
+  constraints + `ON CONFLICT DO NOTHING`), verified against PostgreSQL.
+- **Client session hygiene.** The query cache is keyed by user id and cleared
+  on every change of user and on sign-out, before the network call completes.
+
+## Standing review answers — Phase 2
+
+- Can the client fake it? Identity comes only from a signature-verified token.
+- Can it be replayed? A captured token works until it expires (bounded by the
+  access-token lifetime); provisioning replays are idempotent.
+- Can it be called concurrently? Yes; provisioning converges on one player.
+- Can rewards be duplicated? No rewards exist in Phase 2.
+- Can another player's resource be targeted? No; ownership is part of the query.
+- Can invalid numeric values enter? Level/stage are server-set, CHECK-constrained,
+  and bounded to safe integers on read.
+- Can the operation leave partial state? Provisioning is one transaction; a
+  profile without a character is repaired by the next call.
+
+## Known limitations
+
+- **Revocation lag:** after sign-out, the access token remains valid at the API
+  until it expires. The refresh token is revoked immediately.
+- **Tokens in `localStorage`:** an XSS flaw would expose them. A strict Content
+  Security Policy is not yet configured.
+- **No rate limiting** on API endpoints yet. Supabase Auth applies its own limits
+  to sign-in and sign-up.
+
 ## PLANNED
 
-- Authentication, authorization and ownership checks — Phase 2.
-- Input validation on gameplay endpoints via shared Zod contracts — Phase 2
-  onwards. Phase 0 has no request bodies.
-- Rate limiting — Phase 2 onwards, per endpoint semantics.
+- Rate limiting — per endpoint semantics, Redis-backed so it holds across API
+  replicas. First candidates: provisioning and every future economy command.
+- Content Security Policy and further browser hardening headers for `apps/web`.
 - Economy transactionality, idempotency keys and audit trail — Phase 4 onwards.
-- Row Level Security policies — with the first tables, Phase 2.
+- Account deletion covering profile, characters and all future player data.
 - Automated dependency and secret scanning in CI — Phase 20 at the latest.
 
 ## Standing review questions
