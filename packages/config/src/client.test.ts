@@ -6,6 +6,13 @@ describe('publicEnvSchema', () => {
     expect(parsePublicEnv({}).NEXT_PUBLIC_API_URL).toBe('http://localhost:3001');
   });
 
+  it('defaults Supabase to the local auth test double', () => {
+    expect(parsePublicEnv({})).toMatchObject({
+      NEXT_PUBLIC_SUPABASE_URL: 'http://127.0.0.1:54329',
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: 'local-development-anon-key',
+    });
+  });
+
   it('rejects a malformed API URL', () => {
     expect(publicEnvSchema.safeParse({ NEXT_PUBLIC_API_URL: 'localhost:3001' }).success).toBe(
       false,

@@ -5,6 +5,7 @@ import { EnvValidationError } from './env-error.js';
 const validApiEnv = {
   DATABASE_URL: 'postgresql://forge:forge@localhost:5432/eternal_forge',
   REDIS_URL: 'redis://localhost:6379',
+  SUPABASE_URL: 'https://project.supabase.co',
 };
 
 describe('apiEnvSchema', () => {
@@ -24,9 +25,46 @@ describe('apiEnvSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('does not accept Supabase service credentials as part of process startup', () => {
-    // Supabase lands in Phase 2; the API must boot without those variables.
+  it('never requires the service-role key: tokens are verified with public keys', () => {
     expect(Object.keys(apiEnvSchema.shape)).not.toContain('SUPABASE_SERVICE_ROLE_KEY');
+  });
+
+  it('requires SUPABASE_URL to know which issuer to trust', () => {
+    const { SUPABASE_URL: _omitted, ...withoutSupabase } = validApiEnv;
+
+    expect(apiEnvSchema.safeParse(withoutSupabase).success).toBe(false);
+  });
+
+  it('defaults the expected audience and leaves the legacy secret unset', () => {
+    const env = apiEnvSchema.parse(validApiEnv);
+
+    expect(env.AUTH_JWT_AUDIENCE).toBe('authenticated');
+    expect(env.SUPABASE_JWT_SECRET).toBeUndefined();
+  });
+
+  it('rejects a short legacy JWT secret', () => {
+    const result = apiEnvSchema.safeParse({ ...validApiEnv, SUPABASE_JWT_SECRET: 'short' });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('refuses a plain-HTTP key source in production', () => {
+    const result = apiEnvSchema.safeParse({
+      ...validApiEnv,
+      NODE_ENV: 'production',
+      SUPABASE_URL: 'http://auth.internal:9999',
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('allows a plain-HTTP key source for local development', () => {
+    const result = apiEnvSchema.safeParse({
+      ...validApiEnv,
+      SUPABASE_URL: 'http://127.0.0.1:54329',
+    });
+
+    expect(result.success).toBe(true);
   });
 });
 

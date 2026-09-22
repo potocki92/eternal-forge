@@ -1,7 +1,16 @@
 import { z } from 'zod';
 import { parseEnv, type EnvSource } from './parse.js';
 import { urlWithProtocol } from './schemas/primitives.js';
+import { secret } from './schemas/primitives.js';
 import { supabasePublicEnvSchema } from './schemas/supabase.js';
+
+/**
+ * Local-development defaults point at the Supabase Auth test double
+ * (`pnpm --filter @eternal-forge/web run auth:stub`). A deployment against a
+ * real Supabase project sets both values; the anon key is public by design.
+ */
+export const LOCAL_SUPABASE_URL = 'http://127.0.0.1:54329';
+export const LOCAL_SUPABASE_ANON_KEY = 'local-development-anon-key';
 
 /**
  * Browser-visible configuration for apps/web.
@@ -12,6 +21,11 @@ import { supabasePublicEnvSchema } from './schemas/supabase.js';
  */
 export const publicEnvSchema = z.object({
   NEXT_PUBLIC_API_URL: urlWithProtocol(['http:', 'https:'], 'API').default('http://localhost:3001'),
+  NEXT_PUBLIC_SUPABASE_URL: urlWithProtocol(['http:', 'https:'], 'Supabase').default(
+    LOCAL_SUPABASE_URL,
+  ),
+  /** The anon (publishable) key. Never the service-role key. */
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: secret().default(LOCAL_SUPABASE_ANON_KEY),
 });
 
 export type PublicEnv = z.infer<typeof publicEnvSchema>;
