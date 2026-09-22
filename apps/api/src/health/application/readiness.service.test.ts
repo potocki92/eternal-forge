@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ProbeTimeoutError, ReadinessService } from './readiness.service.js';
-import type { Clock } from './ports/clock.port.js';
+import type { Clock } from '../../common/clock/clock.port.js';
 import type { DependencyProbe } from './ports/dependency-probe.port.js';
 
 const VERSION = '1.2.3';

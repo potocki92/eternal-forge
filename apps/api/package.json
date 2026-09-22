@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "license": "UNLICENSED",
-  "description": "Eternal Forge HTTP API \u2014 server-authoritative application layer.",
+  "description": "Eternal Forge HTTP API — server-authoritative application layer.",
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "clean": "rm -rf dist .turbo *.tsbuildinfo coverage"
+    "clean": "rm -rf dist .turbo *.tsbuildinfo coverage",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
     "@eternal-forge/config": "workspace:*",
@@ -24,9 +25,11 @@
     "@nestjs/platform-express": "catalog:",
     "helmet": "catalog:",
     "ioredis": "catalog:",
+    "jose": "catalog:",
     "pino": "catalog:",
     "reflect-metadata": "catalog:",
-    "rxjs": "catalog:"
+    "rxjs": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@eternal-forge/eslint-config": "workspace:*",

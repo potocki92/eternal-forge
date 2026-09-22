@@ -3,7 +3,7 @@
   "ui": "stream",
   "globalDependencies": [".env.example"],
   "globalEnv": ["NODE_ENV", "CI"],
-  "//": "Turborepo runs tasks in strict environment mode. Variables tasks need at runtime but that must not affect the cache hash are passed through explicitly.",
+  "//": "Turborepo runs tasks in strict environment mode. Variables tasks need at runtime but that must not affect the cache hash are passed through explicitly. SUPABASE_SERVICE_ROLE_KEY is passed through so CI can prove that a value present at build time never reaches the browser bundle.",
   "globalPassThroughEnv": [
     "DATABASE_URL",
     "DIRECT_URL",
@@ -13,7 +13,14 @@
     "PLAYWRIGHT_BROWSERS_PATH",
     "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD",
     "NEXT_TELEMETRY_DISABLED",
-    "TURBO_TELEMETRY_DISABLED"
+    "TURBO_TELEMETRY_DISABLED",
+    "SUPABASE_URL",
+    "SUPABASE_JWT_SECRET",
+    "AUTH_JWT_AUDIENCE",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "FAKE_AUTH_PORT",
+    "FAKE_AUTH_HOST",
+    "FAKE_AUTH_ACCESS_TOKEN_TTL"
   ],
   "tasks": {
     "db:generate": {
@@ -37,8 +44,12 @@
       "dependsOn": ["^build", "db:generate"],
       "outputs": ["coverage/**"]
     },
+    "test:integration": {
+      "dependsOn": ["^build", "db:generate"],
+      "cache": false
+    },
     "test:e2e": {
-      "dependsOn": ["^build", "build"],
+      "dependsOn": ["^build", "build", "@eternal-forge/api#build"],
       "outputs": ["playwright-report/**", "test-results/**"]
     },
     "dev": {
