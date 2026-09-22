@@ -1,0 +1,22 @@
+// Eternal Forge — Prisma schema
+//
+// PostgreSQL is the persistent source of truth (docs/DATABASE.md). Tables are
+// introduced by the phase that needs them; Phase 0 deliberately declares no
+// models so the repository carries no speculative schema.
+//
+// Domain entities are NOT Prisma models. Prisma models are persistence models,
+// mapped to domain entities by repository implementations (CLAUDE.md —
+// "Persistence").
+
+generator client {
+  provider        = "prisma-client-js"
+  output          = "../generated/prisma"
+  previewFeatures = []
+}
+
+// Connection strings live in `prisma.config.ts` (Migrate/Introspect) and are
+// supplied to the runtime client through a driver adapter — see
+// `src/prisma/prisma-client.ts`.
+datasource db {
+  provider = "postgresql"
+}

@@ -1,6 +1,10 @@
 # Eternal Forge — Database Design
 
-Status: EARLY DESIGN
+Status: EARLY DESIGN — infrastructure IMPLEMENTED (Phase 0), schema PLANNED
+
+The Prisma schema currently declares **no models**. That is deliberate: tables
+are created by the phase that requires them, so the repository carries no
+speculative schema. Everything under "Planned domains" below is PLANNED.
 
 Database:
 
@@ -12,7 +16,12 @@ Supabase PostgreSQL.
 
 ORM:
 
-Prisma.
+Prisma 7.
+
+Connection strings are supplied through `prisma.config.ts` for Migrate and
+through the `pg` driver adapter at runtime; Prisma 7 no longer accepts them in
+`schema.prisma`. Migrate uses `DIRECT_URL` — DDL cannot run through Supabase's
+transaction pooler. See ADR-011.
 
 ---
 
@@ -105,6 +114,17 @@ Do not assume amount always fits a JavaScript integer.
 
 HugeNumber persistence format must be deliberately designed.
 
+Status: UNRESOLVED. This is tracked as ADR-013 and must be decided before Phase 1
+completes, because the in-memory representation constrains both the storage
+format and any ranking key derived from it.
+
+A consequence that is easy to discover too late: Redis sorted sets score members
+with an IEEE-754 double. A leaderboard over a HugeNumber quantity — Boss Damage,
+for example — therefore cannot use the raw value as a sorted-set score without
+losing precision. The exact value must live in PostgreSQL and the sorted set
+must hold a monotonic projection of it. See ADR-013 and the "Leaderboards"
+section below.
+
 ---
 
 # Items
@@ -196,6 +216,10 @@ Active rankings may live in Redis.
 
 Persistent snapshots live in PostgreSQL.
 
+For any ranking whose metric is a HugeNumber, PostgreSQL holds the exact value
+and Redis holds only the ordering key. Ties at the projection's granularity are
+broken against the exact value on read (ADR-013).
+
 ---
 
 # Guilds
@@ -273,6 +297,19 @@ Do not add speculative indexes everywhere.
 
 ---
 
+# Rules version
+
+Any table that persists the result of a deterministic simulation — combat
+results, arena snapshots, offline progression — must record the
+`GAME_RULES_VERSION` in force when the result was produced.
+
+Without it, a replay after a balance patch is compared against rules that did
+not apply at the time. See ADR-005.
+
+Status: PLANNED; applies from the first such table in Phase 3.
+
+---
+
 # Migrations
 
 Every schema change must use a migration.
@@ -289,6 +326,7 @@ Atomic economy operations use transactions.
 Examples:
 
 upgrade item:
+
 - subtract gold,
 - update item,
 - record transaction.

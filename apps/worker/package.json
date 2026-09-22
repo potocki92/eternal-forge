@@ -1,0 +1,39 @@
+{
+  "name": "@eternal-forge/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "description": "Background job processor: scheduled work, snapshots and asynchronous reward processing.",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "smoke": "node dist/smoke-cli.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "clean": "rm -rf dist .turbo *.tsbuildinfo coverage"
+  },
+  "dependencies": {
+    "@eternal-forge/config": "workspace:*",
+    "@eternal-forge/contracts": "workspace:*",
+    "@eternal-forge/database": "workspace:*",
+    "@eternal-forge/game-core": "workspace:*",
+    "bullmq": "catalog:",
+    "ioredis": "catalog:",
+    "pino": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@eternal-forge/eslint-config": "workspace:*",
+    "@eternal-forge/typescript-config": "workspace:*",
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "pino-pretty": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

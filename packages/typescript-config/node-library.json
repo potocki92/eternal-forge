@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "Eternal Forge — Node library (ESM)",
+  "extends": "./base.json",
+  "compilerOptions": {
+    // The workspace is ESM end to end: NestJS 12, Vitest and Next.js are all
+    // ESM-only, and a mixed graph forces dynamic `import()` at every boundary.
+    // NodeNext resolution means relative specifiers carry an explicit `.js`
+    // extension, exactly as Node resolves them at runtime.
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "verbatimModuleSyntax": true,
+    "types": ["node"]
+  }
+}

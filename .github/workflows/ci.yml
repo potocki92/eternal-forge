@@ -1,0 +1,167 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TURBO_TELEMETRY_DISABLED: 1
+  NEXT_TELEMETRY_DISABLED: 1
+
+jobs:
+  quality:
+    name: Lint, typecheck, unit tests, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check formatting
+        run: pnpm run format:check
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Unit tests
+        run: pnpm run test
+
+      - name: Build
+        run: pnpm run build
+
+  e2e:
+    name: End-to-end (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm --filter @eternal-forge/web exec playwright install --with-deps chromium
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Run end-to-end suite
+        run: pnpm run test:e2e
+
+      - name: Upload report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 7
+
+  integration-smoke:
+    name: Backing services smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # Proves the API and the worker actually reach PostgreSQL and Redis. Unit
+    # tests deliberately fake both, so without this job a broken connection
+    # would not be caught until deployment.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: forge
+          POSTGRES_PASSWORD: forge
+          POSTGRES_DB: eternal_forge
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U forge -d eternal_forge"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://forge:forge@127.0.0.1:5432/eternal_forge
+      DIRECT_URL: postgresql://forge:forge@127.0.0.1:5432/eternal_forge
+      REDIS_URL: redis://127.0.0.1:6379
+      API_PORT: '3001'
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate Prisma schema
+        run: pnpm --filter @eternal-forge/database run db:validate
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Start API and worker
+        # NODE_ENV is set here rather than at job level: a job-wide
+        # `NODE_ENV=production` makes `pnpm install` skip devDependencies.
+        env:
+          NODE_ENV: production
+        run: |
+          node apps/api/dist/main.js > /tmp/api.log 2>&1 &
+          node apps/worker/dist/main.js > /tmp/worker.log 2>&1 &
+
+      - name: Wait for API readiness
+        run: |
+          for attempt in $(seq 1 30); do
+            code=$(curl -s -o /tmp/ready.json -w '%{http_code}' http://127.0.0.1:3001/health/ready || true)
+            if [ "$code" = "200" ]; then
+              echo "API ready"
+              cat /tmp/ready.json
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "API never became ready"
+          cat /tmp/ready.json 2>/dev/null || true
+          cat /tmp/api.log
+          exit 1
+
+      - name: Run worker smoke job
+        run: pnpm --filter @eternal-forge/worker run smoke
+
+      - name: Dump service logs
+        if: failure()
+        run: |
+          echo '--- api ---'; cat /tmp/api.log || true
+          echo '--- worker ---'; cat /tmp/worker.log || true
