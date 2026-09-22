@@ -361,6 +361,18 @@ delivery is possible.
 
 Never rely solely on frontend button disabling.
 
+`economy_transactions` names an `idempotency_key`, but idempotency is required
+by more operations than that table records: ClaimOfflineRewards, ClaimSeasonReward,
+CraftItem, Purchase and Prestige (docs/ARCHITECTURE.md — "Idempotency").
+
+Those operations need a single mechanism rather than a per-table column, since
+some of them produce no economy transaction at all. The intended shape is a
+dedicated table keyed by `(player_id, operation, idempotency_key)` with a unique
+constraint, storing the result of the first successful execution so a retry
+replays it instead of re-running the operation.
+
+Status: PLANNED — to be designed with the first idempotent command, in Phase 4.
+
 ---
 
 # Data deletion
