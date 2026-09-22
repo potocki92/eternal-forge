@@ -540,6 +540,9 @@ What exists in the repository today.
 - `packages/ui` — design tokens and three primitives.
 - CI: format, lint, typecheck, unit tests, build, Playwright end-to-end, and a
   backing-services smoke job running against real PostgreSQL and Redis.
+- Generated code (the Prisma client) is produced by an explicit `db:generate`
+  Turborepo task that every task reading the package depends on, so any task
+  works on a clean checkout (ADR-014).
 
 ## NOT IMPLEMENTED
 
@@ -552,4 +555,7 @@ of player state, domain events, CQRS infrastructure, rate limiting and PixiJS.
 
 - Hosting for `apps/api` and `apps/worker` (ADR-012, deferred to Phase 2).
 - `HugeNumber` representation, persistence format and leaderboard ordering key
-  (ADR-013, required before Phase 1 completes).
+  (ADR-013, required before Phase 1 completes). A recommendation is recorded
+  there: a decimal `bigint` coefficient with 18 significant digits plus a 32-bit
+  exponent, a canonical string on the wire, two columns in PostgreSQL and an
+  integer projection as the Redis score. It is not yet accepted.

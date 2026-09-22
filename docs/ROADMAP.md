@@ -8,7 +8,13 @@ PHASE 0 — FOUNDATION
 
 Status:
 
-COMPLETE — awaiting user approval to begin Phase 1
+IN PROGRESS — local re-validation passed; awaiting green GitHub Actions on
+`main`, then user approval
+
+Phase 0 was marked COMPLETE on 2026-09-22, but the first CI run on `main` after
+the merge failed (`Lint, typecheck, unit tests, build`). Green CI is a
+completion requirement, so the status was reverted until CI passes on GitHub.
+See "CI re-validation" under Phase 0.
 
 One task could not be executed from the development environment and is carried
 forward; see "Carried forward" under Phase 0.
@@ -19,7 +25,7 @@ Claude must NOT begin another phase without explicit user approval.
 
 # Phase 0 — Foundation
 
-Status: COMPLETE (one task carried forward)
+Status: IN PROGRESS — awaiting green GitHub Actions (one task carried forward)
 
 Goal:
 
@@ -55,7 +61,34 @@ Tasks:
 - [x] validate typecheck
 - [x] validate tests
 - [x] validate build
+- [x] fix CI on a clean checkout — Prisma generation is a Turborepo task (ADR-014)
+- [x] re-validate locally, including on a fresh clone with no generated client
+- [ ] GitHub Actions green on `main` — PENDING, not yet observed
 - [ ] deploy initial web application to Vercel — CARRIED FORWARD
+
+CI re-validation (2026-09-22):
+
+The first CI run on `main` failed in the Lint step. Type-aware ESLint reported
+`new PrismaClient(...)` in `packages/database` as an unsafe construction of an
+unresolved type. The cause was the task graph, not the code. `lint` did not
+depend on `prisma generate`, and on a clean checkout the generated client did
+not exist yet. `test` had the same gap, hidden by step order. Fixed by making
+generation an explicit task that `build`, `typecheck`, `lint`, `test` and `dev`
+depend on (ADR-014). No lint rule was disabled and no generated code was
+committed.
+
+Verified locally on a fresh clone after `git clean -fdx`: each of `lint`,
+`typecheck`, `test` and `build` succeeds as the first command, and so do all
+four together. Also passing: format check, 87 unit and integration tests, 8
+Playwright tests (mobile and desktop), production build, and the
+PostgreSQL/Redis smoke test (readiness 200 with both up, 503 with Redis down;
+worker job round trip).
+
+The self-review removed unused workspace dependencies: `game-core` and `zod`
+from `apps/api`; `game-core`, `database` and `contracts` from `apps/worker`.
+
+Phase 0 is complete only when the CI run for this change is green on GitHub
+**and** the user approves.
 
 Carried forward:
 
@@ -83,6 +116,9 @@ Entry requirement: ADR-013 (large-number representation, persistence format and
 leaderboard ordering key) must be decided before this phase completes, because
 HugeNumber's representation constrains both storage and every ranking derived
 from it.
+
+ADR-013 now contains a concrete recommendation with six open questions. It is
+still Proposed and needs the user's answers before `HugeNumber` is implemented.
 
 Implement:
 
