@@ -1,6 +1,13 @@
 # Eternal Forge — Software Architecture
 
-Status: PLANNED / EVOLVING
+Status: PARTIALLY IMPLEMENTED (Phase 0) / EVOLVING
+
+The architectural style, boundaries and package layout described here are
+IMPLEMENTED as of Phase 0. Everything gameplay-related — Game Core simulation,
+domain events, CQRS, offline processing, leaderboards — is PLANNED.
+
+See "Phase 0 implementation status" at the end of this document for exactly what
+exists today, and `docs/adr/` for the decisions behind it.
 
 ---
 
@@ -8,10 +15,8 @@ Status: PLANNED / EVOLVING
 
 Eternal Forge uses:
 
-Modular Monolith
-+
-Clean / Hexagonal Architecture
-+
+Modular Monolith +
+Clean / Hexagonal Architecture +
 DDD-lite.
 
 We intentionally avoid premature microservices.
@@ -29,9 +34,9 @@ v
 NestJS API
 |
 +----------------+
-|                |
-v                v
-Application      Redis
+| |
+v v
+Application Redis
 |
 v
 Domain / Game Core
@@ -63,6 +68,7 @@ BullMQ Worker
 apps/web
 
 Responsible for:
+
 - Next.js application,
 - React UI,
 - responsive layout,
@@ -72,6 +78,7 @@ Responsible for:
 apps/api
 
 Responsible for:
+
 - HTTP API,
 - authentication integration,
 - application use cases,
@@ -81,6 +88,7 @@ Responsible for:
 apps/worker
 
 Responsible for:
+
 - background jobs,
 - scheduled processing,
 - leaderboard snapshots,
@@ -97,6 +105,7 @@ Pure TypeScript.
 Contains gameplay rules.
 
 Must not know about:
+
 - HTTP,
 - database,
 - React,
@@ -125,16 +134,27 @@ LeaderboardResponse
 
 # packages/database
 
-Contains database infrastructure.
+Contains data-platform infrastructure.
 
-Possible responsibilities:
+Responsibilities:
 
 Prisma schema
-Prisma client
-migration helpers
+Prisma client factory
+Supabase client factories (privileged and public)
 database-related infrastructure.
 
+Supabase client construction lives here rather than in a separate package
+because Supabase is the project's data platform — PostgreSQL, Auth and Storage
+from one provider. The privileged client refuses to be constructed in a browser.
+
+Redis connections are deliberately NOT here. A Redis connection is infrastructure
+owned by the process that uses it, and the API and the worker need different
+settings; each application constructs its own. See ADR-006.
+
 Do not leak Prisma types into Domain.
+
+Status: IMPLEMENTED as infrastructure. The Prisma schema declares no models yet;
+tables arrive with the phase that needs them. See ADR-011.
 
 ---
 
@@ -143,6 +163,41 @@ Do not leak Prisma types into Domain.
 Reusable application UI.
 
 Does not contain core gameplay rules.
+
+Status: IMPLEMENTED — design tokens plus the `Button`, `Panel` and
+`StatusBadge` primitives. Further components are created by the feature that
+needs them (docs/UI_SYSTEM.md).
+
+Unlike the other packages, `packages/ui` exports TypeScript source rather than a
+build artefact; the consuming Next.js application compiles it through
+`transpilePackages`. See ADR-008.
+
+---
+
+# packages/config
+
+Runtime environment validation, shared by every application.
+
+Two entry points, separated in the module graph rather than by convention:
+
+- `@eternal-forge/config/server` — privileged configuration. Throws if imported
+  in a browser runtime.
+- `@eternal-forge/config/client` — browser-safe configuration only.
+
+Nothing outside this package reads `process.env` for application settings.
+
+Status: IMPLEMENTED. See ADR-010.
+
+---
+
+# packages/eslint-config and packages/typescript-config
+
+Tooling configuration shared across the workspace: flat ESLint configurations
+(including the Game Core purity rules) and TypeScript presets.
+
+These configure the _toolchain_. `packages/config` configures the _runtime_.
+
+Status: IMPLEMENTED. See ADR-008.
 
 ---
 
@@ -153,10 +208,10 @@ Backend modules should follow domain boundaries.
 Example:
 
 combat/
-  domain/
-  application/
-  infrastructure/
-  presentation/
+domain/
+application/
+infrastructure/
+presentation/
 
 Do not mechanically create empty directories where they provide no value.
 
@@ -221,10 +276,10 @@ The Game Core is designed as a deterministic simulation engine.
 Example:
 
 simulateCombat({
-  player,
-  enemy,
-  seed,
-  rulesVersion
+player,
+enemy,
+seed,
+rulesVersion
 })
 
 returns a CombatResult.
@@ -286,11 +341,11 @@ Effects should become a generalized mechanism for build modification.
 Possible conceptual structure:
 
 Effect {
-  target
-  operation
-  value
-  conditions
-  trigger
+target
+operation
+value
+conditions
+trigger
 }
 
 Do not over-generalize the first implementation.
@@ -420,13 +475,13 @@ Initial target:
 GitHub
 |
 +-> Vercel
-|    -> web
-|    -> compatible application services where appropriate
+| -> web
+| -> compatible application services where appropriate
 |
 +-> Supabase
-|    -> PostgreSQL
-|    -> Auth
-|    -> Storage
+| -> PostgreSQL
+| -> Auth
+| -> Storage
 |
 +-> Redis provider
 
@@ -455,3 +510,46 @@ the operational complexity.
 Design boundaries for scale.
 
 Do not build distributed infrastructure before scale exists.
+
+---
+
+# Phase 0 implementation status
+
+What exists in the repository today.
+
+## IMPLEMENTED
+
+- pnpm workspace, Turborepo task graph, shared TypeScript and ESLint
+  configuration, pnpm catalog for dependency versions (ADR-008).
+- ESM-only workspace; `module`/`moduleResolution` set to `NodeNext` for
+  Node-side code (ADR-009).
+- `apps/api` — NestJS application with layered health module
+  (`application` / `infrastructure` / `presentation`), a dependency-probe port,
+  structured logging with credential redaction, correlation IDs, a safe global
+  exception filter, Helmet and configured CORS.
+- `apps/worker` — BullMQ worker with a pure job handler, graceful shutdown, and
+  a smoke CLI that enqueues a job and waits for the result.
+- `apps/web` — Next.js application: start page, system status page backed by
+  TanStack Query, and its own liveness endpoint.
+- `packages/game-core` — package boundary and its automated guard rails. No
+  gameplay rules.
+- `packages/contracts` — health transport contracts.
+- `packages/database` — Prisma 7 client factory with the `pg` driver adapter,
+  Supabase client factories, database probe port (ADR-011).
+- `packages/config` — validated environment with a server/client split (ADR-010).
+- `packages/ui` — design tokens and three primitives.
+- CI: format, lint, typecheck, unit tests, build, Playwright end-to-end, and a
+  backing-services smoke job running against real PostgreSQL and Redis.
+
+## NOT IMPLEMENTED
+
+Everything gameplay-related. Specifically, and deliberately: HugeNumber, RNG,
+combat, stages, rewards, items, effects, skills, passives, prestige, offline
+progression, leaderboards, guilds, arena, seasons, authentication, persistence
+of player state, domain events, CQRS infrastructure, rate limiting and PixiJS.
+
+## Open architectural decisions
+
+- Hosting for `apps/api` and `apps/worker` (ADR-012, deferred to Phase 2).
+- `HugeNumber` representation, persistence format and leaderboard ordering key
+  (ADR-013, required before Phase 1 completes).

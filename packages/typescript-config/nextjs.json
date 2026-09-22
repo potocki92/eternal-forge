@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "Eternal Forge — Next.js application",
+  "extends": "./base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowJs": true,
+    "jsx": "preserve",
+    "incremental": true,
+    // Next.js inlines `process.env.NEXT_PUBLIC_*` only for static member access,
+    // which this rule would forbid. Relaxed for the application that needs it;
+    // every other package keeps the stricter setting from base.json.
+    "noPropertyAccessFromIndexSignature": false,
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "plugins": [{ "name": "next" }]
+  }
+}

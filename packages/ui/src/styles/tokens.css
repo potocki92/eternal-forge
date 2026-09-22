@@ -1,0 +1,110 @@
+/*
+ * Eternal Forge — design tokens.
+ *
+ * Single source of truth for colour, spacing, radius, elevation, motion and
+ * layering (docs/UI_SYSTEM.md — "Design tokens"). Components reference these
+ * tokens through Tailwind utilities; raw hex values must not appear in
+ * component source.
+ *
+ * Declared through Tailwind v4 `@theme`, so every token is available both as a
+ * CSS custom property and as a generated utility (`bg-surface`, `text-rarity-epic`).
+ *
+ * The product is dark-first (dark fantasy). A light theme is deliberately out of
+ * scope until a phase requires it.
+ */
+
+@theme {
+  /* --- Semantic surfaces & text ----------------------------------------- */
+  --color-background: oklch(16% 0.018 275);
+  --color-surface: oklch(21% 0.021 275);
+  --color-surface-elevated: oklch(26% 0.025 275);
+  --color-border: oklch(33% 0.022 275);
+  --color-border-strong: oklch(44% 0.03 275);
+
+  --color-text-primary: oklch(96% 0.006 275);
+  --color-text-secondary: oklch(75% 0.015 275);
+  --color-text-muted: oklch(60% 0.017 275);
+
+  /* --- Intent ------------------------------------------------------------ */
+  --color-primary: oklch(70% 0.17 55);
+  --color-primary-strong: oklch(62% 0.19 48);
+  --color-primary-contrast: oklch(18% 0.03 55);
+
+  --color-success: oklch(72% 0.16 152);
+  --color-warning: oklch(80% 0.15 85);
+  --color-danger: oklch(64% 0.21 25);
+  --color-info: oklch(72% 0.13 240);
+
+  /* --- Item rarity -------------------------------------------------------
+   * Rarity identity is a core part of the product's visual language; these are
+   * the only sanctioned rarity colours. */
+  --color-rarity-common: oklch(72% 0.012 275);
+  --color-rarity-magic: oklch(70% 0.14 240);
+  --color-rarity-rare: oklch(80% 0.15 95);
+  --color-rarity-epic: oklch(66% 0.19 305);
+  --color-rarity-legendary: oklch(74% 0.18 62);
+  --color-rarity-mythic: oklch(65% 0.22 15);
+
+  /* --- Typography -------------------------------------------------------- */
+  /* System stacks for now: final art direction, including any web font, is a
+   * separate decision (docs/UI_SYSTEM.md — "Visual direction"). */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: ui-serif, Georgia, 'Times New Roman', serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, monospace;
+
+  /* --- Radius ------------------------------------------------------------ */
+  --radius-panel: 0.875rem;
+  --radius-control: 0.625rem;
+  --radius-pill: 9999px;
+
+  /* --- Elevation --------------------------------------------------------- */
+  --shadow-panel: 0 1px 0 0 oklch(100% 0 0 / 4%) inset, 0 8px 24px -12px oklch(0% 0 0 / 70%);
+  --shadow-raised: 0 12px 32px -14px oklch(0% 0 0 / 80%);
+
+  /* --- Motion ------------------------------------------------------------ */
+  --duration-instant: 90ms;
+  --duration-fast: 160ms;
+  --duration-normal: 240ms;
+  --duration-slow: 420ms;
+  --ease-emphasis: cubic-bezier(0.2, 0, 0, 1);
+
+  /* --- Layering ----------------------------------------------------------
+   * Every stacking context in the application draws from this scale. */
+  --z-base: 0;
+  --z-scene: 10;
+  --z-sticky: 100;
+  --z-navigation: 200;
+  --z-overlay: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+/* The primary design viewport is 390x844; `dvh` keeps mobile browser chrome
+ * from cropping the layout, and the safe-area insets keep primary actions
+ * reachable in standalone (PWA) mode. */
+html,
+body {
+  min-height: 100dvh;
+  background-color: var(--color-background);
+  color: var(--color-text-primary);
+}
+
+body {
+  padding-bottom: env(safe-area-inset-bottom);
+  -webkit-font-smoothing: antialiased;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

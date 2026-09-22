@@ -1,0 +1,47 @@
+# Local backing services for development.
+#
+# Production uses Supabase PostgreSQL and a managed Redis provider
+# (docs/ARCHITECTURE.md — "Deployment architecture"); this file exists so a
+# checkout can run the full stack without cloud credentials.
+#
+#   docker compose up -d
+#   cp .env.example .env
+#   pnpm dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: eternal-forge-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: forge
+      POSTGRES_PASSWORD: forge
+      POSTGRES_DB: eternal_forge
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U forge -d eternal_forge']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: eternal-forge-redis
+    restart: unless-stopped
+    command: ['redis-server', '--appendonly', 'yes']
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres-data:
+  redis-data:

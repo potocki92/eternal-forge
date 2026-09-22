@@ -1,0 +1,16 @@
+node_modules
+dist
+.next
+.turbo
+coverage
+playwright-report
+test-results
+pnpm-lock.yaml
+packages/database/generated
+next-env.d.ts
+
+# Markdown is authored prose, not generated output. Prettier's Markdown rules
+# rewrite constructs such as a standalone "+" separator into a list bullet,
+# which changes the meaning of a hand-written design document. Formatting is
+# enforced for code and configuration; prose is reviewed by people.
+*.md

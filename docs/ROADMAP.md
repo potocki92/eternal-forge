@@ -8,7 +8,10 @@ PHASE 0 — FOUNDATION
 
 Status:
 
-NOT STARTED
+COMPLETE — awaiting user approval to begin Phase 1
+
+One task could not be executed from the development environment and is carried
+forward; see "Carried forward" under Phase 0.
 
 Claude must NOT begin another phase without explicit user approval.
 
@@ -16,7 +19,7 @@ Claude must NOT begin another phase without explicit user approval.
 
 # Phase 0 — Foundation
 
-Status: NOT STARTED
+Status: COMPLETE (one task carried forward)
 
 Goal:
 
@@ -24,35 +27,43 @@ Create a production-quality project foundation.
 
 Tasks:
 
-- [ ] initialize pnpm workspace
-- [ ] configure Turborepo
-- [ ] create apps/web
-- [ ] create apps/api
-- [ ] create apps/worker
-- [ ] create packages/game-core
-- [ ] create packages/contracts
-- [ ] create packages/database
-- [ ] create packages/ui
-- [ ] create shared configuration
-- [ ] configure strict TypeScript
-- [ ] configure ESLint
-- [ ] configure formatting
-- [ ] configure environment validation
-- [ ] prepare PostgreSQL integration
-- [ ] prepare Redis integration
-- [ ] prepare Supabase integration
-- [ ] add API health endpoint
-- [ ] add web health/start page
-- [ ] add worker smoke mechanism
-- [ ] configure Vitest
-- [ ] configure Playwright skeleton
-- [ ] configure GitHub Actions
-- [ ] create ADRs
-- [ ] validate lint
-- [ ] validate typecheck
-- [ ] validate tests
-- [ ] validate build
-- [ ] deploy initial web application to Vercel
+- [x] initialize pnpm workspace — with a `catalog:` for shared dependency versions
+- [x] configure Turborepo
+- [x] create apps/web — Next.js 16, App Router, Tailwind v4
+- [x] create apps/api — NestJS 12, layered health module
+- [x] create apps/worker — BullMQ worker
+- [x] create packages/game-core — boundary and guard rails only, no gameplay
+- [x] create packages/contracts — health transport contracts
+- [x] create packages/database — Prisma 7 + `pg` adapter, Supabase clients
+- [x] create packages/ui — design tokens, Button, Panel, StatusBadge
+- [x] create shared configuration — packages/typescript-config, packages/eslint-config
+- [x] configure strict TypeScript
+- [x] configure ESLint — including Game Core purity rules
+- [x] configure formatting — Prettier, checked in CI
+- [x] configure environment validation — packages/config, server/client split
+- [x] prepare PostgreSQL integration — Prisma schema (no models), client factory, readiness probe
+- [x] prepare Redis integration — per-process connections, readiness probe, BullMQ transport
+- [x] prepare Supabase integration — privileged and public client factories, credential schemas
+- [x] add API health endpoint — `/health` (liveness) and `/health/ready` (readiness, 503 on failure)
+- [x] add web health/start page — `/`, `/status`, and `/api/health`
+- [x] add worker smoke mechanism — `pnpm --filter @eternal-forge/worker run smoke`
+- [x] configure Vitest — every package; SWC transform in apps/api for decorator metadata
+- [x] configure Playwright skeleton — mobile (390x844) and desktop projects
+- [x] configure GitHub Actions — quality, end-to-end and backing-services smoke jobs
+- [x] create ADRs — ADR-001 … ADR-013
+- [x] validate lint
+- [x] validate typecheck
+- [x] validate tests
+- [x] validate build
+- [ ] deploy initial web application to Vercel — CARRIED FORWARD
+
+Carried forward:
+
+**Deploy initial web application to Vercel.** Requires Vercel account access,
+which the development environment does not have. Everything needed is in the
+repository: `apps/web/vercel.json`, and the project settings are documented in
+ADR-012. The step is a dashboard action — import the repository, set the root
+directory to `apps/web` — not a code change.
 
 Do NOT implement gameplay.
 
@@ -62,11 +73,16 @@ Completion requires user approval.
 
 # Phase 1 — Game Core Foundation
 
-Status: NOT STARTED
+Status: NOT STARTED — blocked on user approval
 
 Goal:
 
 Create the first deterministic headless game simulation.
+
+Entry requirement: ADR-013 (large-number representation, persistence format and
+leaderboard ordering key) must be decided before this phase completes, because
+HugeNumber's representation constrains both storage and every ranking derived
+from it.
 
 Implement:
 

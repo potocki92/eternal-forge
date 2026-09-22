@@ -1,0 +1,13 @@
+{
+  "name": "@eternal-forge/typescript-config",
+  "version": "0.0.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "files": [
+    "base.json",
+    "node-library.json",
+    "nest.json",
+    "nextjs.json",
+    "react-library.json"
+  ]
+}

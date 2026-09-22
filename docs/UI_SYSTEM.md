@@ -1,6 +1,14 @@
 # Eternal Forge — UI & UX System
 
-Status: EARLY DESIGN
+Status: EARLY DESIGN — foundations IMPLEMENTED (Phase 0)
+
+IMPLEMENTED: design tokens (colour, typography, radius, elevation, motion,
+layering, item rarity) as Tailwind v4 `@theme` variables in
+`packages/ui/src/styles/tokens.css`, plus the `Button`, `Panel` and
+`StatusBadge` primitives, a reduced-motion guard and safe-area handling.
+
+PLANNED: everything else in this document, including bottom navigation, the
+combat screen, item presentation and the PixiJS scene.
 
 ---
 
@@ -194,6 +202,9 @@ EmptyState
 Do not create all components immediately.
 
 Create them as features require them.
+
+IMPLEMENTED so far: Button, Panel, StatusBadge. Each exists because a Phase 0
+screen needed it.
 
 ---
 
@@ -416,3 +427,14 @@ The gameplay content should carry visual richness while application chrome
 remains readable.
 
 Final art direction will be refined separately.
+
+---
+
+# Number formatting and HugeNumber
+
+Formatting is presentation logic and belongs in the UI layer. Arithmetic belongs
+to `HugeNumber` in Game Core.
+
+The two are related by more than style: the representation chosen for
+`HugeNumber` determines what the formatter receives. That decision is open and
+tracked in ADR-013; the formatter is written once it is settled, not before.
