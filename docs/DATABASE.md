@@ -1,11 +1,14 @@
 # Eternal Forge — Database Design
 
 Status: EARLY DESIGN — infrastructure IMPLEMENTED (Phase 0), identity tables
-IMPLEMENTED (Phase 2), everything else PLANNED
+IMPLEMENTED (Phase 2), progression and combat history IMPLEMENTED (Phase 3),
+everything else PLANNED
 
 Tables are created by the phase that requires them, so the repository carries no
-speculative schema. Phase 2 added `profiles` and `characters` (ADR-017).
-Everything else under "Planned domains" below is PLANNED.
+speculative schema. Phase 2 added `profiles` and `characters` (ADR-017). Phase 3
+added progression columns to `characters` and the `combat_runs` table (migration
+`20260923053138_gameplay_loop`, ADR-019). Everything else under "Planned
+domains" below is PLANNED.
 
 Database:
 
@@ -101,9 +104,21 @@ the column accepts, 1 to 2^63 − 1, is read and written as an exact `bigint`
 and is never converted to a JavaScript `number`. The column type bounds it
 from above and the CHECK from below.
 
-Only source state is stored. Combat stats are derived from `level` by Game Core
-and are not persisted. Experience, gold and other resources arrive with Phase 3
-as HugeNumber column pairs.
+Only source state is stored. Combat stats, the experience requirement and the
+enemy on the current stage are derived by Game Core and are not persisted.
+
+Added in Phase 3 (ADR-019):
+
+| Column                              | Type                | Rules                                                     |
+| ----------------------------------- | ------------------- | --------------------------------------------------------- |
+| `experience_coef`, `experience_exp` | `bigint`, `integer` | HugeNumber pair (ADR-013); experience *within* the level  |
+| `gold_coef`, `gold_exp`             | `bigint`, `integer` | HugeNumber pair                                           |
+| `next_combat_at`                    | `timestamptz(3)`    | pacing gate; written from the API clock                   |
+| `version`                           | `bigint`            | default 0, CHECK ≥ 0; optimistic concurrency token        |
+
+Every HugeNumber pair carries two CHECKs: ADR-013's normalisation rule, which
+also makes negatives unstorable, and a whole-amount rule, which rejects
+fractions.
 
 Row Level Security is enabled on both tables with no policies (deny by default
 for every non-owner role); on Supabase the migration also revokes the `anon` and
@@ -125,30 +140,19 @@ settings
 
 # Progression
 
-character_progress
+Status: IMPLEMENTED (Phase 3) as columns of `characters` — `level`, `stage`,
+experience, gold, `next_combat_at` and `version` (see "Player"). A separate
+`character_progress` table was not needed: progression is one row per
+character, read and written together.
 
-Potential concepts:
-
-character_id
-stage
-level
-experience
-last_processed_at
-
-player_resources
-
-Potential concepts:
-
-character_id
-resource_type
-amount
+PLANNED: `last_processed_at` for offline progression (Phase 4) attaches to
+`next_combat_at` (ADR-019 §10). A `player_resources` table for further
+resource types arrives with the first second resource.
 
 Do not assume amount always fits a JavaScript integer.
 
-HugeNumber persistence format must be deliberately designed.
-
-Status: DECIDED — ADR-013, accepted 2026-09-22. The columns themselves are
-PLANNED and arrive with the first table that persists a HugeNumber.
+HugeNumber persistence format: DECIDED — ADR-013, accepted 2026-09-22.
+IMPLEMENTED in Phase 3 by `characters` and `combat_runs`.
 
 Each persisted HugeNumber uses two columns, `<name>_coef bigint` and
 `<name>_exp integer`, non-negative by constraint and ordered by `(exp, coef)`.
@@ -207,6 +211,37 @@ passive_nodes
 character_passive_nodes
 
 Do not add a database column for every possible future skill.
+
+---
+
+# Combat history
+
+Status: IMPLEMENTED (Phase 3, ADR-019).
+
+combat_runs — one row per resolved combat
+
+| Group        | Columns                                                                                     |
+| ------------ | ------------------------------------------------------------------------------------------- |
+| identity     | `id` uuid PK, `character_id` FK → `characters` ON DELETE CASCADE, `idempotency_key` uuid, `created_at` (resolution time, API clock) |
+| replay input | `rules_version`, `seed` varchar(64), `stage` bigint, `character_level`, `experience_before_*`, `gold_before_*` |
+| audit output | `outcome` (enum WIN/LOSS), `end_reason` (enum), `duration_ms`, `reward_gold_*`, `reward_experience_*` |
+
+Constraints: UNIQUE `(character_id, idempotency_key)`. Every HugeNumber pair is
+normalised and whole. `rules_version`, `stage` and `character_level` must be
+≥ 1, `duration_ms` ≥ 0 and the seed non-empty. `outcome = WIN` exactly when
+`end_reason = ENEMY_DEFEATED`, and a loss pays nothing. That last rule means
+"no reward on defeat" holds in the ledger whatever code path wrote the row.
+Row Level Security is enabled with no policies, and `anon` and
+`authenticated` are revoked.
+
+Index: only the unique index. It serves the idempotency lookup, the per-character
+history and the cascading delete.
+
+The event log is not stored. Game Core regenerates it exactly from the replay
+inputs, and a replay is checked against the audit columns. The table is also
+the credit ledger for gold and experience in Phase 3. Replaying its rewards
+through HugeNumber reproduces the character's balance, and an integration test
+proves this.
 
 ---
 
@@ -349,7 +384,8 @@ results, arena snapshots, offline progression — must record the
 Without it, a replay after a balance patch is compared against rules that did
 not apply at the time. See ADR-005.
 
-Status: PLANNED; applies from the first such table in Phase 3. The Phase 2
+Status: IMPLEMENTED (Phase 3). `combat_runs.rules_version` records the rule set
+each combat ran under, and replays resolve under that version. The Phase 2
 tables store player state, not simulation results, and carry no rules version.
 
 ---
@@ -394,6 +430,14 @@ NOTHING` for the profile and the main character inside one transaction, relying
 on the unique constraints. Concurrent requests converge on one profile and one
 character; an integration test fires 25 in parallel against PostgreSQL.
 
+Implemented example (Phase 3, ADR-019): combat uses optimistic concurrency. The
+character update carries `WHERE version = <read version>`, and PostgreSQL
+re-evaluates it after waiting on the row lock, so of two concurrent writers
+exactly one matches. Game Core runs before the transaction, which stays two
+statements long. Integration tests fire 25 simultaneous combats at one
+character and interleave retried requests across two API instances. Each
+case produces exactly one combat, one reward and one stage change.
+
 Example:
 
 two simultaneous upgrade requests must not both spend the same resources.
@@ -426,7 +470,12 @@ dedicated table keyed by `(player_id, operation, idempotency_key)` with a unique
 constraint, storing the result of the first successful execution so a retry
 replays it instead of re-running the operation.
 
-Status: PLANNED — to be designed with the first idempotent command, in Phase 4.
+Status: combat IMPLEMENTED (Phase 3). The first idempotent command resolves a
+combat, and the combat row is its natural result record. It is keyed by the
+unique `(character_id, idempotency_key)`, and a retry replays it by
+deterministic re-simulation (ADR-019). The generic table above is still PLANNED
+for Phase 4, where operations such as an offline claim have no result row of
+their own.
 
 ---
 

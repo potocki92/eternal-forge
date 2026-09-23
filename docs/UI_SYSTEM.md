@@ -13,8 +13,12 @@ IMPLEMENTED (Phase 2): the account screens — sign-in, registration, first-run
 level, stage, sign-out). They are mobile-first single-column layouts verified at
 390x844 and on desktop. This is not the final game UI.
 
-PLANNED: everything else in this document, including bottom navigation, the
-combat screen, item presentation and the PixiJS scene.
+IMPLEMENTED (Phase 3): the first game screen and the PixiJS combat scene —
+see "Game screen (Phase 3)" at the end of this document — plus the
+`ProgressBar` primitive and the HugeNumber formatter.
+
+PLANNED: everything else in this document, including bottom navigation, item
+presentation and final art.
 
 ---
 
@@ -210,8 +214,10 @@ Do not create all components immediately.
 Create them as features require them.
 
 IMPLEMENTED so far: Button, Panel, StatusBadge (Phase 0); TextField, Alert,
-Skeleton (Phase 2, for the account forms and loading states). Each exists
-because a screen needed it.
+Skeleton (Phase 2, for the account forms and loading states); ProgressBar
+(Phase 3, for health and experience: an ARIA progressbar with a name and value
+text, `primary`/`success`/`danger`/`info` tones, reduced-motion aware). Each
+exists because a screen needed it.
 
 ---
 
@@ -455,10 +461,92 @@ The two are related by more than style: the representation chosen for
 may import `HugeNumber` for parsing, comparison and those parts. It must not use
 Game Core to compute gameplay outcomes (ADR-003).
 
-Status: PLANNED. The formatter is written with the first screen that displays a
-HugeNumber (Phase 3), in the UI layer, not in Game Core.
+Status: IMPLEMENTED (Phase 3) in `apps/web/src/game/format/format-huge.ts`.
+Below 10 000 values are grouped with at most one decimal (`1,240`, `12.1`).
+Above that come `K`, `M`, `B` and `T` with three significant digits (`12.4K`,
+`5.28M`), then scientific notation (`1.23e15`). It reads the exact digits
+from `HugeNumber.toParts()`, and it truncates rather than rounds, so a balance
+is never overstated. `hugeRatio` turns two values into a bar width. It is a
+presentation float that never feeds a rule.
 
 IMPLEMENTED (ADR-018): stage numbers arrive as canonical decimal strings, and
 `formatStage` in `apps/web` groups their digits through `BigInt` and
 `Intl.NumberFormat`. It is exact at every stage and never converts to a
 `number`.
+
+---
+
+# Game screen (Phase 3)
+
+Status: IMPLEMENTED — the first game UI, not the final art direction.
+
+Layout (390×844 first; centred and framed at desktop widths):
+
+```
+┌──────────────────────────────┐
+│ PLAYER NAME         Sign out │  HUD: display name, hero name,
+│ Hero name                    │  level + experience bar, gold,
+│ Level 3 ▓▓▓▓░░░░░    Gold 1.2K│  stage (danger-tinted "Boss stage")
+│ Stage 12                     │
+├──────────────────────────────┤
+│ Husk               30 / 40   │  DOM overlay: enemy name, boss badge,
+│ ▓▓▓▓▓▓▓░░░░░░░░              │  health bar with numbers
+│          (enemy)             │
+│                              │  PixiJS canvas: actors, lunges, hit
+│          (hero)              │  flashes, damage numbers, criticals,
+│ Hero               96 / 100  │  deaths, victory burst, defeat vignette
+│ ▓▓▓▓▓▓▓▓▓▓▓▓▓░               │
+├──────────────────────────────┤
+│ Victory! Stage 1 cleared …   │  aria-live report; reward chips;
+│ [+5 gold] [+3 XP]  Next: …   │  next encounter
+├──────────────────────────────┤
+│ [          Fight          ]  │  one primary action (Skip while fighting)
+└──────────────────────────────┘
+```
+
+Behaviour:
+
+- **Server truth only.** Every value shown arrives in the player state or the
+  combat response. The boss treatment comes from the server's stage `kind`.
+  The screen never tests a stage number itself.
+- **States:** loading (the existing skeleton), waiting, requesting ("Your
+  hero charges in…"), fighting (live timeline; the HUD keeps the pre-combat
+  values), finished (outcome banner, rewards, then the next enemy steps in
+  after 1.2 s), and failed. The failures are: connection lost (retry with
+  the same key), API unavailable (retry), still fighting (the state is
+  re-read), and session ended (back to sign-in).
+- **One action.** The Fight button is the only primary control. It is
+  disabled while a combat is requested or playing, and it shows "Ready in Ns"
+  until the server's pacing gate opens. It reads "Fight boss" (danger
+  variant) on a boss stage. A synchronous guard means a double tap sends one
+  request.
+- **Bosses:** a danger-tinted stage badge and battlefield, a `Boss` badge, a
+  larger health bar, a larger enemy with crown spikes and a pulsing aura, a
+  heavier entrance with screen shake, and "Boss slain!" on victory.
+
+React / PixiJS boundary (ADR-007):
+
+```
+GameScreen (React: state machine, playback clock, all information)
+   │  showEncounter / playHit / showOutcome / destroy
+   v
+CombatScene interface  ──  PixiCombatScene (lazy import of pixi.js)
+```
+
+- The scene receives presentation cues only, and it can reject its creation
+  (no WebGL, no canvas). The game then shows static silhouettes and stays
+  fully playable.
+- One scene per mounted screen. Creation is async and StrictMode-safe: a scene
+  that finishes after unmount is destroyed at once. `destroy()` releases the
+  renderer, the WebGL context, the ticker callback, the resize listener and
+  every transient text or particle. Tests cover this lifecycle.
+- The canvas is `aria-hidden`. The DOM carries names, health (ARIA
+  progressbars), the outcome and a polite live report. End-to-end tests read
+  those, never pixels.
+- Reduced motion: the scene skips shakes, particles, lunges and idle
+  breathing, and animations jump to their end state. CSS entrance animations
+  follow the global reduced-motion guard. The pacing wait still applies,
+  because it is a server rule.
+- The scene's colours live in one palette module that mirrors the design
+  tokens. Enemy looks are a data table keyed by archetype id, with a generic
+  fallback, so new content never needs scene code.

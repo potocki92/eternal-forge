@@ -1,13 +1,15 @@
 # Eternal Forge — Software Architecture
 
-Status: PARTIALLY IMPLEMENTED (Phases 0–2) / EVOLVING
+Status: PARTIALLY IMPLEMENTED (Phases 0–3) / EVOLVING
 
 The architectural style, boundaries and package layout described here are
 IMPLEMENTED as of Phase 0. The headless Game Core simulation (HugeNumber, RNG,
 versioned rules, combat, stages, rewards) is IMPLEMENTED as of Phase 1.
 Authentication, player identity persistence and the first authenticated API are
-IMPLEMENTED in Phase 2 (awaiting approval). Domain events, CQRS infrastructure, persistence of
-gameplay progress, offline processing and leaderboards are PLANNED.
+IMPLEMENTED in Phase 2. The first persistent gameplay loop — server-authoritative
+combat, progression persistence, the game screen and the PixiJS combat scene —
+is IMPLEMENTED in Phase 3 (ADR-019, awaiting approval). Domain events, CQRS
+infrastructure, offline processing and leaderboards are PLANNED.
 
 See the "Phase N implementation status" sections at the end of this document
 for exactly what exists today, and `docs/adr/` for the decisions behind it.
@@ -141,9 +143,12 @@ LeaderboardResponse
 
 Status: IMPLEMENTED for health, the shared API error body (`ApiErrorResponse`
 with a machine-readable `code`), the player-name rule, the stage-number wire
-format (`stageNumberSchema`, a canonical decimal string — ADR-018) and the
-player contracts (`PlayerStateResponse`, `ProvisionPlayerRequest`,
-`CharacterResponse`).
+format (`stageNumberSchema`, a canonical decimal string — ADR-018), the player
+contracts (`PlayerStateResponse`, `ProvisionPlayerRequest`,
+`CharacterResponse`), and — Phase 3 — the HugeNumber wire format
+(`hugeNumberSchema`, delegating to Game Core's `HugeNumber.isCanonical` as
+ADR-013 approved), the derived `progression` block and the combat contract
+(`CombatResponse`, `IDEMPOTENCY_KEY_HEADER`).
 
 ---
 
@@ -181,7 +186,7 @@ Reusable application UI.
 Does not contain core gameplay rules.
 
 Status: IMPLEMENTED — design tokens plus the `Alert`, `Button`, `Panel`,
-`Skeleton`, `StatusBadge` and `TextField` primitives. Further components are created by the feature that
+`ProgressBar` (Phase 3), `Skeleton`, `StatusBadge` and `TextField` primitives. Further components are created by the feature that
 needs them (docs/UI_SYSTEM.md).
 
 Unlike the other packages, `packages/ui` exports TypeScript source rather than a
@@ -717,7 +722,90 @@ through `BigInt`. This makes `apps/api` a consumer of `@eternal-forge/game-core`
 
 ## NOT IMPLEMENTED
 
-Gameplay persistence (experience, gold, stage progression), level-up, combat UI,
-rate limiting, account deletion, email change and password reset screens,
+As of Phase 2 — Phase 3 has since implemented gameplay persistence, level-up
+and the combat UI; see "Phase 3 implementation status". Still open: rate
+limiting, account deletion, email change and password reset screens,
 display-name uniqueness, and a production host for the API (ADR-012 remains
 open).
+
+---
+
+# Phase 3 implementation status
+
+Status: IMPLEMENTED — awaiting CI and user approval. Decision: ADR-019 (the
+server-authoritative combat transaction).
+
+## Request flow
+
+```
+Browser (React)
+  │  Fight tapped → one idempotency key per intent (reused on every retry)
+  │
+  ├─> Supabase Auth ── access token (JWT)
+  │
+  │  POST /player/characters/:characterId/combats
+  │  Authorization: Bearer <token>      Idempotency-Key: <uuid>      (no body)
+  v
+apps/api
+  AuthGuard ── verified identity (ADR-016)
+  CombatController (thin: validate path + header, call use case, map result)
+  RunCombatUseCase
+    1. CombatRepository.loadTarget(authUserId, characterId, key)
+         owned character + version + any combat already under the key
+    2. key already used → replay: resolveStageAttempt(stored inputs) == stored summary
+    3. server clock < next_combat_at → 409 COMBAT_NOT_READY (Retry-After)
+    4. CombatSeedSource → 256-bit CSPRNG seed
+    5. Game Core resolveStageAttempt({ progress, seed, GAME_RULES_VERSION })
+         enemy, combat, rewards, level-up, next stage — every rule
+    6. CombatRepository.commit — one transaction:
+         UPDATE characters … WHERE id AND version = expected AND owner
+         INSERT combat_runs (unique character_id + idempotency_key)
+       conflict → re-read key: replay the winner, or 409
+  PrismaCombatRepository ──> PostgreSQL (characters, combat_runs; RLS)
+  │
+  │  201 CombatResponse (200 on replay): combat timeline, rewards,
+  │  before/after, character, progression (next encounter, nextCombatAt)
+  v
+Browser
+  shared Zod contract validates the response
+  TanStack Query: authoritative state written into the player-state cache
+  GameScreen plays the server's events in real time
+     ├─ DOM (React): HUD, health bars, boss marker, aria-live report
+     └─ CombatScene adapter ──> PixiJS (animation only)
+```
+
+## Module layout
+
+```
+packages/game-core/src/progression/   level rule, resolveStageAttempt, describeProgress
+apps/api/src/combat/
+  domain/            CombatRun record, replay check
+  application/       RunCombatUseCase, CombatRepository and CombatSeedSource ports
+  infrastructure/    PrismaCombatRepository, CryptoCombatSeedSource
+  presentation/      CombatController, domain → contract mapping
+apps/api/src/player/domain/progression-view.ts   derived view for player state
+apps/web/src/game/
+  combat-api.ts, combat-session.ts, use-combat-session.ts   API + state machine
+  playback/          server events → presentation timeline (pure)
+  format/            HugeNumber display and bar ratios (presentation only)
+  scene/             CombatScene interface, lifecycle hook, lazy Pixi loader
+  scene/pixi/        the PixiJS implementation and its look table
+  components/        GameScreen, GameHud, CombatStage, CombatReport
+```
+
+## Boundaries enforced by tooling
+
+- Game Core purity: unchanged guard test and ESLint rules.
+- `apps/web` may import only `HugeNumber` from Game Core (ESLint
+  `no-restricted-imports` with `allowImportNames`). Every gameplay rule stays
+  on the server (ADR-003, ADR-013).
+- PixiJS is imported only by `src/game/scene/pixi/`, and only dynamically.
+- `apps/web` refuses to build with a privileged `NEXT_PUBLIC_` variable, and on
+  Vercel without its public configuration (docs/DEPLOYMENT.md).
+
+## NOT IMPLEMENTED
+
+Offline progression (Phase 4 attaches at `next_combat_at` and the version
+check, ADR-019 §10), the generic idempotency table, rate limiting beyond the
+per-character pacing gate, combat history endpoints, auto-battle, and a
+production host for the API (ADR-012, owner decision — docs/DEPLOYMENT.md).

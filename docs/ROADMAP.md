@@ -8,8 +8,9 @@ PHASE 3 — FIRST GAMEPLAY LOOP
 
 Status:
 
-IN PROGRESS — started 2026-09-23 after Phase 2 was closed. Decision record:
-ADR-019 (the server-authoritative combat transaction).
+IMPLEMENTED — awaiting GitHub Actions and user approval. Decision record:
+ADR-019 (the server-authoritative combat transaction). See "Validation" under
+Phase 3. Phase 4 must not start without approval.
 
 Phase 2 is COMPLETE / APPROVED: the post-audit hardening (ADR-018) was merged
 as PR #5, and GitHub Actions is green on `main` (run #13 on `fb3db8b`, the merge
@@ -379,24 +380,111 @@ Validation (2026-09-23, local, PostgreSQL 16 and Redis 7):
 
 # Phase 3 — First Gameplay Loop
 
-Status: NOT STARTED
+Status: IMPLEMENTED — awaiting GitHub Actions and user approval (2026-09-23)
 
-Implement:
+Goal:
 
-Combat
--> enemy defeated
--> reward
--> next stage
--> boss
--> progression.
+Authenticated player → current stage → enemy → combat → win/loss → persisted
+reward, experience, level and stage → boss every 10th stage → authoritative
+state back to a mobile-first game screen with a PixiJS combat scene → repeat.
 
-Create first mobile-first game screen.
+Decision: ADR-019. Gameplay decision taken with it, for the owner's review:
+**a lost combat falls back one stage** (`stagesLostOnDefeat = 1`). Without it
+the loop deadlocks at the first wall, because combat is the only progression
+source in Phase 3 (docs/GAME_DESIGN.md — "Progression rules v1").
 
-Introduce PixiJS CombatScene.
+Tasks:
 
-Game Core remains authoritative.
+- [x] Phase 2 closed — CI green on `main` (run #13, `fb3db8b`), approved
+- [x] ADR-019 — written before implementation: seed custody, Game Core
+      authority, pacing, optimistic concurrency, idempotency, replay,
+      persistence, offline attachment point
+- [x] Game Core — `resolveStageAttempt` (enemy, combat, rewards, level-up,
+      stage advance or fallback), level rule, `StageNumber.stepBack`,
+      `describeProgress`. Rules v1 extended in place; `GAME_RULES_VERSION`
+      stays 1 (no prior persisted result, no changed outcome; Phase 1
+      fingerprints unmodified). Golden fingerprints for stage attempts added
+- [x] persistence — migration `gameplay_loop`: experience and gold as
+      HugeNumber pairs, `next_combat_at`, `version` on `characters`;
+      `combat_runs` with replay inputs and audited summary, unique
+      `(character_id, idempotency_key)`, ledger CHECKs, RLS
+- [x] combat history — inputs + summary, no event log (regenerated
+      deterministically; replays verified against the summary)
+- [x] seeds — 256-bit CSPRNG per combat, never from or to the client
+- [x] use case — `RunCombatUseCase`: one owner-scoped read, simulation outside
+      the transaction, one conditional two-statement transaction
+- [x] concurrency — optimistic version check; 25-request storms and retries
+      across two API instances produce exactly one combat
+- [x] idempotency — `Idempotency-Key` header; 201 new, 200 replay
+- [x] pacing gate — `409 COMBAT_NOT_READY` + `Retry-After` until the combat's
+      simulated duration has passed on the server clock
+- [x] API contract — `CombatResponse`, HugeNumber wire schema via Game Core
+      (ADR-013 edge), `progression` in player state (encounter `null` beyond
+      the rule set's reach)
+- [x] security — authentication, ownership in read and write, header
+      validation, body ignored, no seed/owner/version in responses
+- [x] Supabase — `supabase/` CLI structure (generated, adapted: Prisma owns
+      migrations), docs/DEPLOYMENT.md with variables, workflow and owner
+      checklist; no credentials
+- [x] game screen — mobile-first HUD, battlefield, report, single action;
+      boss treatment from the server's stage kind; every UX state
+- [x] PixiJS — `CombatScene` adapter, lazy procedural scene, lifecycle-safe
+      (StrictMode, late init, full destroy), canvas fallback, DOM mirror
+- [x] client state — TanStack Query cache updated from the authoritative
+      response; screen keyed by user; retries reuse the key
+- [x] Vercel preparation — build guard (missing public config on Vercel,
+      privileged `NEXT_PUBLIC_` names anywhere); owner steps documented
+- [x] documentation — ADR-019, ARCHITECTURE, GAME_DESIGN, DATABASE, SECURITY,
+      UI_SYSTEM, DEPLOYMENT, README, ADR index
+- [ ] GitHub Actions green on the pull request
+- [ ] Supabase DEV project created and migrated — OWNER ACTION
+      (docs/DEPLOYMENT.md)
+- [ ] Vercel deployment — OWNER ACTION, and a playable deployment is
+      BLOCKED on the API host decision (ADR-012, owner decision)
+- [ ] user approval
 
----
+Validation (2026-09-23, local, PostgreSQL 16 and Redis 7):
+
+- `pnpm run verify` (format check, lint, typecheck, unit tests, production
+  build): pass, whole workspace.
+- Unit and application tests: 830 pass (Phase 2: 614) — `game-core` 429,
+  `contracts` 95, `api` 136, `web` 105, `config` 33, `ui` 18, `database` 10,
+  `worker` 4.
+- PostgreSQL integration (`pnpm run test:integration`): 55 pass (Phase 2:
+  28), five consecutive runs without a failure. Covered: token → combat →
+  persistence → response; 25 simultaneous combats on stage 9 (one 201,
+  twenty-four 409, one reward, stage 10); 25 simultaneous retries of one key
+  (one 201, twenty-four 200, one row); eight intents × three retries across
+  two API instances (exactly one combat); a 30-combat session whose ledger
+  reconciles to the balance; replay from the database byte-identical; boss
+  defeat fallback at stage 4·10^9; a too-deep stage failing without writes;
+  stale-version and foreign-owner commits writing nothing; ledger CHECKs; RLS.
+- Playwright E2E: 42 pass (21 scenarios × mobile 390x844 and desktop),
+  including fight → reward → next stage → next enemy → reload; one request per
+  burst of taps; a boss stage and its defeat; a second account starting
+  clean. The Pixi scene reports ready in headless Chromium; assertions read
+  the DOM, never pixels.
+- Migrations applied to an empty database on which Supabase's `anon` and
+  `authenticated` roles exist with default privileges: no drift (`prisma
+  migrate diff --exit-code`); RLS on `profiles`, `characters` and
+  `combat_runs` with zero policies; neither role holds any privilege.
+- Browser bundle built with the canary service-role key: clean. PixiJS is in
+  two lazy chunks referenced by no page's initial HTML.
+- Game Core purity: guard test and ESLint unchanged and passing; the web app
+  may import only `HugeNumber` from Game Core.
+- Deterministic replay: Game Core golden fingerprints, property tests, the
+  use case's equality with a direct Game Core call, and replay-from-database.
+- Self-review fixed before commit: a pacing-gate clock mismatch for new
+  characters, a 500 on player state for stages beyond the rule set's reach, a
+  `useCombatScene` state that stayed "ready" across a scene re-creation, a
+  frame of stale playback time, lunges drifting under overlapping attacks,
+  tweens outliving destroyed actors, actors colliding with the DOM overlays
+  (found by screenshot review), a type error Vitest does not catch, and a
+  test that re-implemented the boss rule.
+
+Not in this phase, by design: offline progression, items, skills, prestige,
+rankings, PvP, auto-battle, combat history endpoints, general rate limiting,
+the generic idempotency table, and hosting the API (ADR-012).
 
 # Phase 4 — Offline Progression
 

@@ -269,14 +269,38 @@ later balance change is a new rule set under a new version (ADR-015).
 - Offline progress needs an aggregate record, because one claim covers many
   fights. That record and the generic idempotency table are Phase 4 designs.
 
+## Implementation notes (2026-09-23)
+
+Two findings during implementation refine the decision above. They do not
+change it.
+
+1. **One clock for the pacing gate.** A new character's `next_combat_at` was
+   first left to the column default, the database's `now()`, while the gate
+   compares against the API's clock. Any skew between the two would block a
+   new character's first fight. Provisioning now writes `next_combat_at`
+   from the API clock, and every value the gate reads comes from that single
+   source. The column default remains only to backfill rows that existed
+   before the migration.
+2. **An encounter can be undescribable.** Every stage from 1 to 2^63 − 1 is
+   valid (ADR-018). Under `RULES_V1`, however, enemy scaling overflows
+   `HugeNumber` around stage 4·10^10. Deriving the encounter for
+   `GET /player/state` there would turn a valid read into a 500.
+   `describeProgress` therefore returns `encounter: null` when the rule set
+   cannot scale an enemy that deep. The contract carries it as `null`, and the
+   web app shows "no enemy can be found" and disables the fight. A combat
+   attempted there fails with a 500 and writes nothing, and a test pins that
+   behaviour. No such state is reachable in play.
+
 ## Consequences
 
 - A combat cannot be forged, replayed for a second reward, raced into a double
   advance, re-rolled or sped up by a client. Each property is covered by a
   test against PostgreSQL.
-- The request path costs at most three statements on the happy path: one
-  owned-character read, then an `UPDATE` and an `INSERT` in one transaction.
-  The idempotency lookup runs only when the combat already exists.
+- A new combat costs four statements. First comes one owner-scoped read of
+  the character and of any combat already recorded under the key; Prisma
+  issues it as two `SELECT`s. Then an `UPDATE` and an `INSERT` run in one
+  transaction. The unique index `(character_id, idempotency_key)` serves the
+  key lookup. A replay costs the read alone.
 - The API now calls Game Core on every combat and on every player-state read.
   At about 200 k combats/s (Phase 1 benchmark), this is not a cost concern.
 - Players wait for combat time. This is the intended pace, and the rule set

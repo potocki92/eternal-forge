@@ -10,6 +10,7 @@ import {
   StageNumber,
   calculateStageRewards,
   getGameRules,
+  resolveStage,
 } from '@eternal-forge/game-core';
 import request from 'supertest';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -178,14 +179,14 @@ describe('combat against PostgreSQL — the loop', () => {
       HugeNumber.ZERO,
     );
     expect(gold(row).eq(ledgerGold)).toBe(true);
+    // Every row pays exactly what Game Core says its stage is worth — the
+    // stage kind (boss or not) comes from the rule set, not from this test.
     for (const run of runs) {
       const paid = HugeNumber.fromParts(run.rewardGoldCoef, run.rewardGoldExp);
-      const stage = { number: StageNumber.of(run.stage), kind: 'REGULAR' as const };
-      if (run.outcome === 'LOSS') {
-        expect(paid.isZero()).toBe(true);
-      } else if (run.stage % 10n !== 0n) {
-        expect(paid.eq(calculateStageRewards(stage, rules.rewards).gold)).toBe(true);
-      }
+      const stage = resolveStage(StageNumber.of(run.stage), rules.stages);
+      const expected =
+        run.outcome === 'WIN' ? calculateStageRewards(stage, rules.rewards).gold : HugeNumber.ZERO;
+      expect(paid.eq(expected)).toBe(true);
     }
   });
 

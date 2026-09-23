@@ -108,7 +108,46 @@ Stage and reward rules v1 — IMPLEMENTED (Phase 1):
   `floor(base × growth^(stage − 1))`, multiplied for bosses. A loss yields
   nothing.
 - A character's health and damage grow per level. Level-ups from experience
-  are PLANNED (Phase 3); Phase 1 only computes the rewards.
+  are IMPLEMENTED in Phase 3 (below).
+
+## Progression rules v1 — IMPLEMENTED (Phase 3)
+
+The first persistent loop (ADR-019). The numbers are provisional balance and
+live only in `RULES_V1.progression`. Rules v1 was extended in place because
+nothing produced under it had been persisted yet. It is frozen from the first
+persisted combat onwards.
+
+- **One stage at a time.** The player fights the enemy on the character's
+  current stage. The server chooses the stage, the enemy and the seed. The
+  player only decides *when* to fight.
+- **Win:** the stage's gold and experience are granted, and the character
+  advances exactly one stage.
+- **Loss:** nothing is granted, and the character falls back one stage
+  (`stagesLostOnDefeat`), never below stage 1. A wall becomes a farm: the
+  player earns rewards on the stage before it until their level beats it.
+  Without this rule the only progression source would dry up at the first
+  wall. A simulation of the loop stalled permanently at the stage-10 boss.
+- **Levels:** going from level `L` to `L + 1` costs
+  `floor(10 × 1.10^(L − 1))` experience. Experience is kept as progress
+  within the current level. One reward can grant several levels, at most
+  1 000 per reward, and any remainder is kept. The level cap is 2^31 − 1, the
+  column's range.
+- **Pacing:** a combat occupies the hero for its simulated duration. The next
+  fight unlocks on the server's clock when that time has passed, and the
+  client's animation lasts exactly as long. Time is the resource of an idle
+  game, so it cannot be skipped by sending requests faster. The animation
+  itself can be skipped; the wait cannot.
+- **Bosses:** every 10th stage, as the rule set classifies it. Bosses are
+  bigger numbers with a separate archetype and a distinct presentation. Boss
+  *mechanics* remain PLANNED.
+
+Measured with the real Game Core over simulated play (seeded): stage 10 is
+reached after about 1 minute of combat time. The first boss takes about 8
+minutes of farming, stage 50 about 48 minutes and stage 100 about 4 hours.
+Walls at each boss are intended. Builds (Phases 5–8) are meant to break them.
+
+FUTURE: a player-controlled "stay and farm" toggle, auto-battle, and offline
+progression (Phase 4).
 
 ---
 

@@ -256,7 +256,7 @@ describe('describeProgress', () => {
     const description = describeProgress(progress({ level: 3, stage: StageNumber.of(10) }), 1);
     expect(description.experienceToNextLevel.eq(n(12))).toBe(true);
     expect(description.character).toEqual(createCharacter(3, rules));
-    expect(description.encounter.stage.kind).toBe('BOSS');
+    expect(description.encounter?.stage.kind).toBe('BOSS');
     expect(description.encounter).toEqual(createEnemyForStage(StageNumber.of(10), rules));
   });
 });
