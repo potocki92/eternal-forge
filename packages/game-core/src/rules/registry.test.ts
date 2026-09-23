@@ -27,6 +27,7 @@ describe('game rules registry', () => {
     expect(Object.isFrozen(rules.stages.bossArchetype)).toBe(true);
     expect(Object.isFrozen(rules.character.baseStats)).toBe(true);
     expect(Object.isFrozen(rules.progression)).toBe(true);
+    expect(Object.isFrozen(rules.offline)).toBe(true);
   });
 
   it('contains only internally consistent data', () => {
@@ -56,6 +57,13 @@ describe('game rules registry', () => {
       expect(rules.progression.experienceToLevelGrowth.gte(HugeNumber.ONE)).toBe(true);
       expect(Number.isSafeInteger(rules.progression.stagesLostOnDefeat)).toBe(true);
       expect(rules.progression.stagesLostOnDefeat).toBeGreaterThanOrEqual(0);
+      // Offline progression (ADR-023): whole milliseconds, a real cap, and a
+      // minimum absence long enough for any combat, so an eligible claim
+      // always fits at least one fight.
+      expect(Number.isSafeInteger(rules.offline.capMs)).toBe(true);
+      expect(Number.isSafeInteger(rules.offline.minimumAbsenceMs)).toBe(true);
+      expect(rules.offline.minimumAbsenceMs).toBeGreaterThanOrEqual(rules.combat.timeLimitMs);
+      expect(rules.offline.capMs).toBeGreaterThanOrEqual(rules.offline.minimumAbsenceMs);
     }
   });
 });

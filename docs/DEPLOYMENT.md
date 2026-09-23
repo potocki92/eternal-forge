@@ -1,6 +1,6 @@
 # Eternal Forge — Environments and Deployment
 
-Status: PARTIALLY IMPLEMENTED (Phase 3)
+Status: PARTIALLY IMPLEMENTED (Phase 3, migrations through Phase 4 PR 4.3)
 
 - IMPLEMENTED: local development and CI, which are reproducible without any
   hosted service; the Supabase CLI project structure (`supabase/`); a build
@@ -135,7 +135,7 @@ by hand.
 
    ```sql
    SELECT relname, relrowsecurity FROM pg_class
-    WHERE relname IN ('profiles', 'characters', 'combat_runs');   -- all true
+    WHERE relname IN ('profiles', 'characters', 'combat_runs', 'offline_runs'); -- all true
    SELECT has_table_privilege('anon', 'combat_runs', 'SELECT'),
           has_table_privilege('authenticated', 'characters', 'UPDATE'); -- false, false
    ```
@@ -190,3 +190,21 @@ unreachable, which is accurate.
 draining and `/health`/`/health/ready` probes. Record it in an ADR that
 supersedes ADR-012's open part. The Vercel checklist above is then completed
 with the API's URL and CORS origins.
+
+---
+
+# Migration deployment order (every PR with a migration)
+
+Application code that expects a new column must never reach an environment
+before its migration. After merging a PR that adds a migration:
+
+1. Run the GitHub Action **Deploy Supabase DEV**
+   (`.github/workflows/deploy-supabase-dev.yml`) from `main`.
+2. Check that it reports no drift.
+3. Only then deploy or restart the API against Supabase DEV.
+
+Phase 4 PR 4.3 adds `20260923180000_offline_progression`
+(`characters.offline_seed`, `offline_runs`). It is additive: existing rows get
+an offline seed, nothing else changes, and the previous API version keeps
+working against the migrated schema. The new API version fails on every
+character read without it.

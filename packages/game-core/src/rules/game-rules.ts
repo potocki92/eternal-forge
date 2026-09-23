@@ -15,6 +15,7 @@ export interface GameRules {
   readonly stages: StageRules;
   readonly rewards: RewardRules;
   readonly progression: ProgressionRules;
+  readonly offline: OfflineRules;
 }
 
 export interface CombatRules {
@@ -84,4 +85,25 @@ export interface ProgressionRules {
    * farm: the character earns rewards on earlier stages until it can pass.
    */
   readonly stagesLostOnDefeat: number;
+}
+
+/**
+ * Offline progression (ADR-023): how much of a character's idle time the
+ * server converts into farming fights when the player returns.
+ *
+ * Both values are durations in whole milliseconds of server time. They are
+ * balance, owned by the rule set, never by a client or a UI constant.
+ */
+export interface OfflineRules {
+  /**
+   * The most idle time one claim can reward. Time beyond it is not rewarded
+   * and is not kept for a later claim.
+   */
+  readonly capMs: number;
+  /**
+   * Idle time below this is not converted yet: it stays unprocessed and is
+   * counted by a later claim. At least the combat time limit, so every
+   * eligible claim fits at least one fight.
+   */
+  readonly minimumAbsenceMs: number;
 }

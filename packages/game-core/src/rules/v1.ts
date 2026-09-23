@@ -66,4 +66,10 @@ export const RULES_V1: GameRules = {
     experienceToLevelGrowth: d('1.10'),
     stagesLostOnDefeat: 1,
   },
+  // Added in Phase 4 PR 4.3 (ADR-023). New rules, read only by offline
+  // progression: no persisted result of rules v1 changes. Frozen from here on.
+  offline: {
+    capMs: 8 * 60 * 60 * 1_000, // 8 hours — provisional, owner-adjustable
+    minimumAbsenceMs: 60_000, // 1 minute
+  },
 };

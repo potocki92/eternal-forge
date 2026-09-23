@@ -22,6 +22,16 @@ import { CombatController } from '../../src/combat/presentation/combat.controlle
 import { CLOCK, type Clock } from '../../src/common/clock/clock.port.js';
 import { AllExceptionsFilter } from '../../src/common/http/all-exceptions.filter.js';
 import { RequestIdMiddleware } from '../../src/common/http/request-id.middleware.js';
+import { ClaimOfflineProgressUseCase } from '../../src/offline/application/claim-offline-progress.use-case.js';
+import {
+  OFFLINE_PROGRESS_REPOSITORY,
+  type OfflineProgressRepository,
+} from '../../src/offline/application/ports/offline-progress-repository.port.js';
+import {
+  OFFLINE_SEED_SOURCE,
+  type OfflineSeedSource,
+} from '../../src/offline/application/ports/offline-seed-source.port.js';
+import { OfflineProgressController } from '../../src/offline/presentation/offline-progress.controller.js';
 import { GetOwnedCharacterUseCase } from '../../src/player/application/get-owned-character.use-case.js';
 import { GetPlayerStateUseCase } from '../../src/player/application/get-player-state.use-case.js';
 import {
@@ -43,8 +53,12 @@ export interface TestAppOptions {
   readonly players: PlayerRepository;
   readonly combats: CombatRepository;
   readonly selections: StageSelectionRepository;
+  /** Offline progression (ADR-023). The routes exist only when it is given. */
+  readonly offline?: OfflineProgressRepository;
   /** Defaults to {@link sequentialSeeds}, so combats are reproducible. */
   readonly seeds?: CombatSeedSource;
+  /** Defaults to {@link sequentialSeeds} with an `offline` prefix. */
+  readonly offlineSeeds?: OfflineSeedSource;
   readonly clock?: Clock;
   /** Replaces the real verifier; only for failure modes keys cannot produce. */
   readonly verifier?: AccessTokenVerifier;
@@ -82,8 +96,27 @@ export class ManualClock implements Clock {
  */
 export async function createTestApp(options: TestAppOptions): Promise<INestApplication> {
   const clock = options.clock ?? { now: () => new Date() };
+  const offline =
+    options.offline === undefined
+      ? { controllers: [], providers: [] }
+      : {
+          controllers: [OfflineProgressController],
+          providers: [
+            { provide: OFFLINE_PROGRESS_REPOSITORY, useValue: options.offline },
+            {
+              provide: OFFLINE_SEED_SOURCE,
+              useValue: options.offlineSeeds ?? sequentialSeeds('offline-seed'),
+            },
+            ClaimOfflineProgressUseCase,
+          ],
+        };
   const moduleRef = await Test.createTestingModule({
-    controllers: [PlayerController, CombatController, StageSelectionController],
+    controllers: [
+      PlayerController,
+      CombatController,
+      StageSelectionController,
+      ...offline.controllers,
+    ],
     providers: [
       { provide: CLOCK, useValue: clock },
       {
@@ -107,6 +140,7 @@ export async function createTestApp(options: TestAppOptions): Promise<INestAppli
       GetOwnedCharacterUseCase,
       RunCombatUseCase,
       SelectStageUseCase,
+      ...offline.providers,
     ],
   }).compile();
 

@@ -1,6 +1,6 @@
 # Eternal Forge — Security Model
 
-Status: PARTIALLY IMPLEMENTED (Phases 0–3, Phase 4 PRs 4.1–4.2) / EVOLVING
+Status: PARTIALLY IMPLEMENTED (Phases 0–3, Phase 4 PRs 4.1–4.3) / EVOLVING
 
 The principles below are binding from the first line of gameplay code. A
 per-control implementation status is listed at the end of this document.
@@ -596,6 +596,55 @@ while a client sends requests.
 - Can the operation leave partial state? No: Stop never aborts a request;
   each combat commits whole or not at all.
 
+## IMPLEMENTED (Phase 4 PR 4.3) — offline progression
+
+See ADR-023.
+
+- **No client time.** `POST /player/characters/:characterId/offline-progress`
+  has no body (anything sent is ignored — a test sends a forged elapsed time,
+  client clock, stage and reward). Idle time is the API clock minus the
+  persisted boundary `next_combat_at`, never negative.
+- **Capped and bounded.** At most 8 hours count; at most 30 000 fights are
+  simulated per claim (`LIMIT_EXCEEDED` beyond, never unbounded CPU). Under
+  rules v1 an 8-hour claim is ≤ 28 800 fights, ~0.35 s.
+- **One time line.** Online combat and offline claims move the same boundary
+  in the same version-conditional write; no interval can be paid twice.
+- **Seeds are server custody and cannot be re-rolled.** The claim seed is
+  stored on the character (`offline_seed`), fixed until a claim commits and
+  then replaced from the CSPRNG. A claim that fits nothing writes nothing but
+  also cannot draw a new seed.
+- **Replays are cheap.** A repeated key is answered from the stored summary,
+  never re-simulated.
+- **No barrier breaking.** Offline fights only on a stage ≤ the highest
+  cleared (Game Core rule and a database CHECK) and never writes a stage
+  column, so rankings cannot be raised offline.
+- **Observability.** `offline.processed`, `offline.capped`,
+  `offline.replayed`, `offline.noop` (debug), `offline.conflict`,
+  `offline.rejected`, with character and claim ids, counts and durations —
+  never a token, seed or body.
+
+## Standing review answers — Phase 4 PR 4.3 (offline progression)
+
+| Threat                                   | Why it cannot duplicate or accelerate rewards                                                         |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| A. fake elapsed time in the request      | No body is read; elapsed is server clock − persisted boundary                                         |
+| B/C. device clock or timezone changed    | Never read; the web client sends no time                                                              |
+| D. same claim replayed                   | Unique `(character, key)`; replay from the stored row, 200, nothing written                          |
+| E. many different keys                   | After the first commit the boundary is ~now: the rest find nothing (tested: 100 keys, one claim)     |
+| F. two devices at once                   | Shared version: one commits, the other re-reads and finds nothing (tested across two instances)      |
+| G. refresh after commit, before response | Same key → replay; new key → nothing left to collect                                                  |
+| H. API spam                              | Each no-op is one read + a cheap check; general rate limiting still PLANNED (see Known limitations)   |
+| I/J. forged or foreign character id      | UUID-validated path; owner in read and write → 404, nothing written                                  |
+| K. stage selection during a claim        | Version conflict → the claim re-resolves against the new state; records never written                |
+| L/M. combat or auto-battle during claim  | Both move the same boundary under the version: whichever commits first owns the time                 |
+| N. huge body                             | Ignored; the body parser limit answers 413 as before                                                  |
+| O. future boundary or clock anomaly      | Elapsed clamps to 0; a backwards clock gives nothing; a forward jump is capped at 8 h                 |
+
+- Can the operation leave partial state? No: rewards, boundary, seed and
+  record commit in one transaction (tested by forcing the INSERT to fail).
+- Can invalid numeric values enter? No: stages stay exact (2^53 + 1 tested),
+  amounts are canonical HugeNumbers, CHECKs as on `combat_runs`.
+
 ## Known limitations
 
 - **Revocation lag:** after sign-out, the access token remains valid at the API
@@ -608,6 +657,15 @@ while a client sends requests.
   combat duration plus about 1.2 s (≈ 0.5 requests/s per character under
   rules v1, where a combat lasts 1–30 s), plus bounded retries; a limit must
   allow that cadence per character and several tabs (ADR-022). Supabase Auth applies its own limits to sign-in and sign-up.
+- **Offline claim CPU.** A claim that finds time to collect simulates up to
+  ~0.35 s of CPU (8 hours, rules v1). Concurrent first claims for one
+  character with different keys each simulate before the first commits; only
+  one pays. Rate limiting (PLANNED) must bound this amplification.
+- **Offline zero-result probe.** A claim that fits nothing reveals that the
+  next offline fight is longer than the idle time. Switching farm stages
+  between such probes lets a script prefer, for its next claim, a stage
+  whose first fight is short. The seed cannot be re-rolled, the effect is
+  limited to one fight per claim, and each probe costs a selection write.
 
 ## PLANNED
 

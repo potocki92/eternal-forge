@@ -5,10 +5,19 @@ import { CombatModule } from './combat/combat.module.js';
 import { ApiConfigModule } from './config/api-config.module.js';
 import { RequestIdMiddleware } from './common/http/request-id.middleware.js';
 import { HealthModule } from './health/health.module.js';
+import { OfflineModule } from './offline/offline.module.js';
 import { PlayerModule } from './player/player.module.js';
 
 @Module({
-  imports: [ApiConfigModule, ClockModule, AuthModule, HealthModule, PlayerModule, CombatModule],
+  imports: [
+    ApiConfigModule,
+    ClockModule,
+    AuthModule,
+    HealthModule,
+    PlayerModule,
+    CombatModule,
+    OfflineModule,
+  ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {

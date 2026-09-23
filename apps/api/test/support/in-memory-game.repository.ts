@@ -7,6 +7,13 @@ import type {
 } from '../../src/combat/application/ports/combat-repository.port.js';
 import type { CombatRun } from '../../src/combat/domain/combat-run.js';
 import type {
+  CommitOfflineClaim,
+  CommitOfflineClaimResult,
+  OfflineClaimTarget,
+  OfflineProgressRepository,
+} from '../../src/offline/application/ports/offline-progress-repository.port.js';
+import type { OfflineRun } from '../../src/offline/domain/offline-run.js';
+import type {
   PlayerRepository,
   ProvisionPlayerData,
   ProvisionPlayerOutcome,
@@ -27,25 +34,28 @@ import {
 interface StoredCharacter {
   character: Character;
   version: bigint;
+  offlineSeed: string;
 }
 
 /**
- * In-memory {@link PlayerRepository}, {@link CombatRepository} and
- * {@link StageSelectionRepository} over one shared store, with the ports'
- * documented semantics: owner-scoped reads, idempotent provisioning, a combat
- * commit that is atomic, conditional on the character's version and unique
- * per `(character, idempotency key)`, and a selection save conditional on the
- * same version.
+ * In-memory {@link PlayerRepository}, {@link CombatRepository},
+ * {@link StageSelectionRepository} and {@link OfflineProgressRepository} over
+ * one shared store, with the ports' documented semantics: owner-scoped reads,
+ * idempotent provisioning, combat and offline commits that are atomic,
+ * conditional on the character's version and unique per `(character,
+ * idempotency key)`, and a selection save conditional on the same version.
  *
  * Used where a test is about the layers above persistence. The PostgreSQL
  * adapters are covered against a real database in `test-integration/`.
  */
 export class InMemoryGameRepository
-  implements PlayerRepository, CombatRepository, StageSelectionRepository
+  implements PlayerRepository, CombatRepository, StageSelectionRepository, OfflineProgressRepository
 {
   private readonly profiles = new Map<string, Profile>();
   private readonly characters: StoredCharacter[] = [];
   private readonly combatRuns: CombatRun[] = [];
+  private readonly offlineRuns: OfflineRun[] = [];
+  private seedCounter = 0;
 
   /**
    * Runs just before a commit is applied. Tests use it to let a "concurrent"
@@ -55,6 +65,9 @@ export class InMemoryGameRepository
 
   /** Runs just before a selection is saved, like {@link beforeCommit}. */
   beforeSaveSelection: (() => Promise<void>) | undefined;
+
+  /** Runs just before an offline claim is committed, like {@link beforeCommit}. */
+  beforeCommitClaim: (() => Promise<void>) | undefined;
 
   constructor(private readonly now: () => Date = () => new Date('2026-09-22T10:00:00.000Z')) {}
 
@@ -107,6 +120,8 @@ export class InMemoryGameRepository
           updatedAt: this.now(),
         },
         version: 0n,
+        // PostgreSQL draws the initial offline seed itself (column default).
+        offlineSeed: `initial-offline-seed-${String((this.seedCounter += 1))}`,
       };
       this.characters.push(stored);
       created = true;
@@ -180,7 +195,70 @@ export class InMemoryGameRepository
     return { kind: 'saved', character: stored.character };
   }
 
+  // --- OfflineProgressRepository ------------------------------------------
+
+  loadClaimTarget(
+    authUserId: string,
+    characterId: string,
+    idempotencyKey: string,
+  ): Promise<OfflineClaimTarget | null> {
+    const stored = this.owned(authUserId, characterId);
+    if (stored === undefined) {
+      return Promise.resolve(null);
+    }
+    return Promise.resolve({
+      character: stored.character,
+      version: stored.version,
+      offlineSeed: stored.offlineSeed,
+      existingRun:
+        this.offlineRuns.find(
+          (run) => run.characterId === characterId && run.idempotencyKey === idempotencyKey,
+        ) ?? null,
+    });
+  }
+
+  async commitClaim(command: CommitOfflineClaim): Promise<CommitOfflineClaimResult> {
+    await this.beforeCommitClaim?.();
+
+    const stored = this.owned(command.authUserId, command.characterId);
+    const keyTaken = this.offlineRuns.some(
+      (run) =>
+        run.characterId === command.characterId &&
+        run.idempotencyKey === command.run.idempotencyKey,
+    );
+    if (stored?.version !== command.expectedVersion || keyTaken) {
+      return { kind: 'conflict' };
+    }
+
+    stored.character = {
+      ...stored.character,
+      level: command.level,
+      experience: command.experience,
+      gold: command.gold,
+      nextCombatAt: command.processedUntil,
+    };
+    stored.offlineSeed = command.nextOfflineSeed;
+    stored.version += 1n;
+    const run: OfflineRun = { ...command.run, id: randomUUID() };
+    this.offlineRuns.push(run);
+    return { kind: 'committed', run, character: stored.character };
+  }
+
   // --- Test helpers -------------------------------------------------------
+
+  /** Every offline claim recorded for a character, oldest first. */
+  offlineRunsOf(characterId: string): readonly OfflineRun[] {
+    return this.offlineRuns.filter((run) => run.characterId === characterId);
+  }
+
+  /** The seed the character's next offline claim will use. */
+  offlineSeedOf(characterId: string): string {
+    const stored = this.characters.find((entry) => entry.character.id === characterId);
+    if (stored === undefined) {
+      throw new Error(`No character ${characterId}`);
+    }
+    return stored.offlineSeed;
+  }
 
   /** Every combat recorded for a character, oldest first. */
   runsOf(characterId: string): readonly CombatRun[] {

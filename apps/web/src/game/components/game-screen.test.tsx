@@ -1,6 +1,7 @@
 import {
   stageSelectionRequestSchema,
   type CombatResponse,
+  type OfflineProgressResponse,
   type PlayerStateResponse,
   type StageSelectionRequest,
 } from '@eternal-forge/contracts';
@@ -10,7 +11,7 @@ import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AccessTokenSource } from '@/auth/access-token-source';
 import { usePlayerState } from '@/player/use-player';
-import { combatResponseFixture, playerStateFixture } from '@/test/fixtures';
+import { combatResponseFixture, offlineProgressFixture, playerStateFixture } from '@/test/fixtures';
 import type { CombatScene, CombatSceneFactory, SceneHit } from '../scene/combat-scene';
 import { GameScreen } from './game-screen';
 
@@ -39,6 +40,14 @@ type CombatReply =
   | 'offline';
 
 let combatReplies: CombatReply[];
+/** How the server answers offline claims, in order; "nothing to collect" once empty. */
+type OfflineReply =
+  | OfflineProgressResponse
+  | { readonly status: number; readonly body?: unknown }
+  | 'offline'
+  | { readonly hold: Promise<void>; readonly then: OfflineProgressResponse };
+let offlineReplies: OfflineReply[];
+const offlineKeys: string[] = [];
 let serverState: PlayerStateResponse;
 const combatKeys: string[] = [];
 
@@ -101,6 +110,29 @@ const fetchMock = vi.fn(async (url: URL, init: RequestInit) => {
       return json(reply.body, reply.status);
     }
     return json(acceptSelection(body), 200);
+  }
+  if (init.method === 'POST' && url.pathname.endsWith('/offline-progress')) {
+    offlineKeys.push(new Headers(init.headers).get('idempotency-key') ?? '');
+    // The claim carries no time and no gameplay value.
+    expect(init.body).toBeUndefined();
+    let reply = offlineReplies.shift() ?? offlineProgressFixture('nothing');
+    if (reply === 'offline') {
+      return Promise.reject(new TypeError('Failed to fetch'));
+    }
+    if ('hold' in reply) {
+      await reply.hold;
+      reply = reply.then;
+    }
+    if ('offline' in reply) {
+      const answer = {
+        ...reply,
+        progression: serverState.progression,
+        serverTime: serverState.serverTime,
+      };
+      serverState = { ...serverState, character: answer.character };
+      return json(answer, reply.offline.fights > 0 ? 201 : 200);
+    }
+    return json(reply.body ?? {}, reply.status);
   }
   if (init.method === 'POST') {
     combatKeys.push(new Headers(init.headers).get('idempotency-key') ?? '');
@@ -216,6 +248,8 @@ beforeEach(() => {
   fetchMock.mockClear();
   combatKeys.length = 0;
   combatReplies = [];
+  offlineReplies = [];
+  offlineKeys.length = 0;
   selectionReplies = [];
   heldStateRead = undefined;
   selectionBodies.length = 0;
@@ -433,6 +467,75 @@ describe('GameScreen — failures', () => {
     await advance(4_000);
 
     expect(report()).toHaveAttribute('data-outcome', 'WIN');
+  });
+});
+
+describe('GameScreen — offline progress (ADR-023)', () => {
+  it('asks the server once on entry, before any fight, and sends no time', async () => {
+    renderGame(readyPlayer());
+    expect(fightButton()).toBeDisabled();
+    await advance(0);
+
+    expect(offlineKeys).toHaveLength(1);
+    expect(fightButton()).toBeEnabled();
+    // Nothing to collect: no summary at all.
+    expect(screen.queryByTestId('offline-summary')).not.toBeInTheDocument();
+  });
+
+  it('shows the server’s summary and the authoritative gold, then continues', async () => {
+    offlineReplies = [offlineProgressFixture('collected')];
+    renderGame(readyPlayer());
+    await advance(0);
+
+    expect(screen.getByTestId('offline-summary')).toBeInTheDocument();
+    expect(screen.getByTestId('offline-away')).toHaveTextContent('3h 42m');
+    expect(screen.getByTestId('offline-counted')).toHaveTextContent('3h 42m');
+    expect(screen.getByTestId('offline-stage')).toHaveTextContent('1');
+    expect(screen.getByTestId('offline-battles')).toHaveTextContent('24 (24 won)');
+    expect(screen.getByTestId('offline-gold')).toHaveTextContent('+120');
+    expect(screen.getByTestId('offline-levels')).toHaveTextContent('+3');
+    expect(screen.getByTestId('hud-gold')).toHaveTextContent('120');
+    // The summary never blocks play.
+    expect(fightButton()).toBeEnabled();
+
+    fireEvent.click(screen.getByTestId('offline-continue'));
+    expect(screen.queryByTestId('offline-summary')).not.toBeInTheDocument();
+  });
+
+  it('shows the cap when the absence was longer than it', async () => {
+    const capped = offlineProgressFixture('collected');
+    offlineReplies = [
+      {
+        ...capped,
+        offline: {
+          ...capped.offline,
+          elapsedMs: 52_320_000,
+          rewardedMs: 28_800_000,
+          capReached: true,
+        },
+      },
+    ];
+    renderGame(readyPlayer());
+    await advance(0);
+    expect(screen.getByTestId('offline-away')).toHaveTextContent('14h 32m');
+    expect(screen.getByTestId('offline-counted')).toHaveTextContent('8h (limit reached)');
+  });
+
+  it('a failed claim can be retried with the same key, and never blocks the game', async () => {
+    offlineReplies = ['offline', 'offline', 'offline', offlineProgressFixture('collected')];
+    renderGame(readyPlayer());
+    await advance(0);
+    await advance(5_000); // the mutation's own quick retries
+
+    expect(screen.getByTestId('offline-failed')).toBeInTheDocument();
+    expect(fightButton()).toBeEnabled();
+    const firstKey = offlineKeys[0];
+    expect(new Set(offlineKeys)).toEqual(new Set([firstKey]));
+
+    fireEvent.click(screen.getByTestId('offline-retry'));
+    await advance(0);
+    expect(offlineKeys.at(-1)).toBe(firstKey);
+    expect(screen.getByTestId('offline-summary')).toBeInTheDocument();
   });
 });
 
@@ -1001,7 +1104,13 @@ describe('GameScreen — online auto battle (ADR-022)', () => {
 
     setHidden(false);
     await advance(0);
-    // One fight now — not one for every gate that opened while hidden.
+    // Back on screen, the absence is offered to the server as an offline
+    // claim first (ADR-023)…
+    expect(offlineKeys).toHaveLength(2);
+    // (This fake answers with the server time of the last combat, so the
+    // gate it reports is read from the moment the claim arrived.)
+    await advance(4_000);
+    // …then one fight — not one for every gate that opened while hidden.
     expect(combatKeys).toHaveLength(2);
     await advance(1_000);
     expect(combatKeys).toHaveLength(2);

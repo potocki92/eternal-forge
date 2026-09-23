@@ -1,14 +1,11 @@
 import { Controller, Headers, HttpStatus, Param, Post, Res } from '@nestjs/common';
-import {
-  IDEMPOTENCY_KEY_HEADER,
-  idempotencyKeySchema,
-  type CombatResponse,
-} from '@eternal-forge/contracts';
+import { IDEMPOTENCY_KEY_HEADER, type CombatResponse } from '@eternal-forge/contracts';
 import type { Response } from 'express';
 import { z } from 'zod';
 import type { AuthenticatedIdentity } from '../../auth/application/authenticated-identity.js';
 import { CurrentIdentity } from '../../auth/presentation/current-identity.decorator.js';
 import { ApiException } from '../../common/http/api-exception.js';
+import { parseIdempotencyKey } from '../../common/http/idempotency-key.js';
 import { ZodValidationPipe } from '../../common/http/zod-validation.pipe.js';
 import { RunCombatUseCase } from '../application/run-combat.use-case.js';
 import { toCombatResponse } from './combat.mapper.js';
@@ -55,21 +52,6 @@ export class CombatController {
         return toCombatResponse(result.combat, result.serverTime);
     }
   }
-}
-
-function parseIdempotencyKey(value: string | undefined): string {
-  const parsed = idempotencyKeySchema.safeParse(value);
-  if (!parsed.success) {
-    throw new ApiException(HttpStatus.BAD_REQUEST, 'VALIDATION_FAILED', 'The request is invalid.', {
-      issues: [
-        {
-          path: `headers.${IDEMPOTENCY_KEY_HEADER}`,
-          message: 'A UUID idempotency key is required.',
-        },
-      ],
-    });
-  }
-  return parsed.data;
 }
 
 /** Whole seconds, rounded up, never below one (RFC 9110 `Retry-After`). */

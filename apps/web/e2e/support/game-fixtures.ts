@@ -71,3 +71,62 @@ export async function recordedCombats(heroName: string): Promise<RecordedCombat[
     await client.end();
   }
 }
+
+/**
+ * Makes the hero named `heroName` idle for `awayMs`, as if the player had
+ * closed the game that long ago: the server's processed boundary
+ * (`next_combat_at`) is moved into the past on the database clock. This is
+ * test support for the *server's* time line — the browser clock is never
+ * touched, and the API measures the absence itself (ADR-023).
+ */
+export async function sendHeroAway(heroName: string, awayMs: number): Promise<void> {
+  const client = new pg.Client({ connectionString: databaseUrl });
+  await client.connect();
+  try {
+    const result = await client.query(
+      `UPDATE characters
+          SET next_combat_at = now() - make_interval(secs => $1::double precision / 1000)
+        WHERE name = $2`,
+      [awayMs, heroName],
+    );
+    if (result.rowCount !== 1) {
+      throw new Error(`Expected one hero named ${heroName}, updated ${String(result.rowCount)}`);
+    }
+  } finally {
+    await client.end();
+  }
+}
+
+export interface RecordedOfflineRun {
+  readonly fights: number;
+  readonly targetStage: string;
+  readonly rewardGold: string;
+}
+
+/** The offline claims the server recorded for `heroName`. Read-only. */
+export async function recordedOfflineRuns(heroName: string): Promise<RecordedOfflineRun[]> {
+  const client = new pg.Client({ connectionString: databaseUrl });
+  await client.connect();
+  try {
+    const result = await client.query<{
+      fights: number;
+      target_stage: string;
+      reward_gold_coef: string;
+      reward_gold_exp: number;
+    }>(
+      `SELECT r.fights, r.target_stage::text AS target_stage,
+              r.reward_gold_coef::text AS reward_gold_coef, r.reward_gold_exp
+         FROM offline_runs r JOIN characters c ON c.id = r.character_id
+        WHERE c.name = $1
+        ORDER BY r.created_at`,
+      [heroName],
+    );
+    return result.rows.map((row) => ({
+      fights: row.fights,
+      targetStage: row.target_stage,
+      rewardGold: `${row.reward_gold_coef}:${String(row.reward_gold_exp)}`,
+    }));
+  } finally {
+    await client.end();
+  }
+}

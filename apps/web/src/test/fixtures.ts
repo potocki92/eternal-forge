@@ -1,4 +1,8 @@
-import type { CombatResponse, PlayerStateResponse } from '@eternal-forge/contracts';
+import type {
+  CombatResponse,
+  OfflineProgressResponse,
+  PlayerStateResponse,
+} from '@eternal-forge/contracts';
 
 /**
  * Wire-format fixtures shaped exactly like the API's responses. Tests that
@@ -104,5 +108,63 @@ export function combatResponseFixture(): CombatResponse {
       nextCombatAt: '2026-09-22T10:00:14.000Z',
     },
     serverTime: '2026-09-22T10:00:10.000Z',
+  };
+}
+
+/**
+ * The answer to an offline claim: `nothing` (no stage cleared yet), or a
+ * collected claim of three hours on stage 1 that paid 120 gold.
+ */
+export function offlineProgressFixture(
+  kind: 'nothing' | 'collected' = 'nothing',
+): OfflineProgressResponse {
+  const state = playerStateFixture();
+  const base = {
+    character: state.character,
+    progression: state.progression,
+    serverTime: state.serverTime,
+  };
+  if (kind === 'nothing') {
+    return {
+      ...base,
+      offline: {
+        id: null,
+        idleSince: state.progression.nextCombatAt,
+        claimedAt: state.serverTime,
+        elapsedMs: 0,
+        rewardedMs: 0,
+        capMs: 28_800_000,
+        capReached: false,
+        processedUntil: state.progression.nextCombatAt,
+        targetStage: null,
+        idleReason: 'NO_CLEARED_STAGE',
+        fights: 0,
+        wins: 0,
+        losses: 0,
+        rewards: { gold: '0', experience: '0' },
+        levelsGained: 0,
+      },
+    };
+  }
+  return {
+    ...base,
+    character: { ...state.character, level: 4, gold: '1.2e2' },
+    offline: {
+      id: '9a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d',
+      idleSince: '2026-09-22T07:00:00.000Z',
+      claimedAt: state.serverTime,
+      elapsedMs: 13_320_000,
+      rewardedMs: 13_320_000,
+      capMs: 28_800_000,
+      capReached: false,
+      processedUntil: state.progression.nextCombatAt,
+      targetStage: { number: '1', kind: 'REGULAR' },
+      idleReason: null,
+      fights: 24,
+      wins: 24,
+      losses: 0,
+      rewards: { gold: '1.2e2', experience: '7.2e1' },
+      levelsGained: 3,
+    },
   };
 }

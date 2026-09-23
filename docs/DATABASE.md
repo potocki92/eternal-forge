@@ -10,8 +10,10 @@ added progression columns to `characters` and the `combat_runs` table (migration
 `20260923053138_gameplay_loop`, ADR-019). The Phase 3 final audit split the
 stage into the current stage and two records (migration
 `20260923090000_stage_progression`, ADR-020). Phase 4 PR 4.1 added the stage
-mode (migration `20260923140000_stage_selection`, ADR-021). Everything else
-under "Planned domains" below is PLANNED.
+mode (migration `20260923140000_stage_selection`, ADR-021). Phase 4 PR 4.3
+added `characters.offline_seed` and the `offline_runs` table (migration
+`20260923180000_offline_progression`, ADR-023). Everything else under
+"Planned domains" below is PLANNED.
 
 Database:
 
@@ -189,8 +191,10 @@ ADR-020), experience, gold, `next_combat_at` and `version` (see "Player"). A sep
 `character_progress` table was not needed: progression is one row per
 character, read and written together.
 
-PLANNED: `last_processed_at` for offline progression (Phase 4) attaches to
-`next_combat_at` (ADR-019 §10). A `player_resources` table for further
+IMPLEMENTED (Phase 4 PR 4.3, ADR-023): the processed boundary of offline
+progression is `next_combat_at` itself — no separate `last_processed_at`
+column exists. Online combat and offline claims both move it forward inside
+their version-conditional write. A `player_resources` table for further
 resource types arrives with the first second resource.
 
 Do not assume amount always fits a JavaScript integer.
@@ -522,12 +526,14 @@ dedicated table keyed by `(player_id, operation, idempotency_key)` with a unique
 constraint, storing the result of the first successful execution so a retry
 replays it instead of re-running the operation.
 
-Status: combat IMPLEMENTED (Phase 3). The first idempotent command resolves a
+Status: combat IMPLEMENTED (Phase 3); offline claims IMPLEMENTED (Phase 4
+PR 4.3) the same way, with `offline_runs` as their natural result record,
+unique on `(character_id, idempotency_key)` (ADR-023 §11). The first idempotent command resolves a
 combat, and the combat row is its natural result record. It is keyed by the
 unique `(character_id, idempotency_key)`, and a retry replays it by
-deterministic re-simulation (ADR-019). The generic table above is still PLANNED
-for Phase 4, where operations such as an offline claim have no result row of
-their own.
+deterministic re-simulation (ADR-019). The generic table above is still
+PLANNED: the offline claim turned out to have a natural result row, so it was
+not needed in Phase 4.
 
 ---
 
@@ -545,3 +551,42 @@ impossible to determine.
 Production PostgreSQL must use an appropriate backup/recovery strategy.
 
 Exact provider configuration belongs to deployment operations documentation.
+
+---
+
+# Offline progression
+
+Status: IMPLEMENTED (Phase 4 PR 4.3, ADR-023, migration
+`20260923180000_offline_progression`).
+
+`characters` — added:
+
+| Column         | Type          | Rules                                                                                       |
+| -------------- | ------------- | ------------------------------------------------------------------------------------------- |
+| `offline_seed` | `varchar(64)` | NOT NULL, CHECK non-empty; default two `gen_random_uuid()` (backfill and new rows); replaced by a 256-bit API CSPRNG seed on every committed claim; never sent to a client |
+
+`offline_runs` — one row per claim that fought (a claim with nothing to
+collect writes no row):
+
+| Group        | Columns                                                                                                    |
+| ------------ | ---------------------------------------------------------------------------------------------------------- |
+| identity     | `id` uuid PK, `character_id` FK → `characters` ON DELETE CASCADE, `idempotency_key` uuid, `created_at` (the claim's server time) |
+| time line    | `idle_since` (boundary before), `rewarded_from` (`idle_since`, or `created_at − cap`), `processed_until` (new boundary) |
+| replay input | `rules_version`, `seed`, `current_stage`, `highest_stage_reached`, `highest_stage_cleared` (NOT NULL), `character_level`, `experience_before_*`, `gold_before_*` |
+| audit output | `target_stage`, `fights`, `wins`, `losses`, `levels_gained`, `reward_gold_*`, `reward_experience_*`        |
+
+Constraints: UNIQUE `(character_id, idempotency_key)`; `idle_since ≤
+rewarded_from < processed_until ≤ created_at`; stage-progress invariants;
+`1 ≤ target_stage ≤ highest_stage_cleared` (offline never fights an uncleared
+stage); `fights ≥ 1`, `wins + losses = fights`; no reward and no level
+without a win; every HugeNumber pair normalised and whole; `rules_version ≥
+1`; non-empty seed. Row Level Security enabled with no policies, `anon` and
+`authenticated` revoked.
+
+Index: only the unique index (idempotency lookup, per-character history,
+cascading delete).
+
+Individual offline fights are not stored — neither here nor in
+`combat_runs`, whose meaning (one row per online combat) is unchanged. Game
+Core regenerates every fight from the replay inputs (`verifyOfflineRun`).
+The row is the ledger entry for the claim's gold and experience.
