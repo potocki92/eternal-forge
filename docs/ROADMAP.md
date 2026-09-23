@@ -4,17 +4,16 @@ Last updated: 2026-09-23
 
 # Current Phase
 
-PHASE 2 — AUTHENTICATION & PLAYER
+PHASE 3 — FIRST GAMEPLAY LOOP
 
 Status:
 
-COMPLETE — awaiting user approval. GitHub Actions is green on PR #4 (run
-35783641779 on `1d564ff`). See "Validation" under Phase 2.
+IN PROGRESS — started 2026-09-23 after Phase 2 was closed. Decision record:
+ADR-019 (the server-authoritative combat transaction).
 
-Post-audit hardening (2026-09-23): the external Phase 2 audit accepted the
-architecture and asked for a small hardening pass. It is implemented and
-validated locally (StageNumber, ADR-018) — see "Phase 2 hardening" below.
-Phase 3 has not started.
+Phase 2 is COMPLETE / APPROVED: the post-audit hardening (ADR-018) was merged
+as PR #5, and GitHub Actions is green on `main` (run #13 on `fb3db8b`, the merge
+of PR #5). The user approved Phase 2 and asked for Phase 3 on 2026-09-23.
 
 Phase 1 is COMPLETE / APPROVED: GitHub Actions is green on `main` (run #6 on
 `a09b2a3`, the merge of PR #3) and the user approved completion on 2026-09-22.
@@ -221,8 +220,8 @@ Approved by the user on 2026-09-22; Phase 2 started on the same date.
 
 # Phase 2 — Authentication & Player
 
-Status: COMPLETE — awaiting user approval (2026-09-22). Phase 3 must not start
-without that approval.
+Status: COMPLETE / APPROVED — approved by the user on 2026-09-23, after GitHub
+Actions passed on PR #4, on PR #5 (hardening) and on `main` (run #13, `fb3db8b`).
 
 Goal:
 
@@ -275,7 +274,7 @@ Tasks:
 - [x] review — Codex finding (name fields' native `maxLength` disagreed with the
       shared code-point rule) fixed in `1d564ff` with regression tests
 - [x] post-audit hardening — see "Phase 2 hardening" below
-- [ ] user approval
+- [x] user approval — 2026-09-23
 
 Validation (2026-09-22, local, development container with PostgreSQL 16 and
 Redis 7):
@@ -337,7 +336,8 @@ gameplay, and the accepted request flow is unchanged.
 - [x] database review — `CHECK (stage >= 1)`, `bigint`, RLS with no policies
       and the revoked `anon`/`authenticated` privileges are unchanged. No
       migration was needed
-- [ ] GitHub Actions on this change
+- [x] GitHub Actions on this change — green on PR #5 (run #12, `0965366`) and on
+      `main` after the merge (run #13, `fb3db8b`)
 
 Auth checklist — where each behaviour is proven:
 
