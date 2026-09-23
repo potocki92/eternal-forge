@@ -526,6 +526,10 @@ rankings and no stage selection.
 - [x] rules version — `GAME_RULES_VERSION` stays 1. The combat and reward
       fingerprints recorded before the refactor are pinned unchanged.
       `RULES_V1` is immutable once PR #6 is merged
+- [x] review — Codex finding (a loss could spend experience banked by a
+      gain capped at `MAX_LEVELS_PER_GAIN` and grant levels) fixed: experience
+      is applied only on a win. A regression test fails on the previous code.
+      Reachable outcomes are unchanged, so the golden fingerprints still pass
 - [x] documentation — ADR-020, ADR-019 amendment, ADR index, ARCHITECTURE,
       GAME_DESIGN (future FARM / CHALLENGE BOSS / auto modes, ranking on
       `highestStageCleared`), DATABASE, SECURITY
@@ -534,8 +538,8 @@ Validation (2026-09-23, local, PostgreSQL 16 and Redis 7):
 
 - `pnpm run verify` (format check, lint, typecheck, unit tests, production
   build): pass, whole workspace, 13/13 typecheck tasks.
-- Unit and property tests: 867 pass (before the audit: 830). By package:
-  `game-core` 443, `contracts` 107, `api` 145, `web` 107, `config` 33, `ui` 18,
+- Unit and property tests: 868 pass (before the audit: 830). By package:
+  `game-core` 444, `contracts` 107, `api` 145, `web` 107, `config` 33, `ui` 18,
   `database` 10, `worker` 4. New or changed tests:
   - the full audit transition matrix, farming, the uniform defeat rule, a
     zero fallback, exactness beyond 2^53, and invariant rejection;

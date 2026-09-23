@@ -108,6 +108,18 @@ describe('resolveStageAttempt — a loss', () => {
     expect(result.after.gold.eq(n(50))).toBe(true);
   });
 
+  it('never levels up on a loss, even with experience banked by a capped gain', () => {
+    // Regression: a gain capped at MAX_LEVELS_PER_GAIN leaves experience at or
+    // above the requirement. A defeat must not consume it.
+    const banked = experienceToNextLevel(1, rules.progression).mul(n(5));
+    const lost = attempt({ stages: pushingAt(10), experience: banked });
+
+    expect(lost.combat.outcome).toBe('LOSS');
+    expect(lost.levelsGained).toBe(0);
+    expect(lost.after.level).toBe(1);
+    expect(lost.after.experience.eq(banked)).toBe(true);
+  });
+
   it('falls back stagesLostOnDefeat stages, so the wall becomes a farm', () => {
     expect(rules.progression.stagesLostOnDefeat).toBe(1);
     expect(result.after.stages.current.toString()).toBe('9');

@@ -75,7 +75,7 @@ function validateProgress(progress: CharacterProgress): CharacterProgress {
  * 1. The enemy is the rule set's enemy for the current stage.
  * 2. The combat is resolved with stats derived from the current level.
  * 3. A win grants the stage rewards and applies the experience through the
- *    level rule.
+ *    level rule. A loss leaves level and experience exactly as they were.
  * 4. The stage progress moves by {@link advanceStageProgress}: a win clears
  *    the stage and moves on, a loss falls back to farm. The records of the
  *    highest stage reached and cleared never decrease.
@@ -95,13 +95,18 @@ export function resolveStageAttempt(input: StageAttemptInput): StageAttemptResul
     rulesVersion: rules.version,
   });
 
-  const rewards =
-    combat.outcome === 'WIN' ? calculateStageRewards(enemy.stage, rules.rewards) : NO_REWARDS;
-  const leveled = applyExperience(
-    { level: before.level, experience: before.experience },
-    rewards.experience,
-    rules.progression,
-  );
+  const won = combat.outcome === 'WIN';
+  const rewards = won ? calculateStageRewards(enemy.stage, rules.rewards) : NO_REWARDS;
+  // A loss changes nothing but the stage. Experience is applied only for a
+  // win: banked experience left over by a capped gain (MAX_LEVELS_PER_GAIN)
+  // must not turn into levels on a defeat.
+  const leveled = won
+    ? applyExperience(
+        { level: before.level, experience: before.experience },
+        rewards.experience,
+        rules.progression,
+      )
+    : { level: before.level, experience: before.experience, levelsGained: 0 };
 
   return {
     rulesVersion: rules.version,
