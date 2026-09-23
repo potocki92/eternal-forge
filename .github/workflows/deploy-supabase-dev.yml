@@ -1,0 +1,68 @@
+name: Deploy Supabase DEV
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-dev-database
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Migrate and verify DEV database
+    runs-on: ubuntu-latest
+    environment: supabase-dev
+    timeout-minutes: 15
+    env:
+      # Prisma config may resolve either variable. Both intentionally point to
+      # the same DEV direct/session connection for this migration-only job.
+      DATABASE_URL: ${{ secrets.SUPABASE_DEV_DIRECT_URL }}
+      DIRECT_URL: ${{ secrets.SUPABASE_DEV_DIRECT_URL }}
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Require DEV database secret
+        shell: bash
+        run: |
+          if [ -z "${SUPABASE_DEV_DIRECT_URL:-}" ]; then
+            echo "SUPABASE_DEV_DIRECT_URL is not configured in the supabase-dev GitHub environment."
+            exit 1
+          fi
+        env:
+          SUPABASE_DEV_DIRECT_URL: ${{ secrets.SUPABASE_DEV_DIRECT_URL }}
+
+      - name: Validate Prisma schema
+        run: pnpm --filter @eternal-forge/database run db:validate
+
+      - name: Apply committed Prisma migrations
+        run: pnpm run db:deploy
+
+      - name: Verify schema drift
+        run: >-
+          pnpm --filter @eternal-forge/database exec prisma migrate diff
+          --from-config-datasource
+          --to-schema prisma/schema.prisma
+          --exit-code
