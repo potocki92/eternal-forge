@@ -20,6 +20,9 @@ see "Game screen (Phase 3)" at the end of this document — plus the
 IMPLEMENTED (Phase 4 PR 4.2): online auto-battle controls — see "Auto
 battle (Phase 4 PR 4.2)" at the end of this document.
 
+IMPLEMENTED (Phase 4 PR 4.3): a minimal offline-progress summary — see
+"Offline progress (Phase 4 PR 4.3)" at the end of this document.
+
 IMPLEMENTED (Phase 4 PR 4.1): the stage selector on the game screen — see
 "Stage selector (Phase 4 PR 4.1)" at the end of this document.
 
@@ -634,3 +637,33 @@ off:                                     on:
 - **Layout.** Verified at 390×844 and desktop: no horizontal overflow, 48 px
   touch targets.
 
+---
+
+# Offline progress (Phase 4 PR 4.3)
+
+Status: IMPLEMENTED — functional only (ADR-023). The polished "welcome back"
+presentation is PR 4.4.
+
+```
+│ HUD / stage selector (unchanged)  │
+├──────────────────────────────────┤
+│ Offline progress                  │  Panel between the selector and the
+│ Away              14h             │  battlefield; never an overlay, never
+│ Counted           8h (limit…)     │  blocks the controls
+│ Stage farmed      11              │
+│ Battles           28,409 (… won)  │
+│ Gold / XP / Levels  +426K …       │
+│ [          Continue          ]    │
+```
+
+- **When.** On entering the game and when the page becomes visible after
+  being hidden, the client asks once. Until the answer arrives, Fight reads
+  "Returning…" and auto-battle waits (an online fight would end the idle
+  time). "Nothing to collect" shows nothing.
+- **Server truth only.** Every value is from the response; the client only
+  formats durations and numbers. The HUD takes the authoritative gold and
+  level from the same response.
+- **Failure.** A danger `Alert` with **Try again** (same idempotency key)
+  and **Play without it**; the game stays playable. A 401 ends the session
+  as everywhere else.
+- **Layout.** Verified at 390×844 (no horizontal overflow) and desktop.

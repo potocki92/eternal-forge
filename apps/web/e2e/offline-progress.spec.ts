@@ -52,7 +52,7 @@ test.describe('offline progression', () => {
     await expect(summary).toBeVisible();
     await expect(page.getByTestId('offline-away')).toHaveText(/^3h( \d+m)?$/u);
     await expect(page.getByTestId('offline-stage')).toHaveText('4');
-    await expect(page.getByTestId('offline-battles')).toHaveText(/^\d+ \(\d+ won\)$/u);
+    await expect(page.getByTestId('offline-battles')).toHaveText(/^[\d,]+ \([\d,]+ won\)$/u);
 
     // The screen shows the server's answer, and the server recorded it once.
     await expect.poll(() => claims.answers.some((answer) => answer.status === 201)).toBe(true);

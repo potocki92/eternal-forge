@@ -162,8 +162,8 @@ Walls at each boss are intended. Builds (Phases 5–8) are meant to break them.
 
 IMPLEMENTED (Phase 4 PR 4.1): a player-controlled "stay and farm" choice —
 see "Stage selection and farming". IMPLEMENTED (Phase 4 PR 4.2): online
-auto-battle — see "Online auto-battle". FUTURE: offline progression
-(Phase 4 PR 4.3).
+auto-battle — see "Online auto-battle". IMPLEMENTED (Phase 4 PR 4.3):
+offline progression — see "Offline progression rules v1".
 
 ## Stage selection and farming — IMPLEMENTED (Phase 4 PR 4.1, ADR-021)
 
@@ -216,9 +216,9 @@ Still FUTURE:
   the first loss, then farm one stage below the wall. The server executes the
   mode and the client only chooses it. (Online auto-battle, PR 4.2, runs the
   two existing modes; *push then farm* is still FUTURE.)
-- **Offline progression (Phase 4)** simulates from `currentStage` under the
-  selected mode and applies the same transition, so the records only ever
-  rise offline as well.
+- **Offline progression (Phase 4)** — superseded by ADR-023: offline
+  progression farms only an already-cleared stage and never moves a stage or
+  a record (see "Offline progression rules v1").
 - **Rankings (Phase 10).** The Highest Stage ranking uses
   `highestStageCleared`. It is proven by a recorded win and cannot be lowered
   by farming, and a player with no clear is unranked.
@@ -499,6 +499,41 @@ Output:
 calculated progression.
 
 An offline progression limit will exist.
+
+## Offline progression rules v1 — IMPLEMENTED (Phase 4 PR 4.3, ADR-023)
+
+Numbers are provisional balance in `RULES_V1.offline`; the owner may adjust
+them (a change needs rules v2).
+
+- **When.** On returning to the game the client asks the server what the
+  absence earned. The server measures it on its own clock from the moment
+  the hero stopped fighting (`nextCombatAt`). Nothing runs while the player
+  is away, and the device clock never matters.
+- **How much.** At most **8 hours** count per claim; an absence beyond that
+  is capped and the excess is lost. Under **1 minute** nothing is collected
+  yet — the time keeps accumulating.
+- **Where.** The hero farms the last stage it has proven: its current stage
+  if cleared, else its highest cleared stage — `min(current, highestCleared)`.
+  An intentional farm stage is respected; a hero standing on its unbeaten
+  boss farms the stage below it. A hero with no cleared stage collects
+  nothing. **Offline progression never fights an uncleared stage**: it never
+  defeats or skips a boss, never unlocks a stage and never changes the
+  current stage, the mode or a record. Breaking a barrier is the player's
+  job, online.
+- **The same game.** Fights follow each other back to back, each lasting its
+  simulated duration (the online pacing rule). Each is an ordinary combat
+  with the hero's stats at that moment: wins pay the stage's ordinary
+  rewards and experience, level-ups make later fights stronger, losses pay
+  nothing. There is no gold-per-hour formula and no offline multiplier.
+- **Online and offline share one time line.** Online fights use up time as
+  they happen; offline progress covers only the idle time after the last
+  fight. Playing online and then leaving never pays the online time twice.
+  An online fight started before claiming ends the idle period (the game
+  client always claims first).
+- **After a claim** the hero can fight online immediately.
+
+Measured under `RULES_V1` (seeded): a level-10 hero on stage 9 fights about
+3 400 times per hour; 8 hours hold at most 28 800 fights.
 
 ---
 

@@ -1,6 +1,6 @@
 # Eternal Forge — Software Architecture
 
-Status: PARTIALLY IMPLEMENTED (Phases 0–3, Phase 4 PRs 4.1–4.2) / EVOLVING
+Status: PARTIALLY IMPLEMENTED (Phases 0–3, Phase 4 PRs 4.1–4.3) / EVOLVING
 
 The architectural style, boundaries and package layout described here are
 IMPLEMENTED as of Phase 0. The headless Game Core simulation (HugeNumber, RNG,
@@ -11,8 +11,9 @@ combat, progression persistence, the game screen and the PixiJS combat scene —
 is IMPLEMENTED in Phase 3 (ADR-019 and ADR-020). Stage selection and farming
 are IMPLEMENTED in Phase 4 PR 4.1 (ADR-021). Online auto-battle, a client
 loop over the same combat request, is IMPLEMENTED in Phase 4 PR 4.2
-(ADR-022, proposed). Domain events, CQRS
-infrastructure, offline processing and leaderboards are PLANNED.
+(ADR-022, proposed). Server-authoritative offline progression, a lazy
+catch-up claimed on return, is IMPLEMENTED in Phase 4 PR 4.3 (ADR-023,
+proposed). Domain events, CQRS infrastructure and leaderboards are PLANNED.
 
 See the "Phase N implementation status" sections at the end of this document
 for exactly what exists today, and `docs/adr/` for the decisions behind it.
@@ -494,6 +495,9 @@ Persist enough state to calculate elapsed progress.
 
 Server time is authoritative.
 
+Status: IMPLEMENTED (Phase 4 PR 4.3, ADR-023) as a lazy claim on return;
+see "Phase 4 PR 4.3 implementation status".
+
 ---
 
 # Leaderboards
@@ -950,3 +954,81 @@ apps/api/src/combat/application/run-combat.use-case.ts   structured log events
 Offline progression and its claim (PR 4.3), cross-tab coordination, general
 request rate limiting, auto-battle in a hidden tab, and auto-battle that
 survives a reload.
+
+---
+
+# Phase 4 PR 4.3 implementation status — offline progression
+
+Status: IMPLEMENTED — awaiting review. Decision: ADR-023 (proposed).
+
+## Request flow
+
+```
+Browser (game entry, or the page visible again after being hidden)
+  │  POST /player/characters/:characterId/offline-progress
+  │  Authorization: Bearer <token>     Idempotency-Key: <uuid>     (no body)
+  v
+apps/api
+  AuthGuard ── verified identity (ADR-016)
+  OfflineProgressController (thin: path + header, map result; body ignored)
+  ClaimOfflineProgressUseCase
+    1. OfflineProgressRepository.loadClaimTarget(authUserId, characterId, key)
+         owned character + version + offline seed + claim already under the key
+    2. key already used → replay from the stored summary (no re-simulation)
+    3. elapsed = max(0, Clock.now − next_combat_at)          ── server time only
+    4. Game Core resolveOfflineProgress({ progress, elapsed, offline seed, GAME_RULES_VERSION })
+         cap 8 h, minimum 1 min, farm min(current, highestCleared),
+         fights back to back through the ordinary combat/reward/level rules,
+         ≤ 30 000 fights (LIMIT_EXCEEDED otherwise)
+    5. no fight → 200, nothing written
+    6. commitClaim — one transaction:
+         UPDATE characters SET level, experience, gold, next_combat_at = processedUntil,
+                offline_seed = <fresh CSPRNG>, version + 1
+          WHERE id AND version = expected AND owner        (no stage column)
+         INSERT offline_runs (unique character_id + idempotency_key)
+       conflict → re-read and re-resolve (≤ 3) → replay / nothing / 409 CONCURRENT_UPDATE
+  PrismaOfflineProgressRepository ──> PostgreSQL (characters, offline_runs; RLS)
+  │
+  │  201 OfflineProgressResponse (200 on replay or nothing to collect)
+  v
+Browser — writes the authoritative character into the player-state cache,
+          shows a minimal summary, then fights/auto-battle may continue
+```
+
+## The time line (ADR-023 §3)
+
+`characters.next_combat_at` is the processed boundary: every instant before
+it is accounted for by a fight, online or offline. Online combat moves it to
+the combat's end (unchanged); a claim moves it to the end of its last offline
+fight (≤ now). No second timestamp exists. An interval is paid at most once
+because the boundary only moves forward inside the version-conditional
+write that pays for it.
+
+## Module layout
+
+```
+packages/game-core/src/offline/offline-progress.ts   resolveOfflineProgress, offlineFarmStage,
+                                                      MAX_OFFLINE_FIGHTS
+packages/game-core/src/rules/v1.ts                   offline: { capMs, minimumAbsenceMs }
+apps/api/src/offline/
+  domain/            OfflineRun record, verifyOfflineRun (audit replay)
+  application/       ClaimOfflineProgressUseCase, repository and seed-source ports
+  infrastructure/    PrismaOfflineProgressRepository
+  presentation/      OfflineProgressController, mapper
+apps/api/src/common/http/idempotency-key.ts          shared header parsing (combat + offline)
+packages/contracts/src/game/offline-progress.contract.ts
+apps/web/src/game/offline/                           API call, pure claim state, hook
+apps/web/src/game/components/offline-summary.tsx
+```
+
+## Not involved
+
+`apps/worker`, Redis and BullMQ: unchanged. No timer, scheduler or loop runs
+for an absent player.
+
+## NOT IMPLEMENTED
+
+The polished "welcome back" presentation (PR 4.4), offline climbing, an
+offline efficiency factor (owner decision), general request rate limiting,
+the generic idempotency table, and chunked or worker-side resolution of very
+large claims.

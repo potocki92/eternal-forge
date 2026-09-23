@@ -6,6 +6,8 @@ import { formatHuge } from '../format/format-huge';
 import type { OfflineClaim } from '../offline/use-offline-claim';
 import { formatDuration } from '../offline/offline-claim';
 
+const COUNT = new Intl.NumberFormat('en-US');
+
 /**
  * What the hero did while the player was away (ADR-023) — a plain,
  * functional summary. Every value is the server's; nothing is computed here
@@ -64,7 +66,11 @@ export function OfflineSummary({ claim }: { readonly claim: OfflineClaim }) {
       summary.targetStage === null ? '—' : formatStage(summary.targetStage.number),
       'offline-stage',
     ],
-    ['Battles', `${String(summary.fights)} (${String(summary.wins)} won)`, 'offline-battles'],
+    [
+      'Battles',
+      `${COUNT.format(summary.fights)} (${COUNT.format(summary.wins)} won)`,
+      'offline-battles',
+    ],
     ['Gold', `+${formatHuge(summary.rewards.gold)}`, 'offline-gold'],
     ['XP', `+${formatHuge(summary.rewards.experience)}`, 'offline-xp'],
   ];

@@ -9,9 +9,10 @@ PHASE 4 — OFFLINE PROGRESSION (delivered as several PRs)
 Status:
 
 IN PROGRESS — PR 4.1 "Stage Selection & Farming" MERGED (PR #9, ADR-021
-accepted). PR 4.2 "Online Auto Battle" implemented and awaiting review
-(ADR-022, proposed). PR 4.3 (offline progression) must not start without the
-user's approval of PR 4.2. See "Phase 4" below.
+accepted). PR 4.2 "Online Auto Battle" MERGED (PR #10, ADR-022 accepted).
+PR 4.3 "Server-Authoritative Offline Progression" implemented and awaiting
+review (ADR-023, proposed). PR 4.4 (the polished return experience) must not
+start without the user's approval of PR 4.3. See "Phase 4" below.
 
 Phase 3 was merged to `main` as PR #6 (followed by the Supabase deployment
 PRs #7 and #8). The user started Phase 4 on 2026-09-23 with the PR 4.1 task.
@@ -576,7 +577,7 @@ the generic idempotency table, and hosting the API (ADR-012).
 
 # Phase 4 — Offline Progression
 
-Status: IN PROGRESS — PR 4.1 merged; PR 4.2 implemented, awaiting review
+Status: IN PROGRESS — PRs 4.1 and 4.2 merged; PR 4.3 implemented, awaiting review
 
 Phase 4 is delivered as a sequence of PRs, one at a time. Each waits for the
 user's approval before the next begins.
@@ -651,7 +652,7 @@ and the decision whether an offline run may climb or only farm.
 
 ## PR 4.2 — Online Auto Battle
 
-Status: IMPLEMENTED — awaiting review and CI. Decision: ADR-022 (proposed).
+Status: MERGED — PR #10. Decision: ADR-022 (accepted).
 
 Scope: while the game is open and visible, the client keeps fighting through
 the existing server-authoritative combat. **Online auto-battle is not offline
@@ -683,8 +684,8 @@ Redis, WebSockets, migrations or contract changes.
       `PinoLoggerService` records object messages as fields
 - [x] documentation — ADR-022, ADR-021 accepted, ARCHITECTURE, GAME_DESIGN,
       SECURITY, UI_SYSTEM
-- [ ] GitHub Actions green on the pull request
-- [ ] user review and approval
+- [x] GitHub Actions green on the pull request
+- [x] user review and approval — merged as PR #10; PR 4.3 started 2026-09-23
 
 Validation (2026-09-23, local, PostgreSQL 16 and Redis 7):
 
@@ -712,6 +713,85 @@ Validation (2026-09-23, local, PostgreSQL 16 and Redis 7):
 
 Deferred to PR 4.3: offline progression — `last_processed_at`, elapsed
 server time, cap, rewards, claim, the generic idempotency table, summary UI.
+
+## PR 4.3 — Server-Authoritative Offline Progression
+
+Status: IMPLEMENTED — awaiting review and CI. Decision: ADR-023 (proposed).
+
+**AFTER MERGE: run the GitHub Action "Deploy Supabase DEV"** before deploying
+the API: migration `20260923180000_offline_progression` must reach the
+database first (docs/DEPLOYMENT.md).
+
+Scope: lazy, server-authoritative catch-up of idle time, claimed on return.
+No worker, scheduler, timer, Redis, WebSocket or service-worker simulation.
+The polished "welcome back" presentation is PR 4.4.
+
+- [x] audit — PR 4.2 merged (#10); `next_combat_at` already is the processed
+      boundary (ADR-019 §10), so no separate `last_processed_at` column
+- [x] Game Core — `resolveOfflineProgress` (pure; composes enemy, combat,
+      rewards and level rules fight by fight), `offlineFarmStage`
+      (`min(current, highestCleared)`, none before the first clear),
+      `MAX_OFFLINE_FIGHTS = 30 000` (`LIMIT_EXCEEDED`), `RULES_V1.offline`
+      (cap 8 h — owner-adjustable; minimum absence 1 min). Equivalence with
+      repeated FARM `resolveStageAttempt` proven; `GAME_RULES_VERSION` stays 1
+- [x] persistence — migration `20260923180000_offline_progression`:
+      `characters.offline_seed` (non-re-rollable claim seed), `offline_runs`
+      (replay inputs + audited summary, unique `(character_id,
+      idempotency_key)`, time-line, target ≤ cleared, count, ledger and
+      HugeNumber CHECKs, RLS, revokes). Individual offline fights are not
+      written to `combat_runs`
+- [x] use case — `ClaimOfflineProgressUseCase`: one owner-scoped read, replay
+      from stored summary, server-clock elapsed, no write when nothing fits,
+      one version-conditional transaction (level, experience, gold, boundary,
+      next seed + record; never a stage column), bounded re-resolution on
+      conflict
+- [x] API — `POST /player/characters/:characterId/offline-progress`
+      (`Idempotency-Key`, no body): 201 collected, 200 replay / nothing,
+      400, 401, 404, 409 `CONCURRENT_UPDATE`
+- [x] contracts — `offlineProgressSchema`, `offlineProgressResponseSchema`,
+      `offlineIdleReasonSchema`
+- [x] web — claim on entry and on return to a visible page, before any fight
+      or auto-battle step; minimal summary panel; same-key retry; "play
+      without it"
+- [x] observability — `offline.processed`, `offline.capped`,
+      `offline.replayed`, `offline.noop`, `offline.conflict`,
+      `offline.rejected`
+- [x] documentation — ADR-023, ADR-022 accepted, ARCHITECTURE, GAME_DESIGN,
+      DATABASE, SECURITY, DEPLOYMENT, UI_SYSTEM
+- [ ] GitHub Actions green on the pull request
+- [ ] user review and approval
+
+Validation (2026-09-23, local, PostgreSQL 16 and Redis 7):
+
+- `pnpm run verify` (format check, lint, typecheck, unit tests, production
+  build): pass.
+- Unit tests: 1 186 pass (PR 4.2: 1 075) — `game-core` 516 (+43: offline
+  resolution, farm target, cap, equivalence, property, bounded work, rules
+  registry), `contracts` 155 (+14), `api` 242 (+36: use case, HTTP),
+  `web` 208 (+18); other packages unchanged.
+- PostgreSQL integration: 119 pass (was 96). New `offline-progress.int.test.ts`
+  (23): atomic commit, stored claims replay exactly, chained boundaries,
+  no-clear and 2^53 + 1 no-ops, 28 800-fight claim with enormous gold, the
+  same key 100 times, 100 keys across two instances (one claim), lost-response
+  retry on another instance, combat and selection races, auto-battle-style
+  online play then absence, forced rollback, stale and foreign-owner commits,
+  CHECK constraints, uniqueness, RLS.
+- Playwright: 60 pass (was 52), mobile 390×844 and desktop: away 3 h →
+  summary → server-recorded claim matches → continue → refresh pays nothing
+  again; no cleared stage; temporary failure + same-key retry; 401 on the
+  claim ends the session. Screenshot reviewed at 390×844: no overflow.
+- Migrations: applied to the PR 4.2 schema with data and to an empty database
+  with Supabase-like `anon`/`authenticated` roles; `prisma migrate diff
+  --exit-code`: no drift; `offline_runs` has RLS, no policies, no privileges
+  for those roles.
+- Benchmark (`vitest bench`, Node 22): 5 min ≈ 1.2 ms; 1 h ≈ 27 ms; 8 h at
+  stage 9 ≈ 241 ms; 8 h at stage 1 000 (28 800 fights) ≈ 364 ms mean,
+  406 ms p99; heap growth < 10 MB. A claim is 2 SELECTs + 1 UPDATE +
+  1 INSERT; a replay or no-op is the read only.
+
+## PR 4.4 — Return experience
+
+Status: NOT STARTED — requires approval of PR 4.3.
 
 ## Phase 4 scope (whole phase)
 
