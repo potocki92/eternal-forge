@@ -3,6 +3,7 @@ import type {
   CombatEndReason,
   CombatOutcome,
   StageAttemptResult,
+  StageMode,
   StageRewards,
 } from '@eternal-forge/game-core';
 
@@ -23,6 +24,8 @@ export interface CombatRunRecord {
    * progress. `before.stages.current` is the stage actually fought.
    */
   readonly before: CharacterProgress;
+  /** The mode the character fought in (ADR-021). Decides where it went next. */
+  readonly stageMode: StageMode;
   readonly outcome: CombatOutcome;
   readonly endReason: CombatEndReason;
   readonly durationMs: number;
@@ -41,6 +44,7 @@ export function recordAttempt(
   context: {
     readonly characterId: string;
     readonly idempotencyKey: string;
+    readonly stageMode: StageMode;
     readonly resolvedAt: Date;
   },
 ): CombatRunRecord {

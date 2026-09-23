@@ -18,6 +18,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { PrismaCombatRepository } from '../src/combat/infrastructure/prisma-combat.repository.js';
 import type { PrismaService } from '../src/infrastructure/prisma/prisma.service.js';
 import { PrismaPlayerRepository } from '../src/player/infrastructure/prisma-player.repository.js';
+import { PrismaStageSelectionRepository } from '../src/player/infrastructure/prisma-stage-selection.repository.js';
 import {
   ManualClock,
   createTestApp,
@@ -65,6 +66,7 @@ async function newApiInstance(): Promise<INestApplication> {
     issuer,
     players: new PrismaPlayerRepository(prisma),
     combats: new PrismaCombatRepository(prisma),
+    selections: new PrismaStageSelectionRepository(prisma),
     seeds: sequentialSeeds(`int-${randomUUID().slice(0, 8)}`),
     clock,
   });
@@ -412,6 +414,7 @@ describe('PrismaCombatRepository — conditional commit', () => {
           gold: HugeNumber.ZERO,
           stages: INITIAL_STAGE_PROGRESS,
         },
+        stageMode: 'PROGRESS',
         outcome: 'WIN',
         endReason: 'ENEMY_DEFEATED',
         durationMs: 1,
@@ -457,6 +460,7 @@ describe('PrismaCombatRepository — conditional commit', () => {
           gold: HugeNumber.ZERO,
           stages: INITIAL_STAGE_PROGRESS,
         },
+        stageMode: 'PROGRESS',
         outcome: 'WIN',
         endReason: 'ENEMY_DEFEATED',
         durationMs: 1,
@@ -474,11 +478,11 @@ describe('schema constraints — progression and the combat ledger', () => {
   async function insertRun(characterId: string, overrides: string): Promise<void> {
     await prisma.client.$executeRawUnsafe(`
       INSERT INTO combat_runs (character_id, idempotency_key, rules_version, seed, stage,
-        highest_stage_reached_before, character_level, experience_before_coef,
+        highest_stage_reached_before, stage_mode, character_level, experience_before_coef,
         experience_before_exp, gold_before_coef,
         gold_before_exp, outcome, end_reason, duration_ms, reward_gold_coef, reward_gold_exp,
         reward_experience_coef, reward_experience_exp)
-      SELECT '${characterId}', gen_random_uuid(), 1, 'seed', 1, 1, 1, 0, -2147483648, 0,
+      SELECT '${characterId}', gen_random_uuid(), 1, 'seed', 1, 1, 'PROGRESS', 1, 0, -2147483648, 0,
         -2147483648, v.outcome::combat_outcome, v.end_reason::combat_end_reason, 1000,
         v.gold_coef, v.gold_exp, 0, -2147483648
       FROM (VALUES ${overrides}) AS v(outcome, end_reason, gold_coef, gold_exp)`);
@@ -545,12 +549,12 @@ describe('schema constraints — stage records of a combat', () => {
   async function insertRunOn(characterId: string, stage: number, reached: number, cleared: string) {
     await prisma.client.$executeRawUnsafe(`
       INSERT INTO combat_runs (character_id, idempotency_key, rules_version, seed, stage,
-        highest_stage_reached_before, highest_stage_cleared_before, character_level,
+        highest_stage_reached_before, highest_stage_cleared_before, stage_mode, character_level,
         experience_before_coef, experience_before_exp, gold_before_coef, gold_before_exp,
         outcome, end_reason, duration_ms, reward_gold_coef, reward_gold_exp,
         reward_experience_coef, reward_experience_exp)
       VALUES ('${characterId}', gen_random_uuid(), 1, 'seed', ${String(stage)}, ${String(reached)},
-        ${cleared}, 1, 0, -2147483648, 0, -2147483648, 'LOSS', 'PLAYER_DEFEATED', 1000,
+        ${cleared}, 'FARM', 1, 0, -2147483648, 0, -2147483648, 'LOSS', 'PLAYER_DEFEATED', 1000,
         0, -2147483648, 0, -2147483648)`);
   }
 

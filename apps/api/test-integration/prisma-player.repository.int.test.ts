@@ -38,6 +38,7 @@ function provisionData(
     characterSlot: 1,
     characterLevel: 1,
     characterStages: INITIAL_STAGE_PROGRESS,
+    characterStageMode: 'PROGRESS',
     characterExperience: HugeNumber.ZERO,
     characterGold: HugeNumber.ZERO,
     characterNextCombatAt: new Date('2026-09-23T10:00:00.000Z'),

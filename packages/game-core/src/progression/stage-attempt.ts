@@ -7,7 +7,12 @@ import { calculateStageRewards, NO_REWARDS, type StageRewards } from '../rewards
 import { getGameRules, type GameRules } from '../rules/index.js';
 import type { Stage, StageNumber } from '../stage/index.js';
 import { applyExperience, experienceToNextLevel, requireWholeAmount } from './level.js';
-import { advanceStageProgress, createStageProgress, type StageProgress } from './stage-progress.js';
+import {
+  advanceStageProgress,
+  createStageProgress,
+  type StageMode,
+  type StageProgress,
+} from './stage-progress.js';
 
 /**
  * A character's persistent progression: everything a stage attempt reads and
@@ -24,6 +29,13 @@ export interface CharacterProgress {
 
 export interface StageAttemptInput {
   readonly progress: CharacterProgress;
+  /**
+   * Where the hero goes after this combat: on to the next stage or back down
+   * (`PROGRESS`), or nowhere (`FARM`). It changes nothing else — not the
+   * enemy, the combat, the rewards or how the records move (ADR-021). The
+   * player chose it before the combat; the caller persists it separately.
+   */
+  readonly mode: StageMode;
   /** Server-chosen, never client-supplied (ADR-005, ADR-019). */
   readonly seed: string;
   readonly rulesVersion: number;
@@ -70,15 +82,16 @@ function validateProgress(progress: CharacterProgress): CharacterProgress {
  * One attempt at the character's current stage: the complete, authoritative
  * gameplay step of the first loop (ADR-019).
  *
- * A pure function of `(progress, seed, rulesVersion)`:
+ * A pure function of `(progress, mode, seed, rulesVersion)`:
  *
  * 1. The enemy is the rule set's enemy for the current stage.
  * 2. The combat is resolved with stats derived from the current level.
  * 3. A win grants the stage rewards and applies the experience through the
  *    level rule. A loss leaves level and experience exactly as they were.
  * 4. The stage progress moves by {@link advanceStageProgress}: a win clears
- *    the stage and moves on, a loss falls back to farm. The records of the
- *    highest stage reached and cleared never decrease.
+ *    the stage, a loss clears nothing. In `PROGRESS` mode a win moves on and
+ *    a loss falls back; in `FARM` mode the hero stays on the stage. The
+ *    records of the highest stage reached and cleared never decrease.
  *
  * Callers persist `after` exactly as returned. They never recompute any part
  * of it.
@@ -122,7 +135,7 @@ export function resolveStageAttempt(input: StageAttemptInput): StageAttemptResul
       level: leveled.level,
       experience: leveled.experience,
       gold: before.gold.add(rewards.gold),
-      stages: advanceStageProgress(before.stages, combat.outcome, rules.progression),
+      stages: advanceStageProgress(before.stages, combat.outcome, input.mode, rules.progression),
     },
   };
 }

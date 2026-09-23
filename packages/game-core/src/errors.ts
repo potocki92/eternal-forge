@@ -13,6 +13,8 @@ export type GameCoreErrorCode =
   | 'NEGATIVE_VALUE'
   | 'NOT_A_SAFE_INTEGER'
   | 'INVALID_ARGUMENT'
+  /** A stage the character has not reached was requested (ADR-021). */
+  | 'STAGE_LOCKED'
   | 'UNSUPPORTED_RULES_VERSION';
 
 export class GameCoreError extends Error {

@@ -51,6 +51,7 @@ const response = {
     currentStage: '2',
     highestStageReached: '2',
     highestStageCleared: '1',
+    stageMode: 'PROGRESS',
     experienceToNextLevel: '1e1',
     hero: { maxHealth: '1e2', damage: '1e1' },
     encounter: {

@@ -11,6 +11,12 @@ import type {
   ProvisionPlayerData,
   ProvisionPlayerOutcome,
 } from '../../src/player/application/ports/player-repository.port.js';
+import type {
+  SaveStageSelection,
+  SaveStageSelectionResult,
+  StageSelectionRepository,
+  VersionedCharacter,
+} from '../../src/player/application/ports/stage-selection-repository.port.js';
 import {
   MAIN_CHARACTER_SLOT,
   type Character,
@@ -24,15 +30,19 @@ interface StoredCharacter {
 }
 
 /**
- * In-memory {@link PlayerRepository} and {@link CombatRepository} over one
- * shared store, with the ports' documented semantics: owner-scoped reads,
- * idempotent provisioning, and a combat commit that is atomic, conditional on
- * the character's version and unique per `(character, idempotency key)`.
+ * In-memory {@link PlayerRepository}, {@link CombatRepository} and
+ * {@link StageSelectionRepository} over one shared store, with the ports'
+ * documented semantics: owner-scoped reads, idempotent provisioning, a combat
+ * commit that is atomic, conditional on the character's version and unique
+ * per `(character, idempotency key)`, and a selection save conditional on the
+ * same version.
  *
  * Used where a test is about the layers above persistence. The PostgreSQL
  * adapters are covered against a real database in `test-integration/`.
  */
-export class InMemoryGameRepository implements PlayerRepository, CombatRepository {
+export class InMemoryGameRepository
+  implements PlayerRepository, CombatRepository, StageSelectionRepository
+{
   private readonly profiles = new Map<string, Profile>();
   private readonly characters: StoredCharacter[] = [];
   private readonly combatRuns: CombatRun[] = [];
@@ -42,6 +52,9 @@ export class InMemoryGameRepository implements PlayerRepository, CombatRepositor
    * request commit first, which PostgreSQL would serialise the same way.
    */
   beforeCommit: (() => Promise<void>) | undefined;
+
+  /** Runs just before a selection is saved, like {@link beforeCommit}. */
+  beforeSaveSelection: (() => Promise<void>) | undefined;
 
   constructor(private readonly now: () => Date = () => new Date('2026-09-22T10:00:00.000Z')) {}
 
@@ -86,6 +99,7 @@ export class InMemoryGameRepository implements PlayerRepository, CombatRepositor
           name: data.characterName,
           level: data.characterLevel,
           stages: data.characterStages,
+          stageMode: data.characterStageMode,
           experience: data.characterExperience,
           gold: data.characterGold,
           nextCombatAt: data.characterNextCombatAt,
@@ -139,6 +153,31 @@ export class InMemoryGameRepository implements PlayerRepository, CombatRepositor
     const run: CombatRun = { ...command.run, id: randomUUID() };
     this.combatRuns.push(run);
     return { kind: 'committed', run };
+  }
+
+  // --- StageSelectionRepository -------------------------------------------
+
+  loadOwnedCharacter(authUserId: string, characterId: string): Promise<VersionedCharacter | null> {
+    const stored = this.owned(authUserId, characterId);
+    return Promise.resolve(
+      stored === undefined ? null : { character: stored.character, version: stored.version },
+    );
+  }
+
+  async saveSelection(command: SaveStageSelection): Promise<SaveStageSelectionResult> {
+    await this.beforeSaveSelection?.();
+
+    const stored = this.owned(command.authUserId, command.characterId);
+    if (stored?.version !== command.expectedVersion) {
+      return { kind: 'conflict' };
+    }
+    stored.character = {
+      ...stored.character,
+      stages: { ...stored.character.stages, current: command.currentStage },
+      stageMode: command.stageMode,
+    };
+    stored.version += 1n;
+    return { kind: 'saved', character: stored.character };
   }
 
   // --- Test helpers -------------------------------------------------------

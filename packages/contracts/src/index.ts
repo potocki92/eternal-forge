@@ -59,6 +59,7 @@ export {
   heroStatsSchema,
   progressionSchema,
   stageKindSchema,
+  stageModeSchema,
   stageProgressSchema,
   stageSchema,
 } from './game/progression.contract.js';
@@ -69,8 +70,18 @@ export type {
   ProgressionDto,
   StageDto,
   StageKind,
+  StageModeDto,
   StageProgressDto,
 } from './game/progression.contract.js';
+
+export {
+  stageSelectionRequestSchema,
+  stageSelectionResponseSchema,
+} from './game/stage-selection.contract.js';
+export type {
+  StageSelectionRequest,
+  StageSelectionResponse,
+} from './game/stage-selection.contract.js';
 
 export {
   IDEMPOTENCY_KEY_HEADER,

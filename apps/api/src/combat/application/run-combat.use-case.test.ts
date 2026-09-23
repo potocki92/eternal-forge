@@ -40,6 +40,7 @@ beforeEach(async () => {
     characterSlot: 1,
     characterLevel: NEW_CHARACTER_STATE.level,
     characterStages: NEW_CHARACTER_STATE.stages,
+    characterStageMode: NEW_CHARACTER_STATE.stageMode,
     characterExperience: NEW_CHARACTER_STATE.experience,
     characterGold: NEW_CHARACTER_STATE.gold,
     characterNextCombatAt: clock.now(),
@@ -332,6 +333,7 @@ describe('RunCombatUseCase — ownership and authority', () => {
         gold: HugeNumber.ZERO,
         stages: INITIAL_STAGE_PROGRESS,
       },
+      mode: 'PROGRESS',
       seed: 'unit-1',
       rulesVersion: 1,
     });

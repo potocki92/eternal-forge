@@ -76,14 +76,17 @@ export type {
 } from './simulation/simulate-stages.js';
 
 export {
+  INITIAL_STAGE_MODE,
   INITIAL_STAGE_PROGRESS,
   MAX_LEVELS_PER_GAIN,
+  STAGE_MODES,
   advanceStageProgress,
   applyExperience,
   createStageProgress,
   describeProgress,
   experienceToNextLevel,
   resolveStageAttempt,
+  selectStage,
 } from './progression/index.js';
 export type {
   CharacterProgress,
@@ -92,5 +95,7 @@ export type {
   ProgressDescription,
   StageAttemptInput,
   StageAttemptResult,
+  StageMode,
   StageProgress,
+  StageSelection,
 } from './progression/index.js';
