@@ -158,7 +158,7 @@ describe('GET /player/state', () => {
 
     expect(playerStateResponseSchema.parse(response.body)).toMatchObject({
       profile: { id: state.profile.id, displayName: 'Kael' },
-      character: { name: 'Ember', level: 1, stage: 1 },
+      character: { name: 'Ember', level: 1, stage: '1' },
     });
   });
 

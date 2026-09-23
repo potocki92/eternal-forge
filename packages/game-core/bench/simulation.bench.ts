@@ -1,6 +1,7 @@
 import { bench, describe } from 'vitest';
 import {
   GAME_RULES_VERSION,
+  StageNumber,
   createCharacter,
   createEnemyForStage,
   getGameRules,
@@ -20,8 +21,8 @@ import {
 
 const rules = getGameRules(GAME_RULES_VERSION);
 const character = createCharacter(20, rules);
-const regularEnemy = createEnemyForStage(21, rules);
-const bossEnemy = createEnemyForStage(30, rules);
+const regularEnemy = createEnemyForStage(StageNumber.of(21), rules);
+const bossEnemy = createEnemyForStage(StageNumber.of(30), rules);
 
 let combat: CombatResult | undefined;
 let run: StageRunResult | undefined;

@@ -7,32 +7,36 @@ import { calculateStageRewards } from '../rewards/rewards.js';
 import { getGameRules } from '../rules/index.js';
 import { GAME_RULES_VERSION } from '../rules-version.js';
 import { resolveStage } from './stage.js';
+import { STAGE_NUMBER_MAX, StageNumber } from './stage-number.js';
 import { scaleByStage } from './stage-scaling.js';
 
 const rules = getGameRules(GAME_RULES_VERSION);
+const at = (value: bigint | number) => StageNumber.of(value);
 
 describe('stages', () => {
   it('marks every bossInterval-th stage as a boss', () => {
     const interval = rules.stages.bossInterval;
-    expect(resolveStage(1, rules.stages).kind).toBe('REGULAR');
-    expect(resolveStage(interval - 1, rules.stages).kind).toBe('REGULAR');
-    expect(resolveStage(interval, rules.stages).kind).toBe('BOSS');
-    expect(resolveStage(interval * 1_000_000, rules.stages).kind).toBe('BOSS');
+    expect(resolveStage(at(1), rules.stages).kind).toBe('REGULAR');
+    expect(resolveStage(at(interval - 1), rules.stages).kind).toBe('REGULAR');
+    expect(resolveStage(at(interval), rules.stages).kind).toBe('BOSS');
+    expect(resolveStage(at(interval * 1_000_000), rules.stages).kind).toBe('BOSS');
   });
 
-  it('supports any positive safe integer', () => {
-    expect(resolveStage(Number.MAX_SAFE_INTEGER, rules.stages).number).toBe(
-      Number.MAX_SAFE_INTEGER,
+  it('classifies stages beyond the safe-integer range exactly', () => {
+    // 2^53 + 1 is not representable as a double; as a float it would read as
+    // 2^53, which is a multiple of 2 but hides the real remainder.
+    const interval = BigInt(rules.stages.bossInterval);
+    const beyondFloat = 2n ** 53n * interval + interval;
+    expect(resolveStage(at(beyondFloat), rules.stages).kind).toBe('BOSS');
+    expect(resolveStage(at(beyondFloat + 1n), rules.stages).kind).toBe('REGULAR');
+    expect(resolveStage(at(STAGE_NUMBER_MAX), rules.stages).number.toBigInt()).toBe(
+      STAGE_NUMBER_MAX,
     );
-  });
-
-  it.each([0, -1, 1.5, Number.NaN, 2 ** 53])('rejects stage %s', (stage) => {
-    expect(() => resolveStage(stage, rules.stages)).toThrow(GameCoreError);
   });
 });
 
 describe('stage scaling', () => {
-  const stage = (number: number) => resolveStage(number, rules.stages);
+  const stage = (number: number) => resolveStage(at(number), rules.stages);
 
   it('is base × growth^(stage − 1)', () => {
     const base = HugeNumber.fromNumber(40);
@@ -43,7 +47,7 @@ describe('stage scaling', () => {
   });
 
   it('is strictly increasing for regular enemies and reaches far beyond float64', () => {
-    let previous = createEnemyForStage(1, rules).stats.maxHealth;
+    let previous = createEnemyForStage(at(1), rules).stats.maxHealth;
     for (let number = 2; number < 200; number += 1) {
       if (
         number % rules.stages.bossInterval === 0 ||
@@ -51,21 +55,27 @@ describe('stage scaling', () => {
       ) {
         continue;
       }
-      const health = createEnemyForStage(number, rules).stats.maxHealth;
+      const health = createEnemyForStage(at(number), rules).stats.maxHealth;
       expect(health.gt(previous)).toBe(true);
       previous = health;
     }
-    const deep = createEnemyForStage(1_000_000, rules).stats.maxHealth;
+    const deep = createEnemyForStage(at(1_000_000), rules).stats.maxHealth;
     expect(deep.toParts().exponent).toBeGreaterThan(308);
   });
 
+  it('refuses a stage too deep for the rule set instead of returning a wrong value', () => {
+    expect(() => createEnemyForStage(at(STAGE_NUMBER_MAX), rules)).toThrow(
+      expect.objectContaining({ code: 'OVERFLOW' }),
+    );
+  });
+
   it('builds enemies from archetype data', () => {
-    const regular = createEnemyForStage(1, rules);
+    const regular = createEnemyForStage(at(1), rules);
     expect(regular.archetypeId).toBe(rules.stages.regularArchetype.id);
     expect(regular.stats.maxHealth).toEqual(rules.stages.baseEnemyHealth);
     expect(regular.stats.attackSpeedBp).toBe(rules.stages.regularArchetype.attackSpeedBp);
 
-    const boss = createEnemyForStage(rules.stages.bossInterval, rules);
+    const boss = createEnemyForStage(at(rules.stages.bossInterval), rules);
     const regularEquivalent = scaleByStage(
       rules.stages.baseEnemyHealth,
       rules.stages.enemyHealthGrowth,
@@ -101,19 +111,19 @@ describe('character', () => {
 
 describe('rewards', () => {
   it('scales per stage and floors to whole amounts', () => {
-    const first = calculateStageRewards(resolveStage(1, rules.stages), rules.rewards);
+    const first = calculateStageRewards(resolveStage(at(1), rules.stages), rules.rewards);
     expect(first.gold).toEqual(rules.rewards.baseGold.floor());
     expect(first.experience).toEqual(rules.rewards.baseExperience.floor());
 
     for (const number of [2, 3, 17, 250]) {
-      const rewards = calculateStageRewards(resolveStage(number, rules.stages), rules.rewards);
+      const rewards = calculateStageRewards(resolveStage(at(number), rules.stages), rules.rewards);
       expect(rewards.gold.isInteger()).toBe(true);
       expect(rewards.experience.isInteger()).toBe(true);
     }
   });
 
   it('multiplies boss rewards', () => {
-    const bossStage = resolveStage(rules.stages.bossInterval, rules.stages);
+    const bossStage = resolveStage(at(rules.stages.bossInterval), rules.stages);
     const rewards = calculateStageRewards(bossStage, rules.rewards);
     const regularGold = scaleByStage(rules.rewards.baseGold, rules.rewards.goldGrowth, bossStage);
     expect(rewards.gold).toEqual(regularGold.mul(rules.rewards.bossRewardMultiplier).floor());
@@ -121,7 +131,7 @@ describe('rewards', () => {
 
   it('is never negative', () => {
     for (const number of [1, 10, 1_000, 1_000_000]) {
-      const rewards = calculateStageRewards(resolveStage(number, rules.stages), rules.rewards);
+      const rewards = calculateStageRewards(resolveStage(at(number), rules.stages), rules.rewards);
       expect(rewards.gold.isNegative()).toBe(false);
       expect(rewards.experience.isNegative()).toBe(false);
     }

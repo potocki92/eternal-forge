@@ -8,11 +8,13 @@ import type { Stage } from './stage.js';
  * scaling must be centralized").
  *
  * `value(stage) = base × growth^(stage − 1)`. The power uses HugeNumber's
- * square-and-multiply, so stage 1 000 000 costs about 20 multiplications and
- * every result is deterministic.
+ * square-and-multiply on the exact `bigint` exponent, so stage 1 000 000 costs
+ * about 20 multiplications and every result is deterministic. A stage too deep
+ * for the rule set's growth fails with a HugeNumber `OVERFLOW`, never a wrong
+ * value.
  */
 export function scaleByStage(base: HugeNumber, growth: HugeNumber, stage: Stage): HugeNumber {
-  return base.mul(growth.pow(stage.number - 1));
+  return base.mul(growth.pow(stage.number.stagesBefore()));
 }
 
 export function archetypeForStage(stage: Stage, rules: StageRules): EnemyArchetype {

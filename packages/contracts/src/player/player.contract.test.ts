@@ -12,7 +12,7 @@ const state = {
     slot: 1,
     name: 'Kael',
     level: 1,
-    stage: 1,
+    stage: '1',
     createdAt: '2026-09-22T10:00:00.000Z',
   },
   serverTime: '2026-09-22T10:00:00.000Z',
@@ -23,10 +23,18 @@ describe('playerStateResponseSchema', () => {
     expect(playerStateResponseSchema.parse(state)).toEqual(state);
   });
 
-  it('rejects a stage beyond the safe-integer wire range', () => {
+  it('carries stages beyond 2^53 exactly, as strings', () => {
+    const character = { ...state.character, stage: '9007199254740993' };
+
+    expect(playerStateResponseSchema.parse({ ...state, character }).character.stage).toBe(
+      '9007199254740993',
+    );
+  });
+
+  it('rejects a numeric stage, which JSON cannot carry exactly', () => {
     const result = playerStateResponseSchema.safeParse({
       ...state,
-      character: { ...state.character, stage: 2 ** 53 },
+      character: { ...state.character, stage: 1 },
     });
 
     expect(result.success).toBe(false);

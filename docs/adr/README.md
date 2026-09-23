@@ -24,7 +24,8 @@ record; it is never edited away (CLAUDE.md — "ADR").
 | [014](ADR-014-code-generation-task.md)     | Code generation as an explicit Turborepo task           | Accepted           |
 | [015](ADR-015-rng-rule-sets-combat-timeline.md) | Deterministic RNG, versioned rule sets and the combat timeline | Accepted |
 | [016](ADR-016-authentication-and-identity.md) | Authentication, identity and session handling | Accepted |
-| [017](ADR-017-player-identity-persistence.md) | Player identity persistence and provisioning | Accepted |
+| [017](ADR-017-player-identity-persistence.md) | Player identity persistence and provisioning | Accepted (amended) |
+| [018](ADR-018-stage-number.md) | StageNumber: an exact integer for stage progression | Accepted |
 
 ## Format
 

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   GAME_RULES_VERSION,
   HugeNumber,
+  StageNumber,
   createCharacter,
   getGameRules,
   simulateCombat,
@@ -18,12 +19,21 @@ import {
  * simulation. That is either a bug, or a rules change that needs a new rule set
  * and a GAME_RULES_VERSION bump (ADR-005). Never update a fingerprint without
  * that decision.
+ *
+ * Stage numbers are hashed as JSON numbers, the form they had when these
+ * fingerprints were recorded. `StageNumber` (ADR-018) changed only their
+ * representation, and this projection proves it changed no outcome. Every
+ * stage here is far below 2^53, so the projection is exact.
  */
 
 const rules = getGameRules(GAME_RULES_VERSION);
 
 function fingerprint(value: unknown): string {
-  return createHash('sha256').update(JSON.stringify(value)).digest('hex');
+  const json = JSON.stringify(value, function (this: Record<string, unknown>, key, field) {
+    const raw = this[key];
+    return raw instanceof StageNumber ? Number(raw.toBigInt()) : (field as unknown);
+  });
+  return createHash('sha256').update(json).digest('hex');
 }
 
 describe(`golden simulations — rules v${GAME_RULES_VERSION}`, () => {
@@ -36,7 +46,7 @@ describe(`golden simulations — rules v${GAME_RULES_VERSION}`, () => {
     });
 
     const transcript = result.stages.map(
-      (entry) => `Stage ${entry.stage.number} — ${entry.outcome}`,
+      (entry) => `Stage ${entry.stage.number.toString()} — ${entry.outcome}`,
     );
     expect(transcript).toEqual([
       'Stage 1 — WIN',
@@ -89,7 +99,7 @@ describe(`golden simulations — rules v${GAME_RULES_VERSION}`, () => {
     {
       level: 20,
       seed: 'golden-run',
-      highest: 29,
+      highest: '29',
       gold: '1.288e3',
       experience: '5.33e2',
       fingerprint: 'd12e6dd36ebb5ff77bca25dcd8660585b22fc1e3fa983f134f1d4a906fccffb3',
@@ -97,7 +107,7 @@ describe(`golden simulations — rules v${GAME_RULES_VERSION}`, () => {
     {
       level: 500,
       seed: 'golden-deep',
-      highest: 429,
+      highest: '429',
       gold: '6.66034073944804727e22',
       experience: '2.14701017404325436e19',
       fingerprint: 'e646b038440ad6f48571b1aac5b72313280f09c8d2ba088bbb5ca1481c7a1f49',
@@ -109,7 +119,7 @@ describe(`golden simulations — rules v${GAME_RULES_VERSION}`, () => {
       rulesVersion: GAME_RULES_VERSION,
       maxStages: 10_000,
     });
-    expect(result.highestStageCleared).toBe(golden.highest);
+    expect(result.highestStageCleared?.toString()).toBe(golden.highest);
     expect(result.totalRewards.gold.toString()).toBe(golden.gold);
     expect(result.totalRewards.experience.toString()).toBe(golden.experience);
     expect(fingerprint(result)).toBe(golden.fingerprint);

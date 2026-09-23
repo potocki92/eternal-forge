@@ -35,8 +35,8 @@ describe('ProvisionPlayerUseCase', () => {
       name: 'Ember',
       slot: 1,
       level: 1,
-      stage: 1,
     });
+    expect(result.player.mainCharacter.stage.toString()).toBe('1');
     expect(result.serverTime).toEqual(clock.now());
   });
 

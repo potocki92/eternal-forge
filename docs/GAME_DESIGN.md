@@ -128,6 +128,12 @@ Conceptually:
 
 Do not design database schemas around a fixed maximum stage.
 
+IMPLEMENTED (ADR-018): a stage number is an exact integer from 1 to 2^63 − 1,
+the PostgreSQL `bigint` range. It is never a floating-point value. In practice
+the rule set is the limit: under rules v1, enemy scaling overflows `HugeNumber`
+around stage 4·10^10, and that is reported as an error rather than a wrong
+value.
+
 Regular enemies occupy normal stages.
 
 Boss encounters appear at defined intervals.

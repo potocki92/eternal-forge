@@ -12,6 +12,7 @@
  */
 import {
   GAME_RULES_VERSION,
+  StageNumber,
   createCharacter,
   getGameRules,
   simulateStages,
@@ -21,7 +22,7 @@ import {
 interface Options {
   readonly level: number;
   readonly seed: string;
-  readonly start: number;
+  readonly start: StageNumber;
   readonly max: number;
 }
 
@@ -38,13 +39,13 @@ function parseOptions(argv: readonly string[]): Options {
   return {
     level: Number(values.get('level') ?? '1'),
     seed: values.get('seed') ?? 'demo',
-    start: Number(values.get('start') ?? '1'),
+    start: StageNumber.parse(values.get('start') ?? '1'),
     max: Number(values.get('max') ?? '1000'),
   };
 }
 
 function formatEntry(entry: StageRunEntry): string {
-  const stage = `Stage ${String(entry.stage.number).padStart(4)}`;
+  const stage = `Stage ${entry.stage.number.toString().padStart(4)}`;
   const kind = entry.stage.kind === 'BOSS' ? 'boss ' : '     ';
   const seconds = `${(entry.durationMs / 1000).toFixed(2).padStart(6)} s`;
   if (entry.outcome === 'LOSS') {
@@ -70,7 +71,7 @@ const lines = [
   '',
   ...result.stages.map(formatEntry),
   '',
-  `Highest stage cleared: ${result.highestStageCleared}`,
+  `Highest stage cleared: ${result.highestStageCleared?.toString() ?? 'none'}`,
   `Stopped by: ${result.stopReason}`,
   `Total rewards: ${result.totalRewards.gold.toString()} gold, ${result.totalRewards.experience.toString()} xp`,
 ];

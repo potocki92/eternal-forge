@@ -86,4 +86,28 @@ describe('player API against PostgreSQL', () => {
       .set('authorization', `Bearer ${bob}`)
       .expect(404);
   });
+
+  it('serves a stage beyond 2^53 exactly, as a canonical string', async () => {
+    const sub = randomUUID();
+    const token = await issuer.issue({ sub });
+    await request(httpServer(app))
+      .post('/player')
+      .set('authorization', `Bearer ${token}`)
+      .send(names)
+      .expect(201);
+    await prisma.client.character.updateMany({
+      where: { profile: { authUserId: sub } },
+      data: { stage: 9_223_372_036_854_775_807n },
+    });
+
+    const response = await request(httpServer(app))
+      .get('/player/state')
+      .set('authorization', `Bearer ${token}`)
+      .expect(200);
+
+    expect(response.text).toContain('"stage":"9223372036854775807"');
+    expect(playerStateResponseSchema.parse(response.body).character.stage).toBe(
+      '9223372036854775807',
+    );
+  });
 });

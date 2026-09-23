@@ -20,7 +20,7 @@ export function toCharacterDto(character: Character): CharacterDto {
     slot: character.slot,
     name: character.name,
     level: character.level,
-    stage: character.stage,
+    stage: character.stage.toString(),
     createdAt: character.createdAt.toISOString(),
   };
 }

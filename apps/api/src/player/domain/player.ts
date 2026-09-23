@@ -1,3 +1,5 @@
+import { StageNumber } from '@eternal-forge/game-core';
+
 /**
  * Player domain model.
  *
@@ -27,8 +29,8 @@ export interface Character {
   readonly slot: number;
   readonly name: string;
   readonly level: number;
-  /** Current stage. A safe integer in the domain; bigint in PostgreSQL. */
-  readonly stage: number;
+  /** Current stage: exact to 2^63 − 1, a PostgreSQL `bigint` (ADR-018). */
+  readonly stage: StageNumber;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 }
@@ -46,4 +48,4 @@ export interface Player {
 export const MAIN_CHARACTER_SLOT = 1;
 
 /** Where every new character starts. */
-export const NEW_CHARACTER_STATE = { level: 1, stage: 1 } as const;
+export const NEW_CHARACTER_STATE = { level: 1, stage: StageNumber.FIRST } as const;

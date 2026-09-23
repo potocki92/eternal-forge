@@ -11,7 +11,7 @@ import {
 } from '../rewards/rewards.js';
 import { deriveSeed } from '../rng/index.js';
 import { getGameRules } from '../rules/index.js';
-import { validateStageNumber, type Stage } from '../stage/index.js';
+import { StageNumber, type Stage } from '../stage/index.js';
 
 /** Upper bound on one call, so a request can never ask for unbounded work. */
 export const MAX_STAGES_PER_SIMULATION = 10_000;
@@ -21,8 +21,8 @@ export interface SimulateStagesInput {
   /** Root seed of the run. Each stage uses `deriveSeed(seed, 'stage', n)`. */
   readonly seed: string;
   readonly rulesVersion: number;
-  /** First stage to fight. Defaults to 1. */
-  readonly startStage?: number;
+  /** First stage to fight. Defaults to {@link StageNumber.FIRST}. */
+  readonly startStage?: StageNumber;
   /** Maximum number of stages to fight, 1 to `MAX_STAGES_PER_SIMULATION`. */
   readonly maxStages: number;
 }
@@ -42,10 +42,10 @@ export type StageRunStopReason = 'DEFEATED' | 'STAGE_LIMIT';
 export interface StageRunResult {
   readonly rulesVersion: number;
   readonly seed: string;
-  readonly startStage: number;
+  readonly startStage: StageNumber;
   readonly stages: readonly StageRunEntry[];
-  /** Highest stage won in this run, or `startStage − 1` if none was. */
-  readonly highestStageCleared: number;
+  /** Highest stage won in this run, or `null` if the first stage was lost. */
+  readonly highestStageCleared: StageNumber | null;
   readonly totalRewards: StageRewards;
   readonly stopReason: StageRunStopReason;
 }
@@ -63,7 +63,7 @@ export interface StageRunResult {
  */
 export function simulateStages(input: SimulateStagesInput): StageRunResult {
   const rules = getGameRules(input.rulesVersion);
-  const startStage = validateStageNumber(input.startStage ?? 1);
+  const startStage = input.startStage ?? StageNumber.FIRST;
   if (
     !Number.isSafeInteger(input.maxStages) ||
     input.maxStages < 1 ||
@@ -74,18 +74,21 @@ export function simulateStages(input: SimulateStagesInput): StageRunResult {
       `maxStages must be an integer from 1 to ${MAX_STAGES_PER_SIMULATION}.`,
     );
   }
-  validateStageNumber(startStage + input.maxStages - 1);
+  // Refuses a range that would run past the last stage before fighting any.
+  startStage.plus(input.maxStages - 1);
 
   const stages: StageRunEntry[] = [];
   let totalRewards = NO_REWARDS;
-  let highestStageCleared = startStage - 1;
+  let highestStageCleared: StageNumber | null = null;
 
   for (let offset = 0; offset < input.maxStages; offset += 1) {
-    const enemy = createEnemyForStage(startStage + offset, rules);
+    const enemy = createEnemyForStage(startStage.plus(offset), rules);
     const combat = simulateCombat({
       player: input.character,
       enemy,
-      seed: deriveSeed(input.seed, 'stage', enemy.stage.number),
+      // The decimal string is the label a numeric stage always produced, so
+      // every seed — and every recorded result — is unchanged (ADR-018).
+      seed: deriveSeed(input.seed, 'stage', enemy.stage.number.toString()),
       rulesVersion: rules.version,
     });
     const rewards =

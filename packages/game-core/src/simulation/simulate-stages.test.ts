@@ -5,6 +5,7 @@ import { HugeNumber } from '../huge-number/index.js';
 import { NO_REWARDS, addRewards } from '../rewards/rewards.js';
 import { getGameRules } from '../rules/index.js';
 import { GAME_RULES_VERSION } from '../rules-version.js';
+import { STAGE_NUMBER_MAX, StageNumber } from '../stage/index.js';
 import {
   MAX_STAGES_PER_SIMULATION,
   simulateStages,
@@ -31,18 +32,18 @@ describe('simulateStages — headless progression', () => {
     expect(outcomes.length).toBeGreaterThan(1);
     expect(outcomes.at(-1)).toBe('LOSS');
     expect(outcomes.slice(0, -1).every((outcome) => outcome === 'WIN')).toBe(true);
-    expect(result.stages.map((entry) => entry.stage.number)).toEqual(
-      outcomes.map((_, index) => index + 1),
+    expect(result.stages.map((entry) => entry.stage.number.toBigInt())).toEqual(
+      outcomes.map((_, index) => BigInt(index + 1)),
     );
     expect(result.stopReason).toBe('DEFEATED');
-    expect(result.highestStageCleared).toBe(outcomes.length - 1);
+    expect(result.highestStageCleared?.toBigInt()).toBe(BigInt(outcomes.length - 1));
   });
 
   it('stops at the stage limit when the character never loses', () => {
     const result = run({ character: createCharacter(60, rules), maxStages: 5 });
     expect(result.stages).toHaveLength(5);
     expect(result.stopReason).toBe('STAGE_LIMIT');
-    expect(result.highestStageCleared).toBe(5);
+    expect(result.highestStageCleared?.toString()).toBe('5');
   });
 
   it('grants rewards only for wins and totals them', () => {
@@ -60,17 +61,18 @@ describe('simulateStages — headless progression', () => {
   it('a stronger character progresses at least as far', () => {
     const levels = [1, 10, 25, 50];
     const reached = levels.map(
-      (level) => run({ character: createCharacter(level, rules) }).highestStageCleared,
+      (level) =>
+        run({ character: createCharacter(level, rules) }).highestStageCleared?.toBigInt() ?? 0n,
     );
-    expect(reached).toEqual([...reached].sort((a, b) => a - b));
-    expect(reached.at(-1)).toBeGreaterThan(reached[0] ?? 0);
+    expect(reached).toEqual([...reached].sort((a, b) => (a === b ? 0 : a < b ? -1 : 1)));
+    expect(reached.at(-1)).toBeGreaterThan(reached[0] ?? 0n);
   });
 
   it('starts mid-ladder and reports no clears when the first fight is lost', () => {
-    const result = run({ startStage: 500 });
+    const result = run({ startStage: StageNumber.of(500) });
     expect(result.stages).toHaveLength(1);
-    expect(result.stages[0]?.stage.number).toBe(500);
-    expect(result.highestStageCleared).toBe(499);
+    expect(result.stages[0]?.stage.number.toString()).toBe('500');
+    expect(result.highestStageCleared).toBeNull();
     expect(result.totalRewards).toEqual(NO_REWARDS);
   });
 });
@@ -86,7 +88,7 @@ describe('simulateStages — determinism', () => {
   it('a stage resolves the same regardless of where the run started', () => {
     const character = createCharacter(40, rules);
     const full = run({ character, maxStages: 12 });
-    const partial = run({ character, startStage: 6, maxStages: 7 });
+    const partial = run({ character, startStage: StageNumber.of(6), maxStages: 7 });
     expect(partial.stages).toEqual(full.stages.slice(5, 12));
   });
 });
@@ -96,9 +98,10 @@ describe('simulateStages — validation', () => {
     expect(() => run({ maxStages })).toThrow(GameCoreError);
   });
 
-  it('rejects a start stage or range outside the safe integers', () => {
-    expect(() => run({ startStage: 0 })).toThrow(GameCoreError);
-    expect(() => run({ startStage: Number.MAX_SAFE_INTEGER, maxStages: 2 })).toThrow(GameCoreError);
+  it('rejects a range that runs past the last stage before fighting', () => {
+    expect(() => run({ startStage: StageNumber.of(STAGE_NUMBER_MAX), maxStages: 2 })).toThrow(
+      expect.objectContaining({ code: 'OUT_OF_RANGE' }),
+    );
   });
 
   it('rejects an unsupported rules version', () => {

@@ -194,6 +194,9 @@ importers:
       '@eternal-forge/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@eternal-forge/game-core':
+        specifier: workspace:*
+        version: link:../../packages/game-core
       '@nestjs/common':
         specifier: 'catalog:'
         version: 12.0.4(reflect-metadata@0.2.2)(rxjs@7.8.2)
