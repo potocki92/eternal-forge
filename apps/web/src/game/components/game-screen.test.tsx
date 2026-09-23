@@ -32,7 +32,11 @@ vi.mock('@/auth/auth-provider', () => ({
 // --- A scriptable API --------------------------------------------------------
 
 type CombatReply =
-  CombatResponse | { readonly status: number; readonly body?: unknown } | 'offline';
+  | CombatResponse
+  | { readonly status: number; readonly body?: unknown }
+  /** Answers only once released: a request still in flight. */
+  | { readonly hold: Promise<void>; readonly then: CombatResponse }
+  | 'offline';
 
 let combatReplies: CombatReply[];
 let serverState: PlayerStateResponse;
@@ -52,12 +56,19 @@ const selectionBodies: unknown[] = [];
 
 /** The server's own rule, for the fake: FARM stays, PROGRESS returns to the frontier. */
 function acceptSelection(body: StageSelectionRequest) {
+  const currentStage =
+    body.mode === 'FARM' ? body.stage : serverState.progression.highestStageReached;
+  const { encounter } = serverState.progression;
   serverState = {
     ...serverState,
     progression: {
       ...serverState.progression,
       stageMode: body.mode,
-      currentStage: body.mode === 'FARM' ? body.stage : serverState.progression.highestStageReached,
+      currentStage,
+      encounter:
+        encounter === null
+          ? null
+          : { ...encounter, stage: { ...encounter.stage, number: currentStage } },
     },
   };
   return {
@@ -93,9 +104,15 @@ const fetchMock = vi.fn(async (url: URL, init: RequestInit) => {
   }
   if (init.method === 'POST') {
     combatKeys.push(new Headers(init.headers).get('idempotency-key') ?? '');
-    const reply = combatReplies.shift() ?? 'offline';
+    // The combat request carries no gameplay input at all.
+    expect(init.body).toBeUndefined();
+    let reply = combatReplies.shift() ?? 'offline';
     if (reply === 'offline') {
       return Promise.reject(new TypeError('Failed to fetch'));
+    }
+    if ('hold' in reply) {
+      await reply.hold;
+      reply = reply.then;
     }
     if ('combat' in reply) {
       serverState = {
@@ -143,7 +160,13 @@ const recordingScene: CombatSceneFactory = () => {
   return Promise.resolve(scene);
 };
 
-function Harness({ sceneFactory }: { readonly sceneFactory: CombatSceneFactory }) {
+function Harness({
+  sceneFactory,
+  signingOut = false,
+}: {
+  readonly sceneFactory: CombatSceneFactory;
+  readonly signingOut?: boolean;
+}) {
   const player = usePlayerState();
   if (player.data?.kind !== 'provisioned') {
     return null;
@@ -153,7 +176,7 @@ function Harness({ sceneFactory }: { readonly sceneFactory: CombatSceneFactory }
       userId={USER_ID}
       player={player.data.state}
       receivedAt={player.dataUpdatedAt}
-      signingOut={false}
+      signingOut={signingOut}
       onSignOut={() => undefined}
       sceneFactory={sceneFactory}
     />
@@ -585,16 +608,46 @@ describe('GameScreen — stage selection (ADR-021)', () => {
     expect(fightButton()).toBeEnabled();
   });
 
-  it('cannot be changed while a combat is being fought', async () => {
-    combatReplies = [combatResponseFixture()];
+  it('cannot be changed while a combat request is in flight', async () => {
+    let release: () => void = () => undefined;
+    combatReplies = [
+      { hold: new Promise<void>((resolve) => (release = resolve)), then: combatResponseFixture() },
+    ];
     renderGame(readyPlayer());
     await advance(0);
 
     fireEvent.click(fightButton());
     await advance(0);
 
-    expect(report()).toHaveAttribute('data-phase', 'fighting');
+    expect(report()).toHaveAttribute('data-phase', 'requesting');
     expect(toggle()).toBeDisabled();
+    release();
+    await advance(0);
+    expect(report()).toHaveAttribute('data-phase', 'fighting');
+  });
+
+  it('can be changed while a committed combat is being played; it applies to the next fight', async () => {
+    combatReplies = [combatResponseFixture()];
+    renderGame(readyPlayer());
+    await advance(0);
+    fireEvent.click(fightButton());
+    await advance(0);
+    expect(report()).toHaveAttribute('data-phase', 'fighting');
+
+    fireEvent.click(toggle());
+    await advance(0);
+    fireEvent.click(screen.getByRole('radio', { name: 'Stay on this stage' }));
+    fireEvent.change(stageInput(), { target: { value: '1' } });
+    fireEvent.click(submit());
+    await advance(0);
+
+    expect(selectionBodies).toEqual([{ mode: 'FARM', stage: '1' }]);
+    // The fight on screen is unchanged; the HUD still shows the state before it.
+    expect(report()).toHaveAttribute('data-phase', 'fighting');
+    expect(screen.getByTestId('stage-mode')).toHaveTextContent('Farming stage 1');
+    await advance(4_000);
+    await advance(1_200);
+    expect(screen.getByTestId('next-encounter')).toHaveTextContent('Next: Stage 1');
   });
 
   it('closes on Escape without sending anything', async () => {
@@ -656,5 +709,345 @@ describe('GameScreen — stage selection (ADR-021)', () => {
 
     expect(screen.getByTestId('stage-mode')).toHaveTextContent('Farming stage 3');
     expect(screen.getByTestId('hud-stage')).toHaveTextContent('3');
+  });
+});
+
+describe('GameScreen — online auto battle (ADR-022)', () => {
+  let pageHidden = false;
+
+  beforeEach(() => {
+    pageHidden = false;
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => (pageHidden ? 'hidden' : 'visible'),
+    });
+  });
+
+  function setHidden(hidden: boolean) {
+    pageHidden = hidden;
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+  }
+
+  /** The server's n-th win; its gate opens `gateMs` after it answered. */
+  function win(n: number, gateMs = 4_000, farmStage?: string): CombatResponse {
+    const base = combatResponseFixture();
+    return {
+      ...base,
+      combat: { ...base.combat, id: `7d9f1a52-3c4b-4e8d-9a1f-2b3c4d5e6f7${String(n)}` },
+      progression: {
+        ...base.progression,
+        ...(farmStage === undefined ? {} : { stageMode: 'FARM', currentStage: farmStage }),
+        nextCombatAt: new Date(Date.parse(base.serverTime) + gateMs).toISOString(),
+      },
+    };
+  }
+
+  const busyReply = {
+    status: 409,
+    body: { statusCode: 409, code: 'COMBAT_NOT_READY', error: 'Your hero is still fighting.' },
+  };
+  const startAuto = () => {
+    fireEvent.click(screen.getByTestId('auto-battle-start'));
+  };
+  const stopAuto = () => {
+    fireEvent.click(screen.getByTestId('auto-battle-stop'));
+  };
+  const autoStatus = () => screen.getByTestId('auto-battle-status');
+  const stateReads = () => fetchMock.mock.calls.filter(([, init]) => init.method === 'GET');
+  /** One whole fight on screen: playback, then the next enemy steps in. */
+  const playOut = async () => {
+    await advance(4_000);
+    await advance(1_200);
+  };
+
+  it('starts, fights the server’s combats back to back, and stops', async () => {
+    combatReplies = [win(1), win(2), win(3)];
+    renderGame(readyPlayer());
+    await advance(0);
+    expect(screen.queryByTestId('auto-battle-status')).toBeNull();
+
+    startAuto();
+    await advance(0);
+
+    expect(combatKeys).toHaveLength(1);
+    expect(autoStatus()).toHaveAttribute('data-auto-status', 'running');
+    expect(autoStatus()).toHaveTextContent('Auto battle · Climbing');
+    expect(screen.getByTestId('auto-battle-stop')).toHaveTextContent('Stop auto battle');
+    expect(screen.queryByTestId('fight-button')).toBeNull();
+    expect(report()).toHaveAttribute('data-phase', 'fighting');
+
+    await playOut();
+    await advance(0);
+    expect(combatKeys).toHaveLength(2);
+    expect(new Set(combatKeys).size).toBe(2);
+
+    stopAuto();
+    await advance(0);
+    expect(screen.queryByTestId('auto-battle-status')).toBeNull();
+    // The fight already committed plays out; nothing new starts.
+    await playOut();
+    await advance(30_000);
+    expect(combatKeys).toHaveLength(2);
+    expect(report()).toHaveAttribute('data-outcome', 'WIN');
+    expect(fightButton()).toBeEnabled();
+  });
+
+  it('waits for the server’s pacing gate and shows it as a countdown', async () => {
+    combatReplies = [win(1, 8_000), win(2)];
+    renderGame(readyPlayer());
+    await advance(0);
+    startAuto();
+    await advance(0);
+
+    await playOut();
+    await advance(0);
+    expect(autoStatus()).toHaveAttribute('data-auto-step', 'fight');
+    expect(screen.getByTestId('auto-battle-countdown')).toHaveTextContent('Next fight in 3s');
+    await advance(2_700);
+    expect(combatKeys).toHaveLength(1);
+
+    await advance(200);
+    expect(combatKeys).toHaveLength(2);
+  });
+
+  it('never has two requests in flight, however long the server takes', async () => {
+    let release: () => void = () => undefined;
+    combatReplies = [{ hold: new Promise<void>((resolve) => (release = resolve)), then: win(1) }];
+    renderGame(readyPlayer());
+    await advance(0);
+    startAuto();
+
+    await advance(120_000);
+    expect(combatKeys).toHaveLength(1);
+    expect(report()).toHaveAttribute('data-phase', 'requesting');
+
+    release();
+    await advance(0);
+    expect(report()).toHaveAttribute('data-phase', 'fighting');
+  });
+
+  it('stop while a request is in flight: that fight completes and is shown, no other starts', async () => {
+    let release: () => void = () => undefined;
+    combatReplies = [
+      { hold: new Promise<void>((resolve) => (release = resolve)), then: win(1) },
+      win(2),
+    ];
+    renderGame(readyPlayer());
+    await advance(0);
+    startAuto();
+    await advance(0);
+
+    stopAuto();
+    await advance(0);
+    expect(autoStatus()).toHaveAttribute('data-auto-status', 'stopping');
+    expect(autoStatus()).toHaveTextContent('Auto battle stops after this fight.');
+    expect(screen.getByTestId('auto-battle-stop')).toBeDisabled();
+
+    release();
+    await advance(0);
+    expect(report()).toHaveAttribute('data-phase', 'fighting');
+    expect(screen.queryByTestId('auto-battle-status')).toBeNull();
+    await playOut();
+    await advance(30_000);
+    expect(combatKeys).toHaveLength(1);
+    expect(report()).toHaveAttribute('data-outcome', 'WIN');
+  });
+
+  it('retries a lost connection with the same key, after a backoff', async () => {
+    // The request and both of the session's own retries are lost.
+    combatReplies = ['offline', 'offline', 'offline', win(1)];
+    renderGame(readyPlayer());
+    await advance(0);
+    startAuto();
+    await advance(3_000);
+
+    expect(combatKeys).toHaveLength(3);
+    expect(screen.getByRole('alert')).toHaveTextContent('Connection lost');
+    expect(screen.getByTestId('auto-battle-countdown')).toHaveTextContent(/^Retrying in [12]s$/u);
+
+    await advance(2_000);
+    expect(combatKeys).toHaveLength(4);
+    // One intent, one key: a response lost after the server committed is replayed.
+    expect(new Set(combatKeys).size).toBe(1);
+    expect(report()).toHaveAttribute('data-phase', 'fighting');
+  });
+
+  it('gives up after a long outage, says so, and stops asking', async () => {
+    combatReplies = Array<CombatReply>(40).fill('offline');
+    renderGame(readyPlayer());
+    await advance(0);
+    startAuto();
+
+    for (let second = 0; second < 120; second += 1) {
+      await advance(1_000);
+    }
+    const sent = combatKeys.length;
+    // Five failed intents, each the request and its two quick retries.
+    expect(sent).toBe(15);
+    expect(autoStatus()).toHaveAttribute('data-auto-status', 'halted');
+    expect(autoStatus()).toHaveTextContent('The forge cannot be reached');
+
+    await advance(120_000);
+    expect(combatKeys).toHaveLength(sent);
+    expect(screen.getByTestId('auto-battle-start')).toBeEnabled();
+  });
+
+  it('an ended session stops the loop', async () => {
+    combatReplies = [
+      { status: 401, body: { statusCode: 401, code: 'UNAUTHENTICATED', error: 'Sign in.' } },
+      win(1),
+    ];
+    renderGame(readyPlayer());
+    await advance(0);
+    startAuto();
+    await advance(0);
+
+    expect(autoStatus()).toHaveAttribute('data-auto-status', 'halted');
+    expect(autoStatus()).toHaveTextContent('Your session has ended.');
+    await advance(60_000);
+    expect(combatKeys).toHaveLength(1);
+    expect(screen.getByTestId('auto-battle-start')).toBeDisabled();
+  });
+
+  it('after "still fighting" (another tab won), re-reads the server, then fights with a new key', async () => {
+    combatReplies = [busyReply, win(1)];
+    renderGame(readyPlayer());
+    await advance(0);
+    const readsBefore = stateReads().length;
+    startAuto();
+    await advance(0);
+
+    expect(combatKeys).toHaveLength(1);
+    expect(stateReads().length).toBeGreaterThan(readsBefore);
+    await advance(990);
+    expect(combatKeys).toHaveLength(1);
+
+    await advance(20);
+    expect(combatKeys).toHaveLength(2);
+    expect(combatKeys[1]).not.toBe(combatKeys[0]);
+    expect(report()).toHaveAttribute('data-phase', 'fighting');
+  });
+
+  it('stops when the server has no enemy this deep', async () => {
+    combatReplies = [
+      { status: 409, body: { statusCode: 409, code: 'STAGE_NOT_PLAYABLE', error: 'Too deep.' } },
+    ];
+    renderGame(readyPlayer());
+    await advance(0);
+    startAuto();
+    await advance(0);
+
+    expect(autoStatus()).toHaveAttribute('data-auto-status', 'halted');
+    expect(autoStatus()).toHaveTextContent('No enemy is known this deep yet.');
+    await advance(60_000);
+    expect(combatKeys).toHaveLength(1);
+  });
+
+  it('a stage choice while running: the next fight waits for the server’s answer', async () => {
+    let release: () => void = () => undefined;
+    selectionReplies = [{ hold: new Promise<void>((resolve) => (release = resolve)) }, 'accept'];
+    // The server's answers after the choice reflect it: it fights where the hero stands.
+    combatReplies = [win(1), win(2, 4_000, '1'), win(3)];
+    renderGame(readyPlayer());
+    await advance(0);
+    startAuto();
+    await advance(0);
+
+    // Climbing → farm stage 1, chosen while the first fight plays.
+    fireEvent.click(screen.getByTestId('stage-selector-toggle'));
+    await advance(0);
+    fireEvent.click(screen.getByRole('radio', { name: 'Stay on this stage' }));
+    fireEvent.change(screen.getByLabelText('Stage to farm'), { target: { value: '1' } });
+    fireEvent.click(screen.getByTestId('stage-selection-submit'));
+    await playOut();
+    await advance(5_000);
+
+    expect(combatKeys).toHaveLength(1);
+    expect(autoStatus()).toHaveTextContent('Auto battle waits for your stage choice.');
+
+    release();
+    await advance(10);
+    expect(combatKeys).toHaveLength(2);
+    expect(autoStatus()).toHaveTextContent('Auto battle · Farming stage 1');
+
+    // Farm → climbing, during the second fight: shown at once, used next.
+    fireEvent.click(screen.getByTestId('stage-selector-toggle'));
+    await advance(0);
+    fireEvent.click(screen.getByRole('radio', { name: 'Continue climbing' }));
+    fireEvent.click(screen.getByTestId('stage-selection-submit'));
+    await advance(0);
+    expect(autoStatus()).toHaveTextContent('Auto battle · Climbing');
+    expect(selectionBodies).toEqual([{ mode: 'FARM', stage: '1' }, { mode: 'PROGRESS' }]);
+
+    await playOut();
+    await advance(0);
+    expect(combatKeys).toHaveLength(3);
+  });
+
+  it('pauses while the page is hidden and never catches up for the hidden time', async () => {
+    combatReplies = [win(1), win(2), win(3)];
+    renderGame(readyPlayer());
+    await advance(0);
+    startAuto();
+    await advance(0);
+
+    setHidden(true);
+    await playOut();
+    await advance(10 * 60_000);
+    expect(combatKeys).toHaveLength(1);
+    expect(autoStatus()).toHaveTextContent('Auto battle paused while the game is hidden.');
+
+    setHidden(false);
+    await advance(0);
+    // One fight now — not one for every gate that opened while hidden.
+    expect(combatKeys).toHaveLength(2);
+    await advance(1_000);
+    expect(combatKeys).toHaveLength(2);
+  });
+
+  it('stops on unmount: no timer survives the screen', async () => {
+    combatReplies = [win(1), win(2)];
+    const view = renderGame(readyPlayer());
+    await advance(0);
+    startAuto();
+    await advance(0);
+
+    view.unmount();
+    await advance(60_000);
+    expect(combatKeys).toHaveLength(1);
+  });
+
+  it('stops at once when the player signs out', async () => {
+    combatReplies = [win(1), win(2)];
+    const view = renderGame(readyPlayer());
+    await advance(0);
+    startAuto();
+    await advance(0);
+
+    view.rerender(<Harness sceneFactory={recordingScene} signingOut />);
+    await advance(0);
+    expect(screen.queryByTestId('auto-battle-status')).toBeNull();
+    await playOut();
+    await advance(60_000);
+    expect(combatKeys).toHaveLength(1);
+  });
+
+  it('skipping the animation never skips the server’s gate', async () => {
+    combatReplies = [win(1, 4_000), win(2)];
+    renderGame(readyPlayer());
+    await advance(0);
+    startAuto();
+    await advance(0);
+
+    fireEvent.click(screen.getByTestId('skip-button'));
+    await advance(1_200);
+    await advance(0);
+    expect(combatKeys).toHaveLength(1);
+    expect(screen.getByTestId('auto-battle-countdown')).toHaveTextContent('Next fight in 3s');
+
+    await advance(2_800);
+    expect(combatKeys).toHaveLength(2);
   });
 });

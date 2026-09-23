@@ -1,8 +1,9 @@
 'use client';
 
 import type { EncounterDto, PlayerStateResponse } from '@eternal-forge/contracts';
-import { Button } from '@eternal-forge/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { formatStage } from '@/player/format-stage';
+import { useAutoBattle } from '../auto-battle/use-auto-battle';
 import { localReadyAt } from '../combat-session';
 import { hugeRatio } from '../format/format-huge';
 import { createPlayback } from '../playback/combat-playback';
@@ -14,6 +15,7 @@ import { useCombatSession } from '../use-combat-session';
 import { useStageSelection } from '../stage-selection/use-stage-selection';
 import { useNow } from '../use-now';
 import { usePrefersReducedMotion } from '../use-reduced-motion';
+import { BattleControls } from './battle-controls';
 import { CombatReport, type ReportState } from './combat-report';
 import { CombatStage, type CombatantHealth } from './combat-stage';
 import { GameHud, type HudValues } from './game-hud';
@@ -37,9 +39,10 @@ export interface GameScreenProps {
  * The first game screen (Phase 3), mobile first at 390×844.
  *
  * It renders a gameplay loop it does not run: the server resolves each combat
- * (ADR-019), this screen shows it. React owns the layout, the controls and
- * every piece of information; the PixiJS scene only animates the cues it is
- * given (ADR-007).
+ * (ADR-019), this screen shows it. Online auto-battle (ADR-022) only presses
+ * the same Fight for the player, when the server's pacing gate allows. React
+ * owns the layout, the controls and every piece of information; the PixiJS
+ * scene only animates the cues it is given (ADR-007).
  */
 export function GameScreen({
   userId,
@@ -50,7 +53,8 @@ export function GameScreen({
   sceneFactory = loadPixiCombatScene,
 }: GameScreenProps) {
   const reducedMotion = usePrefersReducedMotion();
-  const { state, fight, finish } = useCombatSession(userId, player.character.id);
+  const session = useCombatSession(userId, player.character.id);
+  const { state, fight, finish } = session;
   const stageSelection = useStageSelection(userId, player.character.id);
   const response =
     state.phase === 'fighting' || state.phase === 'finished' ? state.response : undefined;
@@ -220,6 +224,22 @@ export function GameScreen({
               ? 'Fight boss'
               : 'Fight';
 
+  const auto = useAutoBattle(
+    session,
+    {
+      resultShown: nextRevealed,
+      readyAt,
+      stateReceivedAt: receivedAt,
+      hasEncounter: player.progression.encounter !== null,
+      otherWritePending: stageSelection.pending,
+    },
+    !signingOut,
+  );
+  const modeLabel =
+    player.progression.stageMode === 'FARM'
+      ? `Farming stage ${formatStage(player.progression.currentStage)}`
+      : 'Climbing';
+
   return (
     <div className="mx-auto flex h-dvh w-full max-w-screen-sm flex-col overflow-hidden bg-background md:my-4 md:h-[calc(100dvh-2rem)] md:max-w-2xl md:rounded-(--radius-panel) md:border md:border-border md:shadow-(--shadow-raised)">
       <GameHud
@@ -231,7 +251,10 @@ export function GameScreen({
       />
       <StageSelector
         progression={player.progression}
-        locked={busy}
+        // Only while a combat request is in flight. A combat being played is
+        // already committed, so a new choice simply applies to the next fight;
+        // auto-battle would otherwise lock the choice almost all the time.
+        locked={state.phase === 'requesting'}
         pending={stageSelection.pending}
         error={stageSelection.error}
         onSelect={stageSelection.select}
@@ -254,26 +277,24 @@ export function GameScreen({
         <CombatReport report={report} />
       </main>
 
-      <footer className="flex gap-2 px-4 pt-1 pb-[max(1rem,env(safe-area-inset-bottom))]">
-        <Button
-          size="lg"
-          fullWidth
-          variant={
-            player.progression.encounter?.stage.kind === 'BOSS' && !busy ? 'danger' : 'primary'
-          }
-          disabled={blocked}
-          aria-busy={busy}
-          onClick={fight}
-          data-testid="fight-button"
-        >
-          {fightLabel}
-        </Button>
-        {state.phase === 'fighting' ? (
-          <Button size="lg" variant="secondary" onClick={end} data-testid="skip-button">
-            Skip
-          </Button>
-        ) : null}
-      </footer>
+      <BattleControls
+        fight={{
+          label: fightLabel,
+          disabled: blocked,
+          busy,
+          variant:
+            player.progression.encounter?.stage.kind === 'BOSS' && !busy ? 'danger' : 'primary',
+          onFight: fight,
+        }}
+        onSkip={state.phase === 'fighting' ? end : undefined}
+        auto={auto}
+        autoUnavailable={
+          signingOut ||
+          player.progression.encounter === null ||
+          (state.phase === 'failed' && state.failure.kind === 'session')
+        }
+        modeLabel={modeLabel}
+      />
     </div>
   );
 }
