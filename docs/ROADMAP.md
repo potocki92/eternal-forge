@@ -9,7 +9,8 @@ PHASE 3 — FIRST GAMEPLAY LOOP
 Status:
 
 IMPLEMENTED — final audit fixes and the stage progression model (ADR-020)
-added to PR #6; awaiting GitHub Actions and user approval. Decision records:
+added to PR #6; GitHub Actions green (run #25, `610e633`); awaiting user
+approval. Decision records:
 ADR-019 (the server-authoritative combat transaction) and ADR-020 (stage
 progression model). See "Validation" and "Final audit" under Phase 3. Phase 4
 must not start without approval.
@@ -382,8 +383,8 @@ Validation (2026-09-23, local, PostgreSQL 16 and Redis 7):
 
 # Phase 3 — First Gameplay Loop
 
-Status: IMPLEMENTED — final audit applied; awaiting GitHub Actions and user
-approval (2026-09-23)
+Status: IMPLEMENTED — final audit applied; CI green on PR #6 (run #25);
+awaiting user approval (2026-09-23)
 
 Goal:
 
@@ -445,7 +446,9 @@ Tasks:
       intermediate commits failed on a test type error, fixed in `ee23348`
 - [x] final audit — CI typecheck fix, stage progression model (ADR-020),
       `STAGE_NOT_PLAYABLE`; see "Final audit" below
-- [ ] GitHub Actions green on the final audit commit
+- [x] GitHub Actions green on the final audit commits — run #24 on `b5b22c2`
+      and run #25 on `610e633`: quality (format, lint, typecheck, unit
+      tests, build), PostgreSQL integration and smoke, Playwright end-to-end
 - [ ] Supabase DEV project created and migrated — OWNER ACTION
       (docs/DEPLOYMENT.md)
 - [ ] Vercel deployment — OWNER ACTION, and a playable deployment is
