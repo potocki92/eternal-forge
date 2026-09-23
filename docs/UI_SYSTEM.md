@@ -639,31 +639,42 @@ off:                                     on:
 
 ---
 
-# Offline progress (Phase 4 PR 4.3)
+# Welcome back (Phase 4 PR 4.4)
 
-Status: IMPLEMENTED — functional only (ADR-023). The polished "welcome back"
-presentation is PR 4.4.
+Status: IMPLEMENTED — presentation over the unchanged offline claim (ADR-023).
 
 ```
-│ HUD / stage selector (unchanged)  │
-├──────────────────────────────────┤
-│ Offline progress                  │  Panel between the selector and the
-│ Away              14h             │  battlefield; never an overlay, never
-│ Counted           8h (limit…)     │  blocks the controls
-│ Stage farmed      11              │
-│ Battles           28,409 (… won)  │
-│ Gold / XP / Levels  +426K …       │
-│ [          Continue          ]    │
+│         Welcome Back             │
+│          Away for 14h            │
+│  Gold +426K       XP +255K       │
+│  Level 18 → 20                   │
+│  Battles / victories / stage     │
+│  Offline limit reached · 8h      │
+│ [          Continue          ]   │
 ```
 
 - **When.** On entering the game and when the page becomes visible after
   being hidden, the client asks once. Until the answer arrives, Fight reads
   "Returning…" and auto-battle waits (an online fight would end the idle
   time). "Nothing to collect" shows nothing.
-- **Server truth only.** Every value is from the response; the client only
-  formats durations and numbers. The HUD takes the authoritative gold and
-  level from the same response.
+- **Meaningful results only.** A claim with at least one fight opens a
+  blocking reward dialog. A zero-fight/minimum-absence/repeated no-op answer
+  goes straight to the game without celebratory UI.
+- **Server truth only.** Every reward and battle value is from the response;
+  the client only formats durations and precision-safe numbers. Level display
+  combines the authoritative current level with `levelsGained`. The HUD takes
+  its authoritative gold and level from the same response.
+- **Interaction.** Manual and auto battle remain paused while the result is
+  visible. Continue only dismisses presentation state: it neither claims nor
+  applies a reward. The summary is intentionally memory-only and disappears
+  on refresh; the server then answers a new, normally idempotent claim.
 - **Failure.** A danger `Alert` with **Try again** (same idempotency key)
-  and **Play without it**; the game stays playable. A 401 ends the session
-  as everywhere else.
-- **Layout.** Verified at 390×844 (no horizontal overflow) and desktop.
+  and **Play without it**; combat waits for that explicit choice. A 401 ends
+  the session as everywhere else.
+- **Accessibility.** The overlay has dialog semantics, a semantic heading,
+  initial focus on the primary action, contained keyboard focus and visible
+  focus from the shared Button. Escape does not silently discard the result.
+- **Motion and layout.** A restrained panel/reward entrance is removed under
+  `prefers-reduced-motion`. The dialog is scroll-contained for short screens,
+  respects safe-area insets, has no horizontal overflow at 390×844, and uses
+  the same responsive composition on desktop.

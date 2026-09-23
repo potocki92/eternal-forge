@@ -531,6 +531,11 @@ them (a change needs rules v2).
   An online fight started before claiming ends the idle period (the game
   client always claims first).
 - **After a claim** the hero can fight online immediately.
+- **Return presentation (Phase 4 PR 4.4).** A claim that fought is presented
+  as a Welcome Back reward summary before combat resumes. It displays only
+  the server's result, remains memory-only, and cannot award or recalculate
+  anything. Zero-fight claims are silent; reaching the cap is framed as a
+  successfully collected maximum rather than an error.
 
 Measured under `RULES_V1` (seeded): a level-10 hero on stage 9 fights about
 3 400 times per hour; 8 hours hold at most 28 800 fights.

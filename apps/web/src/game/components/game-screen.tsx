@@ -271,7 +271,11 @@ export function GameScreen({
         onDismissError={stageSelection.clearError}
       />
 
-      <OfflineSummary claim={offlineClaim} />
+      <OfflineSummary
+        claim={offlineClaim}
+        currentLevel={player.character.level}
+        heroName={player.character.name}
+      />
 
       <main className="flex min-h-0 flex-1 flex-col">
         <CombatStage

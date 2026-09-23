@@ -66,9 +66,9 @@ export function offlineClaimReducer(
   }
 }
 
-/** Whether fights must wait: a claim is still to be asked for or in flight. */
+/** Whether fights must wait: claims and their blocking presentation finish first. */
 export function blocksFighting(state: OfflineClaimState): boolean {
-  return state.status === 'needed' || state.status === 'claiming';
+  return state.status !== 'settled';
 }
 
 /** The key for the next claim: the failed claim's own key, or a fresh one. */

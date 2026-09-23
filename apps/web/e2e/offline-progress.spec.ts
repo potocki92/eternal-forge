@@ -52,7 +52,10 @@ test.describe('offline progression', () => {
     await expect(summary).toBeVisible();
     await expect(page.getByTestId('offline-away')).toHaveText(/^3h( \d+m)?$/u);
     await expect(page.getByTestId('offline-stage')).toHaveText('4');
-    await expect(page.getByTestId('offline-battles')).toHaveText(/^[\d,]+ \([\d,]+ won\)$/u);
+    await expect(page.getByTestId('offline-battles')).toHaveText(/^[\d,]+$/u);
+    await expect(page.getByTestId('offline-victories')).toHaveText(/^[\d,]+$/u);
+    await expect(page.getByTestId('offline-gold')).toContainText('+');
+    await expect(page.getByTestId('offline-xp')).toContainText('+');
 
     // The screen shows the server's answer, and the server recorded it once.
     await expect.poll(() => claims.answers.some((answer) => answer.status === 201)).toBe(true);
@@ -106,8 +109,8 @@ test.describe('offline progression', () => {
     await page.reload();
 
     await expect(page.getByTestId('offline-failed')).toBeVisible({ timeout: 20_000 });
-    // The game is not held hostage by the failure.
-    await expect(page.getByTestId('fight-button')).toBeEnabled();
+    // No combat starts behind the recovery dialog.
+    await expect(page.getByTestId('fight-button')).toBeDisabled();
 
     await page.unroute(OFFLINE_PATH);
     const retried = page.waitForRequest(
@@ -119,6 +122,22 @@ test.describe('offline progression', () => {
 
     await expect(page.getByTestId('offline-summary')).toBeVisible();
     expect(await recordedOfflineRuns(account.heroName)).toHaveLength(1);
+  });
+
+  test('an absence beyond the cap explains that eight hours were collected', async ({ page }) => {
+    const account = await registerWithHero(page);
+    await placeHeroOnStage(account.heroName, 3n);
+    await sendHeroAway(account.heroName, 12 * HOUR);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+
+    await page.reload();
+
+    await expect(page.getByTestId('offline-cap-notice')).toContainText('Offline limit reached');
+    await expect(page.getByTestId('offline-counted')).toHaveText('8h of progress collected');
+    await expect(page.getByRole('dialog', { name: 'Welcome Back' })).toHaveAttribute(
+      'data-reduced-motion',
+      'true',
+    );
   });
 
   test('a claim the API refuses as unauthenticated ends the session', async ({ page }) => {
