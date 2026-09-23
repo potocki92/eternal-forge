@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { progressionSchema } from '../game/progression.contract.js';
 import { hugeAmountSchema } from '../huge-number/huge-number.contract.js';
-import { stageNumberSchema } from '../stage/stage-number.contract.js';
 import { playerNameSchema } from './player-name.js';
 
 /**
@@ -21,15 +20,14 @@ export type ProfileDto = z.infer<typeof profileSchema>;
 
 /**
  * A character's persistent source state. Derived values such as combat stats
- * are computed from it by Game Core and travel separately, in `progression`.
+ * are computed from it by Game Core and travel separately, in `progression`,
+ * which also carries the stage progress (ADR-020).
  */
 export const characterSchema = z.object({
   id: z.uuid(),
   slot: z.number().int().min(1),
   name: z.string(),
   level: z.number().int().min(1),
-  /** Current stage as a canonical decimal string, exact to 2^63 − 1 (ADR-018). */
-  stage: stageNumberSchema,
   /** Experience within the current level, as a canonical HugeNumber. */
   experience: hugeAmountSchema,
   gold: hugeAmountSchema,
@@ -61,5 +59,8 @@ export const provisionPlayerRequestSchema = z.strictObject({
 export type ProvisionPlayerRequest = z.input<typeof provisionPlayerRequestSchema>;
 
 /** `GET /player/characters/:characterId` — one of the caller's own characters. */
-export const characterResponseSchema = z.object({ character: characterSchema });
+export const characterResponseSchema = z.object({
+  character: characterSchema,
+  progression: progressionSchema,
+});
 export type CharacterResponse = z.infer<typeof characterResponseSchema>;

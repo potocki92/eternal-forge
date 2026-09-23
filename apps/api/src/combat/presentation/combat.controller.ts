@@ -44,6 +44,12 @@ export class CombatController {
           'Your hero is still fighting.',
           { headers: { 'Retry-After': retryAfterSeconds(result.nextCombatAt, result.serverTime) } },
         );
+      case 'stage-not-playable':
+        throw new ApiException(
+          HttpStatus.CONFLICT,
+          'STAGE_NOT_PLAYABLE',
+          'No enemy is known this deep yet. Your progress is safe.',
+        );
       case 'resolved':
         response.status(result.replayed ? HttpStatus.OK : HttpStatus.CREATED);
         return toCombatResponse(result.combat, result.serverTime);

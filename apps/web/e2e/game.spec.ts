@@ -29,6 +29,7 @@ test.describe('the gameplay loop', () => {
 
     await expect(page.getByTestId('combat-status')).toHaveText('Stage 1: Husk awaits.');
     await expect(page.getByTestId('hud-stage')).toHaveText('1');
+    await expect(page.getByTestId('hud-best-cleared')).toContainText('none yet');
     await expect(page.getByTestId('hud-gold')).toHaveText('0');
     // The combat scene started (WebGL, or its canvas fallback) — not inspected.
     await expect(page.locator('[data-scene]')).toHaveAttribute('data-scene', 'ready');
@@ -41,11 +42,13 @@ test.describe('the gameplay loop', () => {
     );
     await expect(page.getByTestId('reward-gold')).toHaveText('+5 gold');
     await expect(page.getByTestId('hud-stage')).toHaveText('2');
+    await expect(page.getByTestId('hud-best-cleared')).toHaveText('1');
     await expect(page.getByTestId('hud-gold')).toHaveText('5');
     await expect(page.getByTestId('next-encounter')).toHaveText('Next: Stage 2: Husk');
 
     await page.reload();
     await expect(page.getByTestId('hud-stage')).toHaveText('2');
+    await expect(page.getByTestId('hud-best-cleared')).toHaveText('1');
     await expect(page.getByTestId('hud-gold')).toHaveText('5');
     await expect(page.getByTestId('combat-status')).toHaveText('Stage 2: Husk awaits.');
 
@@ -82,6 +85,7 @@ test.describe('the gameplay loop', () => {
     await expect(page.getByTestId('boss-badge')).toBeVisible();
     await expect(page.getByTestId('enemy-name')).toHaveText('Warden');
     await expect(page.getByText('Boss stage')).toBeVisible();
+    await expect(page.getByTestId('hud-best-cleared')).toHaveText('9');
     await expect(fightButton(page)).toHaveText('Fight boss');
 
     // A level-1 hero cannot beat the stage-10 boss under rules v1.
@@ -91,9 +95,15 @@ test.describe('the gameplay loop', () => {
     await expect(page.getByTestId('combat-status')).toHaveText(
       'Defeat on stage 10. No rewards. Your hero falls back to stage 9.',
     );
+    // Back to farm on stage 9; the record of stage 9 cleared is kept.
     await expect(page.getByTestId('hud-stage')).toHaveText('9');
+    await expect(page.getByTestId('hud-best-cleared')).toHaveText('9');
     await expect(page.getByTestId('hud-gold')).toHaveText('0');
     await expect(page.getByTestId('next-encounter')).toHaveText('Next: Stage 9: Husk');
+
+    await page.reload();
+    await expect(page.getByTestId('hud-stage')).toHaveText('9');
+    await expect(page.getByTestId('hud-best-cleared')).toHaveText('9');
   });
 
   test('another account never sees the previous player’s progress', async ({ page }) => {

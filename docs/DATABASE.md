@@ -7,7 +7,9 @@ everything else PLANNED
 Tables are created by the phase that requires them, so the repository carries no
 speculative schema. Phase 2 added `profiles` and `characters` (ADR-017). Phase 3
 added progression columns to `characters` and the `combat_runs` table (migration
-`20260923053138_gameplay_loop`, ADR-019). Everything else under "Planned
+`20260923053138_gameplay_loop`, ADR-019). The Phase 3 final audit split the
+stage into the current stage and two records (migration
+`20260923090000_stage_progression`, ADR-020). Everything else under "Planned
 domains" below is PLANNED.
 
 Database:
@@ -91,7 +93,7 @@ characters
 | `slot`       | `smallint`       | CHECK ≥ 1; UNIQUE (`profile_id`, `slot`); main = 1   |
 | `name`       | `varchar(24)`    | CHECK 3–24 characters, no surrounding whitespace     |
 | `level`      | `integer`        | default 1, CHECK ≥ 1                                 |
-| `stage`      | `bigint`         | default 1, CHECK ≥ 1 — read exactly as `StageNumber` |
+| `stage`      | `bigint`         | default 1, CHECK ≥ 1 — renamed `current_stage` by ADR-020 |
 | `created_at` | `timestamptz(3)` | default `now()`                                      |
 | `updated_at` | `timestamptz(3)` | maintained by Prisma                                 |
 
@@ -103,6 +105,9 @@ characters of a profile (leading column `profile_id`).
 the column accepts, 1 to 2^63 − 1, is read and written as an exact `bigint`
 and is never converted to a JavaScript `number`. The column type bounds it
 from above and the CHECK from below.
+
+(The table above is the Phase 2 shape. See "Stage progress" below for the
+current stage columns.)
 
 Only source state is stored. Combat stats, the experience requirement and the
 enemy on the current stage are derived by Game Core and are not persisted.
@@ -128,6 +133,31 @@ Not yet enforced by the database: a foreign key from `auth_user_id` to Supabase'
 `auth.users` (ADR-017 explains why). Account deletion must remove the profile
 explicitly.
 
+Stage progress — changed by the Phase 3 final audit (ADR-020, migration
+`20260923090000_stage_progression`):
+
+| Column                  | Type     | Rules                                                              |
+| ----------------------- | -------- | ------------------------------------------------------------------ |
+| `current_stage`         | `bigint` | was `stage`; default 1, CHECK ≥ 1; where the next combat is fought |
+| `highest_stage_reached` | `bigint` | NOT NULL, default 1, CHECK ≥ 1; never decreases                    |
+| `highest_stage_cleared` | `bigint` | NULL until the first victory, else CHECK ≥ 1; never decreases      |
+
+Cross-column CHECKs: `current_stage ≤ highest_stage_reached`, and
+`highest_stage_cleared` is NULL or `≤ highest_stage_reached`. All three map
+one-to-one to Game Core's `StageProgress` of exact `StageNumber`s. A row that
+breaks an invariant cannot be stored, and the repository refuses to read one.
+
+Backfill rule: a stage counts as cleared only when a recorded `WIN` on it
+exists in `combat_runs`. Reached is the greatest of the current stage, the
+highest stage fought and the highest stage won + 1. A Phase 2 character on
+stage 7 with no combats becomes `7 / 7 / NULL`, so nothing is claimed that the
+data does not prove. The migration was verified from an empty database, from
+the Phase 2 schema and from Phase 3 data, with no drift in any case.
+
+Rankings (Phase 10, PLANNED) will rank `highest_stage_cleared`: a proven,
+monotonic value that farming cannot lower. The index for that query arrives
+with the ranking, not before.
+
 player_settings
 
 Potential fields:
@@ -140,8 +170,9 @@ settings
 
 # Progression
 
-Status: IMPLEMENTED (Phase 3) as columns of `characters` — `level`, `stage`,
-experience, gold, `next_combat_at` and `version` (see "Player"). A separate
+Status: IMPLEMENTED (Phase 3) as columns of `characters` — `level`, the stage
+progress (`current_stage`, `highest_stage_reached`, `highest_stage_cleared`,
+ADR-020), experience, gold, `next_combat_at` and `version` (see "Player"). A separate
 `character_progress` table was not needed: progression is one row per
 character, read and written together.
 
@@ -223,12 +254,14 @@ combat_runs — one row per resolved combat
 | Group        | Columns                                                                                     |
 | ------------ | ------------------------------------------------------------------------------------------- |
 | identity     | `id` uuid PK, `character_id` FK → `characters` ON DELETE CASCADE, `idempotency_key` uuid, `created_at` (resolution time, API clock) |
-| replay input | `rules_version`, `seed` varchar(64), `stage` bigint, `character_level`, `experience_before_*`, `gold_before_*` |
+| replay input | `rules_version`, `seed` varchar(64), `stage` bigint (the stage fought), `highest_stage_reached_before` bigint, `highest_stage_cleared_before` bigint NULL (ADR-020), `character_level`, `experience_before_*`, `gold_before_*` |
 | audit output | `outcome` (enum WIN/LOSS), `end_reason` (enum), `duration_ms`, `reward_gold_*`, `reward_experience_*` |
 
 Constraints: UNIQUE `(character_id, idempotency_key)`. Every HugeNumber pair is
 normalised and whole. `rules_version`, `stage` and `character_level` must be
-≥ 1, `duration_ms` ≥ 0 and the seed non-empty. `outcome = WIN` exactly when
+≥ 1, `duration_ms` ≥ 0 and the seed non-empty. The stage fought is at most
+`highest_stage_reached_before`, and `highest_stage_cleared_before` is NULL
+or between 1 and `highest_stage_reached_before`. `outcome = WIN` exactly when
 `end_reason = ENEMY_DEFEATED`, and a loss pays nothing. That last rule means
 "no reward on defeat" holds in the ledger whatever code path wrote the row.
 Row Level Security is enabled with no policies, and `anon` and

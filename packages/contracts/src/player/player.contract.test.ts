@@ -12,12 +12,14 @@ const state = {
     slot: 1,
     name: 'Kael',
     level: 1,
-    stage: '1',
     experience: '0',
     gold: '1.5e3',
     createdAt: '2026-09-22T10:00:00.000Z',
   },
   progression: {
+    currentStage: '1',
+    highestStageReached: '1',
+    highestStageCleared: null,
     experienceToNextLevel: '1e1',
     hero: { maxHealth: '1e2', damage: '1e1' },
     encounter: {
@@ -34,21 +36,55 @@ describe('playerStateResponseSchema', () => {
     expect(playerStateResponseSchema.parse(state)).toEqual(state);
   });
 
-  it('carries stages beyond 2^53 exactly, as strings', () => {
-    const character = { ...state.character, stage: '9007199254740993' };
-
-    expect(playerStateResponseSchema.parse({ ...state, character }).character.stage).toBe(
-      '9007199254740993',
-    );
+  it('supports a character that has cleared nothing yet', () => {
+    expect(playerStateResponseSchema.parse(state).progression.highestStageCleared).toBeNull();
   });
 
-  it('rejects a numeric stage, which JSON cannot carry exactly', () => {
+  it('carries the stage progress beyond 2^53 exactly, as strings', () => {
+    const progression = {
+      ...state.progression,
+      currentStage: '9007199254740992',
+      highestStageReached: '9007199254740994',
+      highestStageCleared: '9007199254740993',
+    };
+
+    const parsed = playerStateResponseSchema.parse({ ...state, progression }).progression;
+    expect([parsed.currentStage, parsed.highestStageReached, parsed.highestStageCleared]).toEqual([
+      '9007199254740992',
+      '9007199254740994',
+      '9007199254740993',
+    ]);
+  });
+
+  it.each([
+    ['a numeric current stage', { currentStage: 1 }],
+    ['a numeric record', { highestStageReached: 1 }],
+    ['stage 0', { highestStageCleared: '0' }],
+    ['a missing record', { highestStageReached: undefined }],
+    ['a current stage beyond the highest reached', { currentStage: '2' }],
+    [
+      'a clear beyond the highest reached',
+      { currentStage: '9', highestStageReached: '10', highestStageCleared: '11' },
+    ],
+    [
+      'an inconsistency only visible beyond 2^53',
+      { currentStage: '9007199254740993', highestStageReached: '9007199254740992' },
+    ],
+  ])('rejects %s', (_label, change) => {
     const result = playerStateResponseSchema.safeParse({
       ...state,
-      character: { ...state.character, stage: 1 },
+      progression: { ...state.progression, ...change },
     });
 
     expect(result.success).toBe(false);
+  });
+
+  it('carries no stage on the character: progress lives in progression', () => {
+    const parsed = playerStateResponseSchema.parse({
+      ...state,
+      character: { ...state.character, stage: '5' },
+    });
+    expect(parsed.character).not.toHaveProperty('stage');
   });
 
   it.each([

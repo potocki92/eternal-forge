@@ -76,12 +76,14 @@ export type {
 } from './simulation/simulate-stages.js';
 
 export {
+  INITIAL_STAGE_PROGRESS,
   MAX_LEVELS_PER_GAIN,
+  advanceStageProgress,
   applyExperience,
+  createStageProgress,
   describeProgress,
   experienceToNextLevel,
   resolveStageAttempt,
-  stageAfterCombat,
 } from './progression/index.js';
 export type {
   CharacterProgress,
@@ -90,4 +92,5 @@ export type {
   ProgressDescription,
   StageAttemptInput,
   StageAttemptResult,
+  StageProgress,
 } from './progression/index.js';

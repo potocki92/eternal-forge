@@ -11,15 +11,21 @@ import pg from 'pg';
 const databaseUrl =
   process.env['DATABASE_URL'] ?? 'postgresql://forge:forge@127.0.0.1:5432/eternal_forge';
 
-/** Moves the hero named `heroName` (unique per test account) to `stage`. */
+/**
+ * Moves the hero named `heroName` (unique per test account) to `stage` as a
+ * hero pushing its record would stand there: `stage` reached, every earlier
+ * stage cleared (ADR-020). The database CHECKs reject an inconsistent state.
+ */
 export async function placeHeroOnStage(heroName: string, stage: bigint): Promise<void> {
   const client = new pg.Client({ connectionString: databaseUrl });
   await client.connect();
   try {
-    const result = await client.query('UPDATE characters SET stage = $1 WHERE name = $2', [
-      stage.toString(),
-      heroName,
-    ]);
+    const result = await client.query(
+      `UPDATE characters
+          SET current_stage = $1, highest_stage_reached = $1, highest_stage_cleared = $2
+        WHERE name = $3`,
+      [stage.toString(), stage > 1n ? (stage - 1n).toString() : null, heroName],
+    );
     if (result.rowCount !== 1) {
       throw new Error(`Expected one hero named ${heroName}, updated ${String(result.rowCount)}`);
     }

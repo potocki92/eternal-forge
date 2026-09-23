@@ -85,7 +85,7 @@ export class InMemoryGameRepository implements PlayerRepository, CombatRepositor
           slot: data.characterSlot,
           name: data.characterName,
           level: data.characterLevel,
-          stage: data.characterStage,
+          stages: data.characterStages,
           experience: data.characterExperience,
           gold: data.characterGold,
           nextCombatAt: data.characterNextCombatAt,

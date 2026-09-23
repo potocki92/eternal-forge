@@ -48,7 +48,7 @@ export class ProvisionPlayerUseCase {
       characterName: characterName.value,
       characterSlot: MAIN_CHARACTER_SLOT,
       characterLevel: NEW_CHARACTER_STATE.level,
-      characterStage: NEW_CHARACTER_STATE.stage,
+      characterStages: NEW_CHARACTER_STATE.stages,
       characterExperience: NEW_CHARACTER_STATE.experience,
       characterGold: NEW_CHARACTER_STATE.gold,
       characterNextCombatAt: now,

@@ -18,7 +18,10 @@ export interface CombatRunRecord {
   readonly idempotencyKey: string;
   readonly rulesVersion: number;
   readonly seed: string;
-  /** Progress before the combat: level, experience, gold and the stage fought. */
+  /**
+   * Progress before the combat: level, experience, gold and the stage
+   * progress. `before.stages.current` is the stage actually fought.
+   */
   readonly before: CharacterProgress;
   readonly outcome: CombatOutcome;
   readonly endReason: CombatEndReason;
@@ -61,7 +64,7 @@ export function recordAttempt(
 export function replayMatches(run: CombatRun, attempt: StageAttemptResult): boolean {
   return (
     attempt.rulesVersion === run.rulesVersion &&
-    attempt.stage.number.equals(run.before.stage) &&
+    attempt.stage.number.equals(run.before.stages.current) &&
     attempt.combat.outcome === run.outcome &&
     attempt.combat.endReason === run.endReason &&
     attempt.combat.durationMs === run.durationMs &&

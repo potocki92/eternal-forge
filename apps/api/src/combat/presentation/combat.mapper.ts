@@ -3,6 +3,7 @@ import {
   toCharacterDto,
   toEncounterDto,
   toProgressionDto,
+  toStageProgressDto,
 } from '../../player/presentation/player.mapper.js';
 import type { ProgressSnapshot, ResolvedCombat } from '../application/run-combat.use-case.js';
 
@@ -54,6 +55,6 @@ function toSnapshotDto(snapshot: ProgressSnapshot): ProgressSnapshotDto {
     experience: snapshot.experience.toString(),
     experienceToNextLevel: snapshot.experienceToNextLevel.toString(),
     gold: snapshot.gold.toString(),
-    stage: snapshot.stage.toString(),
+    ...toStageProgressDto(snapshot.stages),
   };
 }

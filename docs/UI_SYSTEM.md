@@ -487,7 +487,7 @@ Layout (390×844 first; centred and framed at desktop widths):
 │ PLAYER NAME         Sign out │  HUD: display name, hero name,
 │ Hero name                    │  level + experience bar, gold,
 │ Level 3 ▓▓▓▓░░░░░    Gold 1.2K│  stage (danger-tinted "Boss stage")
-│ Stage 12                     │
+│ Stage 12           Best 11   │
 ├──────────────────────────────┤
 │ Husk               30 / 40   │  DOM overlay: enemy name, boss badge,
 │ ▓▓▓▓▓▓▓░░░░░░░░              │  health bar with numbers
@@ -506,6 +506,10 @@ Layout (390×844 first; centred and framed at desktop widths):
 
 Behaviour:
 
+- **Stage and record.** The HUD shows the current stage and, compactly,
+  "Best": the highest stage cleared, or "—" (announced as "none yet") before
+  the first victory (ADR-020). After a boss defeat the stage drops back while
+  "Best" stays. The row wraps rather than overflowing on narrow screens.
 - **Server truth only.** Every value shown arrives in the player state or the
   combat response. The boss treatment comes from the server's stage `kind`.
   The screen never tests a stage number itself.

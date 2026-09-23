@@ -59,6 +59,7 @@ export {
   heroStatsSchema,
   progressionSchema,
   stageKindSchema,
+  stageProgressSchema,
   stageSchema,
 } from './game/progression.contract.js';
 export type {
@@ -68,6 +69,7 @@ export type {
   ProgressionDto,
   StageDto,
   StageKind,
+  StageProgressDto,
 } from './game/progression.contract.js';
 
 export {

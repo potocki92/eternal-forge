@@ -36,7 +36,10 @@ describe('ProvisionPlayerUseCase', () => {
       slot: 1,
       level: 1,
     });
-    expect(result.player.mainCharacter.stage.toString()).toBe('1');
+    const { stages } = result.player.mainCharacter;
+    expect(stages.current.toString()).toBe('1');
+    expect(stages.highestReached.toString()).toBe('1');
+    expect(stages.highestCleared).toBeNull();
     expect(result.serverTime).toEqual(clock.now());
   });
 

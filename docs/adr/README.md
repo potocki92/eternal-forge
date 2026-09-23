@@ -26,7 +26,8 @@ record; it is never edited away (CLAUDE.md — "ADR").
 | [016](ADR-016-authentication-and-identity.md) | Authentication, identity and session handling | Accepted |
 | [017](ADR-017-player-identity-persistence.md) | Player identity persistence and provisioning | Accepted (amended) |
 | [018](ADR-018-stage-number.md) | StageNumber: an exact integer for stage progression | Accepted |
-| [019](ADR-019-server-authoritative-combat-transaction.md) | The server-authoritative combat transaction | Accepted |
+| [019](ADR-019-server-authoritative-combat-transaction.md) | The server-authoritative combat transaction | Accepted (amended by 020) |
+| [020](ADR-020-stage-progression-model.md) | Stage progression model: current stage and records | Accepted |
 
 ## Format
 

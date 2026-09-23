@@ -291,6 +291,24 @@ change it.
    attempted there fails with a 500 and writes nothing, and a test pins that
    behaviour. No such state is reachable in play.
 
+## Amendment — ADR-020 (2026-09-23)
+
+The final audit of PR #6 split the single `stage` into the current stage and
+two records (ADR-020). The transaction above is unchanged: the same
+owner-scoped read, the same version-conditional two-statement commit and the
+same idempotency key. What changed:
+
+- `characters.stage` is now `current_stage`, next to `highest_stage_reached`
+  and `highest_stage_cleared`. `combat_runs.stage` remains the stage fought and
+  gains the records before the combat as replay input.
+- A win or loss moves `current` exactly as described in §3. The records never
+  decrease.
+- Implementation note 2 no longer holds: a combat on a stage the rule set
+  cannot scale is now `409 STAGE_NOT_PLAYABLE`, not a 500. It still writes
+  nothing.
+
+The text above is kept as it was decided.
+
 ## Consequences
 
 - A combat cannot be forged, replayed for a second reward, raced into a double

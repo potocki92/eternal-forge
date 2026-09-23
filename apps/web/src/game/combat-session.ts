@@ -30,7 +30,7 @@ export type CombatSessionAction =
   | { readonly type: 'finish' };
 
 export interface CombatFailure {
-  readonly kind: 'connection' | 'unavailable' | 'busy' | 'missing' | 'session';
+  readonly kind: 'connection' | 'unavailable' | 'busy' | 'unplayable' | 'missing' | 'session';
   readonly message: string;
   /**
    * Retrying reuses the same idempotency key: a lost response is answered by
@@ -87,6 +87,13 @@ export function describeCombatFailure(error: unknown): CombatFailure {
   }
   if (error.code === 'COMBAT_NOT_READY') {
     return { kind: 'busy', message: 'Your hero is still fighting.', retryable: false };
+  }
+  if (error.code === 'STAGE_NOT_PLAYABLE') {
+    return {
+      kind: 'unplayable',
+      message: 'No enemy is known this deep yet. Your progress is safe.',
+      retryable: false,
+    };
   }
   if (error.status === 401) {
     return { kind: 'session', message: 'Your session has ended.', retryable: false };

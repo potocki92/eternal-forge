@@ -3,11 +3,13 @@ import {
   enemySchema,
   heroStatsSchema,
   progressionSchema,
+  STAGE_PROGRESS_INVARIANT_MESSAGE,
+  stageProgressIsConsistent,
+  stageProgressShape,
   stageSchema,
 } from '../game/progression.contract.js';
 import { hugeAmountSchema } from '../huge-number/huge-number.contract.js';
 import { characterSchema } from '../player/player.contract.js';
-import { stageNumberSchema } from '../stage/stage-number.contract.js';
 
 /**
  * `POST /player/characters/:characterId/combats` — resolve the character's
@@ -52,17 +54,20 @@ export const rewardsSchema = z.object({
 export type RewardsDto = z.infer<typeof rewardsSchema>;
 
 /** Progression at one instant: before or after the combat. */
-export const progressSnapshotSchema = z.object({
-  level: z.number().int().min(1),
-  experience: hugeAmountSchema,
-  experienceToNextLevel: hugeAmountSchema,
-  gold: hugeAmountSchema,
-  stage: stageNumberSchema,
-});
+export const progressSnapshotSchema = z
+  .object({
+    level: z.number().int().min(1),
+    experience: hugeAmountSchema,
+    experienceToNextLevel: hugeAmountSchema,
+    gold: hugeAmountSchema,
+    ...stageProgressShape,
+  })
+  .refine(stageProgressIsConsistent, { message: STAGE_PROGRESS_INVARIANT_MESSAGE });
 export type ProgressSnapshotDto = z.infer<typeof progressSnapshotSchema>;
 
 export const combatSchema = z.object({
   id: z.uuid(),
+  /** The stage actually fought: `before.currentStage`, classified by the rules. */
   stage: stageSchema,
   enemy: enemySchema,
   /** The hero as it fought: stats from its level before the combat. */

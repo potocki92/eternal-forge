@@ -153,6 +153,8 @@ describe('GameScreen — before a fight', () => {
     expect(screen.getByTestId('combat-status')).toHaveTextContent('Stage 1: Husk awaits.');
     expect(screen.getByTestId('enemy-name')).toHaveTextContent('Husk');
     expect(screen.getByTestId('hud-stage')).toHaveTextContent('1');
+    // Nothing cleared yet: a dash, announced as "none yet".
+    expect(screen.getByTestId('hud-best-cleared')).toHaveTextContent('—none yet');
     expect(screen.getByTestId('hud-gold')).toHaveTextContent('0');
     expect(screen.getByRole('progressbar', { name: 'Husk health' })).toHaveAttribute(
       'aria-valuenow',
@@ -167,9 +169,11 @@ describe('GameScreen — before a fight', () => {
     const state = readyPlayer();
     renderGame({
       ...state,
-      character: { ...state.character, stage: '10' },
       progression: {
         ...state.progression,
+        currentStage: '10',
+        highestStageReached: '10',
+        highestStageCleared: '9',
         encounter: {
           stage: { number: '10', kind: 'BOSS' },
           enemy: { archetypeId: 'warden', maxHealth: '5.5e2', damage: '1.3e1' },
@@ -183,6 +187,28 @@ describe('GameScreen — before a fight', () => {
     expect(screen.getByTestId('battlefield')).toHaveAttribute('data-stage-kind', 'BOSS');
     expect(fightButton()).toHaveTextContent('Fight boss');
     expect(sceneLog.encounters).toEqual(['warden:BOSS']);
+  });
+
+  it('shows the current stage and the best stage cleared separately while farming', async () => {
+    const state = readyPlayer();
+    renderGame({
+      ...state,
+      progression: {
+        ...state.progression,
+        currentStage: '9',
+        highestStageReached: '10',
+        highestStageCleared: '9',
+        encounter: {
+          stage: { number: '9', kind: 'REGULAR' },
+          enemy: { archetypeId: 'husk', maxHealth: '8.6e1', damage: '8e0' },
+        },
+      },
+    });
+    await advance(0);
+
+    expect(screen.getByTestId('hud-stage')).toHaveTextContent('9');
+    expect(screen.getByTestId('hud-best-cleared')).toHaveTextContent('9');
+    expect(screen.getByText('stage cleared', { exact: false })).toBeInTheDocument();
   });
 
   it('waits for the server’s pacing gate', async () => {
@@ -229,6 +255,7 @@ describe('GameScreen — a fight', () => {
     expect(screen.getByTestId('reward-gold')).toHaveTextContent('+5 gold');
     expect(screen.getByTestId('hud-gold')).toHaveTextContent('5');
     expect(screen.getByTestId('hud-stage')).toHaveTextContent('2');
+    expect(screen.getByTestId('hud-best-cleared')).toHaveTextContent('1');
     expect(sceneLog.hits.at(-1)).toMatchObject({ lethal: true });
     expect(sceneLog.outcomes).toEqual(['WIN']);
 

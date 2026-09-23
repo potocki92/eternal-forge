@@ -10,12 +10,8 @@ import { getGameRules } from '../rules/index.js';
 import { GAME_RULES_VERSION } from '../rules-version.js';
 import { STAGE_NUMBER_MAX, StageNumber } from '../stage/index.js';
 import { experienceToNextLevel } from './level.js';
-import {
-  describeProgress,
-  resolveStageAttempt,
-  stageAfterCombat,
-  type CharacterProgress,
-} from './stage-attempt.js';
+import { INITIAL_STAGE_PROGRESS, type StageProgress } from './stage-progress.js';
+import { describeProgress, resolveStageAttempt, type CharacterProgress } from './stage-attempt.js';
 
 const rules = getGameRules(GAME_RULES_VERSION);
 const n = (value: number | string): HugeNumber =>
@@ -26,8 +22,18 @@ function progress(overrides: Partial<CharacterProgress> = {}): CharacterProgress
     level: 1,
     experience: HugeNumber.ZERO,
     gold: HugeNumber.ZERO,
-    stage: StageNumber.FIRST,
+    stages: INITIAL_STAGE_PROGRESS,
     ...overrides,
+  };
+}
+
+/** A hero pushing its record: on `stage`, having cleared every stage before it. */
+function pushingAt(stage: bigint | number): StageProgress {
+  const current = StageNumber.of(stage);
+  return {
+    current,
+    highestReached: current,
+    highestCleared: current.equals(StageNumber.FIRST) ? null : current.stepBack(1),
   };
 }
 
@@ -62,7 +68,9 @@ describe('resolveStageAttempt — a win', () => {
     expect(result.rewards).toEqual(expected);
     expect(result.after.gold.eq(n(100).add(expected.gold))).toBe(true);
     expect(result.after.experience.eq(n(2).add(expected.experience))).toBe(true);
-    expect(result.after.stage.toString()).toBe('2');
+    expect(result.after.stages.current.toString()).toBe('2');
+    expect(result.after.stages.highestReached.toString()).toBe('2');
+    expect(result.after.stages.highestCleared?.toString()).toBe('1');
     expect(result.levelsGained).toBe(0);
   });
 
@@ -83,7 +91,13 @@ describe('resolveStageAttempt — a win', () => {
 
 describe('resolveStageAttempt — a loss', () => {
   // A level-1 hero cannot beat the stage-10 boss under rules v1.
-  const result = attempt({ stage: StageNumber.of(10), gold: n(50), experience: n(9) });
+  const result = attempt({ stages: pushingAt(10), gold: n(50), experience: n(9) });
+
+  it('keeps the historical records: stage 10 stays reached, stage 9 stays cleared', () => {
+    expect(result.stage.number.toString()).toBe('10');
+    expect(result.after.stages.highestReached.toString()).toBe('10');
+    expect(result.after.stages.highestCleared?.toString()).toBe('9');
+  });
 
   it('grants nothing and changes neither level, experience nor gold', () => {
     expect(result.combat.outcome).toBe('LOSS');
@@ -96,23 +110,23 @@ describe('resolveStageAttempt — a loss', () => {
 
   it('falls back stagesLostOnDefeat stages, so the wall becomes a farm', () => {
     expect(rules.progression.stagesLostOnDefeat).toBe(1);
-    expect(result.after.stage.toString()).toBe('9');
+    expect(result.after.stages.current.toString()).toBe('9');
   });
 });
 
 describe('resolveStageAttempt — bosses', () => {
   it('classifies boss stages from the rule set, not from the caller', () => {
-    const boss = attempt({ level: 60, stage: StageNumber.of(20) });
+    const boss = attempt({ level: 60, stages: pushingAt(20) });
     expect(boss.stage.kind).toBe('BOSS');
     expect(boss.enemy.archetypeId).toBe(rules.stages.bossArchetype.id);
 
-    const regular = attempt({ level: 60, stage: StageNumber.of(21) });
+    const regular = attempt({ level: 60, stages: pushingAt(21) });
     expect(regular.stage.kind).toBe('REGULAR');
     expect(regular.enemy.archetypeId).toBe(rules.stages.regularArchetype.id);
   });
 
   it('pays the boss multiplier on a boss win', () => {
-    const boss = attempt({ level: 60, stage: StageNumber.of(20) });
+    const boss = attempt({ level: 60, stages: pushingAt(20) });
     expect(boss.combat.outcome).toBe('WIN');
     const regular = calculateStageRewards(
       { number: StageNumber.of(20), kind: 'REGULAR' },
@@ -121,47 +135,13 @@ describe('resolveStageAttempt — bosses', () => {
     expect(boss.rewards.gold.eq(regular.gold.mul(rules.rewards.bossRewardMultiplier).floor())).toBe(
       true,
     );
-    expect(boss.after.stage.toString()).toBe('21');
-  });
-});
-
-describe('stageAfterCombat', () => {
-  it('advances one stage after a win', () => {
-    expect(stageAfterCombat(StageNumber.of(9), 'WIN', rules.progression).toString()).toBe('10');
-  });
-
-  it('never falls back before stage 1', () => {
-    expect(stageAfterCombat(StageNumber.FIRST, 'LOSS', rules.progression)).toBe(StageNumber.FIRST);
-    expect(
-      stageAfterCombat(StageNumber.of(3), 'LOSS', { ...rules.progression, stagesLostOnDefeat: 5 }),
-    ).toBe(StageNumber.FIRST);
-  });
-
-  it('keeps the stage after a loss when the rule set says so', () => {
-    expect(
-      stageAfterCombat(StageNumber.of(7), 'LOSS', {
-        ...rules.progression,
-        stagesLostOnDefeat: 0,
-      }).toString(),
-    ).toBe('7');
-  });
-
-  it('is exact beyond 2^53', () => {
-    const deep = StageNumber.of(2n ** 53n + 1n);
-    expect(stageAfterCombat(deep, 'WIN', rules.progression).toString()).toBe('9007199254740994');
-    expect(stageAfterCombat(deep, 'LOSS', rules.progression).toString()).toBe('9007199254740992');
-  });
-
-  it('refuses to advance past the last stage', () => {
-    expect(() =>
-      stageAfterCombat(StageNumber.of(STAGE_NUMBER_MAX), 'WIN', rules.progression),
-    ).toThrow(expect.objectContaining({ code: 'OUT_OF_RANGE' }));
+    expect(boss.after.stages.current.toString()).toBe('21');
   });
 });
 
 describe('resolveStageAttempt — determinism', () => {
   it('same progress + seed + rules version produces an identical result', () => {
-    const input = { level: 12, stage: StageNumber.of(13), gold: n(777), experience: n(5) };
+    const input = { level: 12, stages: pushingAt(13), gold: n(777), experience: n(5) };
     const first = attempt(input, 'replay');
     const second = attempt(input, 'replay');
     expect(second).toEqual(first);
@@ -171,7 +151,7 @@ describe('resolveStageAttempt — determinism', () => {
   it('the seed decides the rolls: different seeds can produce different combats', () => {
     const combats = new Set(
       ['a', 'b', 'c', 'd', 'e', 'f'].map((seed) =>
-        JSON.stringify(attempt({ level: 20, stage: StageNumber.of(21) }, seed).combat.events),
+        JSON.stringify(attempt({ level: 20, stages: pushingAt(21) }, seed).combat.events),
       ),
     );
     expect(combats.size).toBeGreaterThan(1);
@@ -180,6 +160,16 @@ describe('resolveStageAttempt — determinism', () => {
 
 describe('resolveStageAttempt — validation and limits', () => {
   it.each([
+    [
+      'stage progress that breaks its invariants',
+      {
+        stages: {
+          current: StageNumber.of(5),
+          highestReached: StageNumber.of(4),
+          highestCleared: StageNumber.of(3),
+        },
+      },
+    ],
     ['negative gold', { gold: n(-1) }],
     ['fractional gold', { gold: n('0.5') }],
     ['negative experience', { experience: n(-3) }],
@@ -195,7 +185,7 @@ describe('resolveStageAttempt — validation and limits', () => {
   });
 
   it('reports a stage too deep for the rule set as OVERFLOW, never a wrong value', () => {
-    expect(() => attempt({ stage: StageNumber.of(10n ** 12n) })).toThrow(
+    expect(() => attempt({ stages: pushingAt(10n ** 12n) })).toThrow(
       expect.objectContaining({ code: 'OVERFLOW' }),
     );
   });
@@ -221,20 +211,28 @@ describe('resolveStageAttempt — invariants (property)', () => {
         const required = experienceToNextLevel(level, rules.progression);
         const before = progress({
           level,
-          stage: StageNumber.of(stage),
+          stages: pushingAt(stage),
           gold: HugeNumber.fromBigInt(gold),
           experience: required.mul(n(experienceFraction)).div(n(100)).floor(),
         });
         const result = resolveStageAttempt({ progress: before, seed, rulesVersion: 1 });
         const { after } = result;
 
+        // The stage fought is always the current one, and the records only move up.
+        expect(result.stage.number.equals(before.stages.current)).toBe(true);
+        expect(
+          after.stages.highestReached.compare(before.stages.highestReached),
+        ).toBeGreaterThanOrEqual(0);
         if (result.combat.outcome === 'WIN') {
-          expect(after.stage.equals(before.stage.next())).toBe(true);
+          expect(after.stages.current.equals(before.stages.current.next())).toBe(true);
+          expect(after.stages.highestCleared?.equals(before.stages.current)).toBe(true);
           expect(after.gold.eq(before.gold.add(result.rewards.gold))).toBe(true);
           expect(after.level).toBe(before.level + result.levelsGained);
         } else {
           expect(result.rewards).toEqual(NO_REWARDS);
-          expect(after.stage.equals(before.stage.stepBack(1))).toBe(true);
+          expect(after.stages.current.equals(before.stages.current.stepBack(1))).toBe(true);
+          expect(after.stages.highestCleared).toBe(before.stages.highestCleared);
+          expect(after.stages.highestReached).toBe(before.stages.highestReached);
           expect(after.gold.eq(before.gold)).toBe(true);
           expect(after.level).toBe(before.level);
           expect(after.experience.eq(before.experience)).toBe(true);
@@ -253,7 +251,7 @@ describe('resolveStageAttempt — invariants (property)', () => {
 
 describe('describeProgress', () => {
   it('derives the experience requirement, stats and upcoming encounter', () => {
-    const description = describeProgress(progress({ level: 3, stage: StageNumber.of(10) }), 1);
+    const description = describeProgress(progress({ level: 3, stages: pushingAt(10) }), 1);
     expect(description.experienceToNextLevel.eq(n(12))).toBe(true);
     expect(description.character).toEqual(createCharacter(3, rules));
     expect(description.encounter?.stage.kind).toBe('BOSS');
@@ -263,14 +261,14 @@ describe('describeProgress', () => {
 
 describe('describeProgress — beyond the rule set', () => {
   it('reports no encounter where enemy scaling overflows, instead of failing', () => {
-    const description = describeProgress(progress({ stage: StageNumber.of(STAGE_NUMBER_MAX) }), 1);
+    const description = describeProgress(progress({ stages: pushingAt(STAGE_NUMBER_MAX) }), 1);
     expect(description.encounter).toBeNull();
     expect(description.experienceToNextLevel.eq(n(10))).toBe(true);
   });
 
   it('still describes the deepest stages the rule set can scale', () => {
     expect(
-      describeProgress(progress({ stage: StageNumber.of(4_000_000_000) }), 1).encounter,
+      describeProgress(progress({ stages: pushingAt(4_000_000_000) }), 1).encounter,
     ).not.toBeNull();
   });
 });

@@ -164,7 +164,8 @@ export function GameScreen({
           experience: player.character.experience,
           experienceToNextLevel: player.progression.experienceToNextLevel,
           gold: player.character.gold,
-          stage: player.character.stage,
+          currentStage: player.progression.currentStage,
+          highestStageCleared: player.progression.highestStageCleared,
           stageKind: player.progression.encounter?.stage.kind,
         };
 

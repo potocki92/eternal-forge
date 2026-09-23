@@ -7,6 +7,7 @@ import {
 } from '@eternal-forge/contracts';
 import {
   HugeNumber,
+  INITIAL_STAGE_PROGRESS,
   StageNumber,
   calculateStageRewards,
   getGameRules,
@@ -99,13 +100,31 @@ function gold(row: { goldCoef: bigint; goldExp: number }): HugeNumber {
   return HugeNumber.fromParts(row.goldCoef, row.goldExp);
 }
 
-/** Puts a character on a stage with some gold, as a fixture. */
+/**
+ * Puts a character on a stage with some gold, as a fixture: pushing its
+ * record, every earlier stage cleared.
+ */
 async function placeCharacter(characterId: string, stage: bigint, goldAmount = 41): Promise<void> {
   const parts = HugeNumber.fromNumber(goldAmount).toParts();
   await prisma.client.character.update({
     where: { id: characterId },
-    data: { stage, goldCoef: parts.coefficient, goldExp: parts.exponent },
+    data: {
+      currentStage: stage,
+      highestStageReached: stage,
+      highestStageCleared: stage > 1n ? stage - 1n : null,
+      goldCoef: parts.coefficient,
+      goldExp: parts.exponent,
+    },
   });
+}
+
+/** `current / highestReached / highestCleared` of a row, as in ADR-020. */
+function stagesOf(row: {
+  currentStage: bigint;
+  highestStageReached: bigint;
+  highestStageCleared: bigint | null;
+}): string {
+  return `${row.currentStage.toString()} / ${row.highestStageReached.toString()} / ${row.highestStageCleared?.toString() ?? 'null'}`;
 }
 
 describe('combat against PostgreSQL — the loop', () => {
@@ -116,7 +135,7 @@ describe('combat against PostgreSQL — the loop', () => {
 
     const row = await characterRow(characterId);
     const runs = await prisma.client.combatRun.findMany({ where: { characterId } });
-    expect(row.stage).toBe(2n);
+    expect(stagesOf(row)).toBe('2 / 2 / 1');
     expect(row.version).toBe(1n);
     expect(gold(row).toString()).toBe(body.after.gold);
     expect(row.nextCombatAt.getTime()).toBe(clock.now().getTime() + body.combat.durationMs);
@@ -125,6 +144,8 @@ describe('combat against PostgreSQL — the loop', () => {
       id: body.combat.id,
       rulesVersion: 1,
       stage: 1n,
+      highestStageReachedBefore: 1n,
+      highestStageClearedBefore: null,
       characterLevel: 1,
       outcome: 'WIN',
       endReason: 'ENEMY_DEFEATED',
@@ -156,11 +177,18 @@ describe('combat against PostgreSQL — the loop', () => {
     const { token, characterId } = await provisionedPlayer();
     const rules = getGameRules(1);
     let expectedStage = StageNumber.FIRST;
+    let reached = 1n;
+    let cleared = 0n;
 
     for (let fightNumber = 0; fightNumber < 30; fightNumber += 1) {
       const body = combatResponseSchema.parse((await fight(token, characterId).expect(201)).body);
       expect(body.combat.stage.number).toBe(expectedStage.toString());
-      expectedStage = StageNumber.parse(body.after.stage);
+      // The records never go down, whatever the outcome.
+      expect(BigInt(body.after.highestStageReached)).toBeGreaterThanOrEqual(reached);
+      expect(BigInt(body.after.highestStageCleared ?? '0')).toBeGreaterThanOrEqual(cleared);
+      reached = BigInt(body.after.highestStageReached);
+      cleared = BigInt(body.after.highestStageCleared ?? '0');
+      expectedStage = StageNumber.parse(body.after.currentStage);
       clock.advance(body.combat.durationMs);
     }
 
@@ -171,7 +199,12 @@ describe('combat against PostgreSQL — the loop', () => {
     });
     expect(runs).toHaveLength(30);
     expect(row.version).toBe(30n);
-    expect(row.stage).toBe(expectedStage.toBigInt());
+    expect(row.currentStage).toBe(expectedStage.toBigInt());
+    expect(row.highestStageReached).toBe(reached);
+    expect(row.highestStageCleared).toBe(cleared);
+    // The highest stage cleared is exactly the highest stage with a recorded win.
+    const wins = runs.filter((run) => run.outcome === 'WIN').map((run) => run.stage);
+    expect(wins.reduce((max, stage) => (stage > max ? stage : max), 0n)).toBe(cleared);
 
     // Replaying the ledger through HugeNumber (ADR-013) reproduces the balance.
     const ledgerGold = runs.reduce(
@@ -207,6 +240,29 @@ describe('combat against PostgreSQL — the loop', () => {
     expect(await prisma.client.combatRun.count({ where: { characterId } })).toBe(2);
   });
 
+  it('a boss defeat on stage 10: back to 9, records kept, the run keeps stage 10', async () => {
+    const { token, characterId } = await provisionedPlayer();
+    await placeCharacter(characterId, 10n);
+
+    const body = combatResponseSchema.parse((await fight(token, characterId).expect(201)).body);
+
+    expect(body.combat.stage).toEqual({ number: '10', kind: 'BOSS' });
+    expect(body.combat.outcome).toBe('LOSS');
+    expect(body.progression).toMatchObject({
+      currentStage: '9',
+      highestStageReached: '10',
+      highestStageCleared: '9',
+    });
+    const row = await characterRow(characterId);
+    expect(stagesOf(row)).toBe('9 / 10 / 9');
+    const run = await prisma.client.combatRun.findFirstOrThrow({ where: { characterId } });
+    expect(run).toMatchObject({
+      stage: 10n,
+      highestStageReachedBefore: 10n,
+      highestStageClearedBefore: 9n,
+    });
+  });
+
   it('a boss defeat pays nothing and falls back one stage, exactly', async () => {
     const { token, characterId } = await provisionedPlayer();
     await placeCharacter(characterId, 4_000_000_000n);
@@ -216,18 +272,19 @@ describe('combat against PostgreSQL — the loop', () => {
     expect(body.combat.stage).toEqual({ number: '4000000000', kind: 'BOSS' });
     expect(body.combat.outcome).toBe('LOSS');
     const row = await characterRow(characterId);
-    expect(row.stage).toBe(3_999_999_999n);
+    expect(stagesOf(row)).toBe('3999999999 / 4000000000 / 3999999999');
     expect(gold(row).eq(HugeNumber.fromNumber(41))).toBe(true);
   });
 
-  it('a stage too deep for the rule set fails safely and writes nothing', async () => {
+  it('a stage too deep for the rule set is 409 STAGE_NOT_PLAYABLE and writes nothing', async () => {
     const { token, characterId } = await provisionedPlayer();
     await placeCharacter(characterId, 2n ** 53n + 1n);
+    const before = await characterRow(characterId);
 
-    const response = await fight(token, characterId).expect(500);
+    const response = await fight(token, characterId).expect(409);
 
-    expect(apiErrorResponseSchema.parse(response.body).code).toBe('INTERNAL_ERROR');
-    expect((await characterRow(characterId)).stage).toBe(2n ** 53n + 1n);
+    expect(apiErrorResponseSchema.parse(response.body).code).toBe('STAGE_NOT_PLAYABLE');
+    expect(await characterRow(characterId)).toEqual(before);
     expect(await prisma.client.combatRun.count()).toBe(0);
   });
 });
@@ -255,7 +312,7 @@ describe('combat against PostgreSQL — concurrency', () => {
     const row = await characterRow(characterId);
     expect(await prisma.client.combatRun.count({ where: { characterId } })).toBe(1);
     expect(row.version).toBe(1n);
-    expect(row.stage).toBe(10n);
+    expect(stagesOf(row)).toBe('10 / 10 / 9');
     expect(gold(row).eq(HugeNumber.fromNumber(41).add(reward.gold))).toBe(true);
   });
 
@@ -274,7 +331,8 @@ describe('combat against PostgreSQL — concurrency', () => {
     );
     expect(ids.size).toBe(1);
     expect(await prisma.client.combatRun.count({ where: { characterId } })).toBe(1);
-    expect((await characterRow(characterId)).stage).toBe(2n);
+    // The records moved exactly once.
+    expect(stagesOf(await characterRow(characterId))).toBe('2 / 2 / 1');
   });
 
   it('many intents, each retried, across two API instances: still exactly one combat', async () => {
@@ -336,7 +394,11 @@ describe('PrismaCombatRepository — conditional commit', () => {
         level: 99,
         experience: HugeNumber.ZERO,
         gold: HugeNumber.fromDecimal('1e30'),
-        stage: StageNumber.of(500),
+        stages: {
+          current: StageNumber.of(500),
+          highestReached: StageNumber.of(500),
+          highestCleared: StageNumber.of(499),
+        },
       },
       nextCombatAt: new Date(),
       run: {
@@ -348,7 +410,7 @@ describe('PrismaCombatRepository — conditional commit', () => {
           level: 1,
           experience: HugeNumber.ZERO,
           gold: HugeNumber.ZERO,
-          stage: StageNumber.FIRST,
+          stages: INITIAL_STAGE_PROGRESS,
         },
         outcome: 'WIN',
         endReason: 'ENEMY_DEFEATED',
@@ -361,7 +423,7 @@ describe('PrismaCombatRepository — conditional commit', () => {
     expect(result).toEqual({ kind: 'conflict' });
     const row = await characterRow(characterId);
     expect(row.level).toBe(1);
-    expect(row.stage).toBe(2n);
+    expect(stagesOf(row)).toBe('2 / 2 / 1');
     expect(await prisma.client.combatRun.count({ where: { seed: 'stale' } })).toBe(0);
   });
 
@@ -377,7 +439,11 @@ describe('PrismaCombatRepository — conditional commit', () => {
         level: 1,
         experience: HugeNumber.ZERO,
         gold: HugeNumber.fromNumber(1),
-        stage: StageNumber.of(2),
+        stages: {
+          current: StageNumber.of(2),
+          highestReached: StageNumber.of(2),
+          highestCleared: StageNumber.FIRST,
+        },
       },
       nextCombatAt: new Date(),
       run: {
@@ -389,7 +455,7 @@ describe('PrismaCombatRepository — conditional commit', () => {
           level: 1,
           experience: HugeNumber.ZERO,
           gold: HugeNumber.ZERO,
-          stage: StageNumber.FIRST,
+          stages: INITIAL_STAGE_PROGRESS,
         },
         outcome: 'WIN',
         endReason: 'ENEMY_DEFEATED',
@@ -408,10 +474,11 @@ describe('schema constraints — progression and the combat ledger', () => {
   async function insertRun(characterId: string, overrides: string): Promise<void> {
     await prisma.client.$executeRawUnsafe(`
       INSERT INTO combat_runs (character_id, idempotency_key, rules_version, seed, stage,
-        character_level, experience_before_coef, experience_before_exp, gold_before_coef,
+        highest_stage_reached_before, character_level, experience_before_coef,
+        experience_before_exp, gold_before_coef,
         gold_before_exp, outcome, end_reason, duration_ms, reward_gold_coef, reward_gold_exp,
         reward_experience_coef, reward_experience_exp)
-      SELECT '${characterId}', gen_random_uuid(), 1, 'seed', 1, 1, 0, -2147483648, 0,
+      SELECT '${characterId}', gen_random_uuid(), 1, 'seed', 1, 1, 1, 0, -2147483648, 0,
         -2147483648, v.outcome::combat_outcome, v.end_reason::combat_end_reason, 1000,
         v.gold_coef, v.gold_exp, 0, -2147483648
       FROM (VALUES ${overrides}) AS v(outcome, end_reason, gold_coef, gold_exp)`);
@@ -441,6 +508,10 @@ describe('schema constraints — progression and the combat ledger', () => {
     ['zero with a real exponent', { goldCoef: 0n, goldExp: 3 }],
     ['negative experience', { experienceCoef: -100000000000000000n, experienceExp: 0 }],
     ['a negative version', { version: -1n }],
+    ['a current stage beyond the highest reached', { currentStage: 2n }],
+    ['a clear beyond the highest reached', { highestStageCleared: 2n }],
+    ['highest stage reached 0', { currentStage: 0n, highestStageReached: 0n }],
+    ['highest stage cleared 0', { highestStageCleared: 0n }],
   ])('rejects a character with %s', async (_label, data) => {
     const { characterId } = await provisionedPlayer();
     await expect(
@@ -467,6 +538,35 @@ describe('schema constraints — progression and the combat ledger', () => {
     await prisma.client.character.delete({ where: { id: characterId } });
 
     expect(await prisma.client.combatRun.count()).toBe(0);
+  });
+});
+
+describe('schema constraints — stage records of a combat', () => {
+  async function insertRunOn(characterId: string, stage: number, reached: number, cleared: string) {
+    await prisma.client.$executeRawUnsafe(`
+      INSERT INTO combat_runs (character_id, idempotency_key, rules_version, seed, stage,
+        highest_stage_reached_before, highest_stage_cleared_before, character_level,
+        experience_before_coef, experience_before_exp, gold_before_coef, gold_before_exp,
+        outcome, end_reason, duration_ms, reward_gold_coef, reward_gold_exp,
+        reward_experience_coef, reward_experience_exp)
+      VALUES ('${characterId}', gen_random_uuid(), 1, 'seed', ${String(stage)}, ${String(reached)},
+        ${cleared}, 1, 0, -2147483648, 0, -2147483648, 'LOSS', 'PLAYER_DEFEATED', 1000,
+        0, -2147483648, 0, -2147483648)`);
+  }
+
+  it('accepts a farm combat below the records', async () => {
+    const { characterId } = await provisionedPlayer();
+    await insertRunOn(characterId, 3, 10, '9');
+    expect(await prisma.client.combatRun.count()).toBe(1);
+  });
+
+  it.each([
+    ['a stage fought beyond the highest reached', 11, 10, '9'],
+    ['a clear beyond the highest reached', 9, 10, '11'],
+    ['a clear of stage 0', 1, 1, '0'],
+  ])('rejects %s', async (_label, stage, reached, cleared) => {
+    const { characterId } = await provisionedPlayer();
+    await expect(insertRunOn(characterId, stage, reached, cleared)).rejects.toThrow();
   });
 });
 

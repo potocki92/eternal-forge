@@ -1,12 +1,13 @@
 import { createCharacter, type Character } from '../character/character.js';
-import { simulateCombat, type CombatOutcome, type CombatResult } from '../combat/index.js';
+import { simulateCombat, type CombatResult } from '../combat/index.js';
 import { createEnemyForStage, type Enemy } from '../enemy/enemy.js';
 import { GameCoreError } from '../errors.js';
 import type { HugeNumber } from '../huge-number/index.js';
 import { calculateStageRewards, NO_REWARDS, type StageRewards } from '../rewards/rewards.js';
-import { getGameRules, type GameRules, type ProgressionRules } from '../rules/index.js';
+import { getGameRules, type GameRules } from '../rules/index.js';
 import type { Stage, StageNumber } from '../stage/index.js';
 import { applyExperience, experienceToNextLevel, requireWholeAmount } from './level.js';
+import { advanceStageProgress, createStageProgress, type StageProgress } from './stage-progress.js';
 
 /**
  * A character's persistent progression: everything a stage attempt reads and
@@ -17,8 +18,8 @@ export interface CharacterProgress {
   /** Experience within the current level. */
   readonly experience: HugeNumber;
   readonly gold: HugeNumber;
-  /** The stage the character fights next. */
-  readonly stage: StageNumber;
+  /** Where the hero fights next, and the records it has set (ADR-020). */
+  readonly stages: StageProgress;
 }
 
 export interface StageAttemptInput {
@@ -31,6 +32,7 @@ export interface StageAttemptInput {
 export interface StageAttemptResult {
   readonly rulesVersion: number;
   readonly seed: string;
+  /** The stage actually fought: `before.stages.current`, classified by the rules. */
   readonly stage: Stage;
   readonly enemy: Enemy;
   /** The character as it fought: stats derived from the level before the combat. */
@@ -60,19 +62,8 @@ export interface ProgressDescription {
 function validateProgress(progress: CharacterProgress): CharacterProgress {
   requireWholeAmount(progress.experience, 'experience');
   requireWholeAmount(progress.gold, 'gold');
+  createStageProgress(progress.stages);
   return progress;
-}
-
-/**
- * The stage a character fights after a combat on `stage`: the next one after a
- * win, `stagesLostOnDefeat` earlier (never before stage 1) after a loss.
- */
-export function stageAfterCombat(
-  stage: StageNumber,
-  outcome: CombatOutcome,
-  rules: ProgressionRules,
-): StageNumber {
-  return outcome === 'WIN' ? stage.next() : stage.stepBack(rules.stagesLostOnDefeat);
 }
 
 /**
@@ -83,9 +74,11 @@ export function stageAfterCombat(
  *
  * 1. The enemy is the rule set's enemy for the current stage.
  * 2. The combat is resolved with stats derived from the current level.
- * 3. A win grants the stage rewards, applies the experience through the level
- *    rule, and advances exactly one stage.
- * 4. A loss grants nothing and falls back `stagesLostOnDefeat` stages.
+ * 3. A win grants the stage rewards and applies the experience through the
+ *    level rule.
+ * 4. The stage progress moves by {@link advanceStageProgress}: a win clears
+ *    the stage and moves on, a loss falls back to farm. The records of the
+ *    highest stage reached and cleared never decrease.
  *
  * Callers persist `after` exactly as returned. They never recompute any part
  * of it.
@@ -94,7 +87,7 @@ export function resolveStageAttempt(input: StageAttemptInput): StageAttemptResul
   const rules = getGameRules(input.rulesVersion);
   const before = validateProgress(input.progress);
   const character = createCharacter(before.level, rules);
-  const enemy = createEnemyForStage(before.stage, rules);
+  const enemy = createEnemyForStage(before.stages.current, rules);
   const combat = simulateCombat({
     player: character,
     enemy,
@@ -124,7 +117,7 @@ export function resolveStageAttempt(input: StageAttemptInput): StageAttemptResul
       level: leveled.level,
       experience: leveled.experience,
       gold: before.gold.add(rewards.gold),
-      stage: stageAfterCombat(before.stage, combat.outcome, rules.progression),
+      stages: advanceStageProgress(before.stages, combat.outcome, rules.progression),
     },
   };
 }
@@ -139,7 +132,7 @@ export function describeProgress(
   return {
     experienceToNextLevel: experienceToNextLevel(progress.level, rules.progression),
     character: createCharacter(progress.level, rules),
-    encounter: encounterAt(progress.stage, rules),
+    encounter: encounterAt(progress.stages.current, rules),
   };
 }
 

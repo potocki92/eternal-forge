@@ -1,10 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import {
   HugeNumber,
+  INITIAL_STAGE_PROGRESS,
+  STAGE_NUMBER_MAX,
   StageNumber,
   calculateStageRewards,
   getGameRules,
   resolveStageAttempt,
+  type StageProgress,
 } from '@eternal-forge/game-core';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ManualClock, sequentialSeeds } from '../../../test/support/create-test-app.js';
@@ -36,7 +39,7 @@ beforeEach(async () => {
     characterName: 'Ember',
     characterSlot: 1,
     characterLevel: NEW_CHARACTER_STATE.level,
-    characterStage: NEW_CHARACTER_STATE.stage,
+    characterStages: NEW_CHARACTER_STATE.stages,
     characterExperience: NEW_CHARACTER_STATE.experience,
     characterGold: NEW_CHARACTER_STATE.gold,
     characterNextCombatAt: clock.now(),
@@ -53,6 +56,21 @@ function resolved(result: RunCombatResult) {
     throw new Error(`Expected a resolved combat, got ${result.kind}`);
   }
   return result;
+}
+
+/** `current / highestReached / highestCleared`, as in ADR-020. */
+function stagesOf(value: { readonly stages: StageProgress }): string {
+  const { current, highestReached, highestCleared } = value.stages;
+  return `${current.toString()} / ${highestReached.toString()} / ${highestCleared?.toString() ?? 'null'}`;
+}
+
+/** A hero pushing its record: on `stage`, every stage before it cleared. */
+function pushingAt(stage: number): StageProgress {
+  return {
+    current: StageNumber.of(stage),
+    highestReached: StageNumber.of(stage),
+    highestCleared: stage === 1 ? null : StageNumber.of(stage - 1),
+  };
 }
 
 async function current(): Promise<Character> {
@@ -74,14 +92,14 @@ describe('RunCombatUseCase — victory', () => {
     expect(attempt.rewards).toEqual(expected);
 
     const after = await current();
-    expect(after.stage.toString()).toBe('2');
+    expect(stagesOf(after)).toBe('2 / 2 / 1');
     expect(after.gold.eq(expected.gold)).toBe(true);
     expect(after.experience.eq(expected.experience)).toBe(true);
     expect(result.combat.character).toEqual({ ...after, updatedAt: character.updatedAt });
 
     expect(repository.runsOf(character.id)).toEqual([run]);
     expect(run).toMatchObject({ outcome: 'WIN', rulesVersion: 1, seed: 'unit-1' });
-    expect(run.before.stage.toString()).toBe('1');
+    expect(stagesOf(run.before)).toBe('1 / 1 / null');
   });
 
   it('occupies the hero for exactly the combat’s duration', async () => {
@@ -106,7 +124,7 @@ describe('RunCombatUseCase — victory', () => {
 describe('RunCombatUseCase — defeat', () => {
   beforeEach(() => {
     repository.updateCharacter(character.id, {
-      stage: StageNumber.of(10),
+      stages: pushingAt(10),
       gold: HugeNumber.fromNumber(41),
       experience: HugeNumber.fromNumber(3),
     });
@@ -120,7 +138,7 @@ describe('RunCombatUseCase — defeat', () => {
     expect(result.combat.run.rewards.experience.isZero()).toBe(true);
 
     const after = await current();
-    expect(after.stage.toString()).toBe('9');
+    expect(stagesOf(after)).toBe('9 / 10 / 9');
     expect(after.gold.eq(HugeNumber.fromNumber(41))).toBe(true);
     expect(after.experience.eq(HugeNumber.fromNumber(3))).toBe(true);
     expect(after.level).toBe(1);
@@ -131,6 +149,24 @@ describe('RunCombatUseCase — defeat', () => {
 
     expect(result.combat.attempt.stage.kind).toBe('BOSS');
     expect(result.combat.attempt.enemy.archetypeId).toBe(rules.stages.bossArchetype.id);
+  });
+
+  it('records the stage actually fought, not the stage the hero falls back to', async () => {
+    const { run, before, after } = resolved(await fight()).combat;
+
+    expect(run.before.stages.current.toString()).toBe('10');
+    expect(stagesOf(before)).toBe('10 / 10 / 9');
+    expect(stagesOf(after)).toBe('9 / 10 / 9');
+  });
+
+  it('keeps the records while farming: a farm win does not move them', async () => {
+    const result = resolved(await fight());
+    clock.advance(result.combat.attempt.combat.durationMs);
+    repository.updateCharacter(character.id, { level: 60 });
+
+    resolved(await fight());
+
+    expect(stagesOf(await current())).toBe('10 / 10 / 9');
   });
 });
 
@@ -188,6 +224,18 @@ describe('RunCombatUseCase — idempotency', () => {
     expect(await current()).toEqual(before);
   });
 
+  it('25 retries of one intent move the stage records exactly once', async () => {
+    repository.updateCharacter(character.id, { stages: pushingAt(9), level: 30 });
+    const key = randomUUID();
+
+    const results = await Promise.all(Array.from({ length: 25 }, () => fight(key)));
+
+    expect(results.map((result) => result.kind)).toEqual(Array(25).fill('resolved'));
+    expect(results.filter((result) => resolved(result).replayed)).toHaveLength(24);
+    expect(repository.runsOf(character.id)).toHaveLength(1);
+    expect(stagesOf(await current())).toBe('10 / 10 / 9');
+  });
+
   it('replays even while the character is still busy (a retried lost response)', async () => {
     const key = randomUUID();
     resolved(await fight(key));
@@ -222,7 +270,31 @@ describe('RunCombatUseCase — concurrency', () => {
 
     expect(loser.kind).toBe('not-ready');
     expect(repository.runsOf(character.id)).toHaveLength(1);
-    expect((await current()).stage.toString()).toBe('2');
+    expect(stagesOf(await current())).toBe('2 / 2 / 1');
+  });
+});
+
+describe('RunCombatUseCase — stages beyond the rule set', () => {
+  it('refuses a valid stage the rules cannot scale, drawing no seed and writing nothing', async () => {
+    const deep: StageProgress = {
+      current: StageNumber.of(STAGE_NUMBER_MAX),
+      highestReached: StageNumber.of(STAGE_NUMBER_MAX),
+      highestCleared: null,
+    };
+    repository.updateCharacter(character.id, { stages: deep });
+    const seeds = sequentialSeeds('deep');
+    const guarded = new RunCombatUseCase(repository, seeds, clock);
+    const before = await current();
+
+    const result = await guarded.execute(identity, {
+      characterId: character.id,
+      idempotencyKey: randomUUID(),
+    });
+
+    expect(result).toEqual({ kind: 'stage-not-playable' });
+    expect(seeds.next()).toBe('deep-1');
+    expect(repository.runsOf(character.id)).toHaveLength(0);
+    expect(await current()).toEqual(before);
   });
 });
 
@@ -258,7 +330,7 @@ describe('RunCombatUseCase — ownership and authority', () => {
         level: 1,
         experience: HugeNumber.ZERO,
         gold: HugeNumber.ZERO,
-        stage: StageNumber.FIRST,
+        stages: INITIAL_STAGE_PROGRESS,
       },
       seed: 'unit-1',
       rulesVersion: 1,

@@ -8,7 +8,10 @@ export interface HudValues {
   readonly experience: HugeNumberDto;
   readonly experienceToNextLevel: HugeNumberDto;
   readonly gold: HugeNumberDto;
-  readonly stage: StageNumberDto;
+  /** The stage the next combat is fought on. */
+  readonly currentStage: StageNumberDto;
+  /** The record the hero has set: `null` before the first victory (ADR-020). */
+  readonly highestStageCleared: StageNumberDto | null;
   /** From the server's rule set; `undefined` when no enemy can be described. */
   readonly stageKind: StageKind | undefined;
 }
@@ -25,7 +28,8 @@ const levelFormat = new Intl.NumberFormat('en-US');
 
 /**
  * Top of the game screen: who is playing, the hero's level and experience,
- * gold and stage. Values are exactly what the server sent — during a combat,
+ * gold, the current stage and the best stage cleared. Values are exactly what
+ * the server sent — during a combat,
  * the state *before* it, so the result is not revealed early.
  */
 export function GameHud({ displayName, heroName, values, signingOut, onSignOut }: GameHudProps) {
@@ -83,21 +87,38 @@ export function GameHud({ displayName, heroName, values, signingOut, onSignOut }
         </div>
         <div
           className={cn(
-            'col-span-3 flex items-center justify-between rounded-(--radius-control) px-3 py-1.5',
+            'col-span-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 rounded-(--radius-control) px-3 py-1.5',
             isBoss ? 'bg-danger/15 ring-1 ring-danger/50' : 'bg-surface-elevated',
           )}
         >
           <div className="flex items-baseline gap-2">
             <dt className="text-xs text-text-muted">Stage</dt>
             <dd className="font-mono text-lg text-text-primary" data-testid="hud-stage">
-              {formatStage(values.stage)}
+              {formatStage(values.currentStage)}
             </dd>
           </div>
-          {isBoss ? (
-            <span className="text-xs font-semibold tracking-[0.2em] text-danger uppercase">
-              Boss stage
-            </span>
-          ) : null}
+          <div className="ml-auto flex min-w-0 items-baseline gap-3">
+            {isBoss ? (
+              <span className="text-xs font-semibold tracking-[0.2em] text-danger uppercase">
+                Boss stage
+              </span>
+            ) : null}
+            <div className="flex items-baseline gap-1.5">
+              <dt className="text-xs text-text-muted">
+                Best<span className="sr-only"> stage cleared</span>
+              </dt>
+              <dd className="font-mono text-sm text-text-secondary" data-testid="hud-best-cleared">
+                {values.highestStageCleared === null ? (
+                  <>
+                    <span aria-hidden="true">—</span>
+                    <span className="sr-only">none yet</span>
+                  </>
+                ) : (
+                  formatStage(values.highestStageCleared)
+                )}
+              </dd>
+            </div>
+          </div>
         </div>
       </dl>
     </header>

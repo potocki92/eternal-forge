@@ -9,7 +9,9 @@ theorycrafting, competitive rankings and effectively unlimited growth.
 approval). A signed-in player fights the enemy on their hero's current stage.
 The server resolves every combat with the deterministic Game Core, grants
 gold and experience, levels the hero up, advances a stage on a win and falls
-back a stage on a loss. Bosses come every tenth stage. The result is
+back a stage on a loss. A defeat never erases the records: the highest stage
+reached and the highest stage cleared are kept separately from the current
+stage (ADR-020). Bosses come every tenth stage. The result is
 persisted atomically and played back on a mobile-first game screen with a
 PixiJS combat scene. See [`docs/ROADMAP.md`](docs/ROADMAP.md).
 

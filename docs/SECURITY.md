@@ -481,6 +481,15 @@ See ADR-019.
   type from Game Core (ESLint). The web build refuses privileged
   `NEXT_PUBLIC_` variables. Responses are validated against the shared
   contract before rendering.
+- **Stage records are server truth (ADR-020).** The current stage, the highest
+  stage reached and the highest stage cleared are all written only by Game
+  Core's transition, inside the same version-conditional transaction. A
+  record can rise only through a committed win and never falls. No request
+  field can set them. Game Core, the CHECK constraints and the contract each
+  enforce the invariants. A future ranking reads `highest_stage_cleared`,
+  which only a recorded win can raise. A stage too deep for the rule set is
+  refused with `409 STAGE_NOT_PLAYABLE` before a seed is drawn, and nothing is
+  written.
 
 ## Standing review answers — Phase 3 (combat)
 
@@ -495,7 +504,9 @@ See ADR-019.
   step per combat, and no reward on a loss, even at the database level.
 - Can another player's resource be targeted? No. Ownership is in the read and
   again in the conditional update.
-- Can invalid numeric values enter? No. Stages are exact `bigint`s (ADR-018).
+- Can invalid numeric values enter? No. Stages are exact `bigint`s (ADR-018),
+  and the three stage values must satisfy their invariants at every layer
+  (ADR-020). Nothing is clamped or truncated.
   Amounts are canonical HugeNumbers, whole and non-negative by contract and
   by CHECK. Level is bounded by Game Core and the column.
 - Can the operation leave partial state? No. The progress update and the

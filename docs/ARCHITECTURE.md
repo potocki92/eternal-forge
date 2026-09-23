@@ -8,7 +8,7 @@ versioned rules, combat, stages, rewards) is IMPLEMENTED as of Phase 1.
 Authentication, player identity persistence and the first authenticated API are
 IMPLEMENTED in Phase 2. The first persistent gameplay loop — server-authoritative
 combat, progression persistence, the game screen and the PixiJS combat scene —
-is IMPLEMENTED in Phase 3 (ADR-019, awaiting approval). Domain events, CQRS
+is IMPLEMENTED in Phase 3 (ADR-019 and ADR-020, awaiting approval). Domain events, CQRS
 infrastructure, offline processing and leaderboards are PLANNED.
 
 See the "Phase N implementation status" sections at the end of this document
@@ -732,8 +732,9 @@ open).
 
 # Phase 3 implementation status
 
-Status: IMPLEMENTED — awaiting CI and user approval. Decision: ADR-019 (the
-server-authoritative combat transaction).
+Status: IMPLEMENTED — awaiting CI and user approval. Decisions: ADR-019 (the
+server-authoritative combat transaction) and ADR-020 (the stage progression
+model: current stage and records).
 
 ## Request flow
 
@@ -754,17 +755,19 @@ apps/api
          owned character + version + any combat already under the key
     2. key already used → replay: resolveStageAttempt(stored inputs) == stored summary
     3. server clock < next_combat_at → 409 COMBAT_NOT_READY (Retry-After)
-    4. CombatSeedSource → 256-bit CSPRNG seed
-    5. Game Core resolveStageAttempt({ progress, seed, GAME_RULES_VERSION })
-         enemy, combat, rewards, level-up, next stage — every rule
-    6. CombatRepository.commit — one transaction:
+    4. no enemy describable on the current stage → 409 STAGE_NOT_PLAYABLE
+    5. CombatSeedSource → 256-bit CSPRNG seed
+    6. Game Core resolveStageAttempt({ progress, seed, GAME_RULES_VERSION })
+         enemy, combat, rewards, level-up, advanceStageProgress — every rule
+    7. CombatRepository.commit — one transaction:
          UPDATE characters … WHERE id AND version = expected AND owner
          INSERT combat_runs (unique character_id + idempotency_key)
        conflict → re-read key: replay the winner, or 409
   PrismaCombatRepository ──> PostgreSQL (characters, combat_runs; RLS)
   │
   │  201 CombatResponse (200 on replay): combat timeline, rewards,
-  │  before/after, character, progression (next encounter, nextCombatAt)
+  │  before/after, character, progression (currentStage, highestStageReached,
+  │  highestStageCleared, next encounter, nextCombatAt)
   v
 Browser
   shared Zod contract validates the response
@@ -777,7 +780,8 @@ Browser
 ## Module layout
 
 ```
-packages/game-core/src/progression/   level rule, resolveStageAttempt, describeProgress
+packages/game-core/src/progression/   level rule, StageProgress + advanceStageProgress,
+                                      resolveStageAttempt, describeProgress
 apps/api/src/combat/
   domain/            CombatRun record, replay check
   application/       RunCombatUseCase, CombatRepository and CombatSeedSource ports
@@ -802,6 +806,28 @@ apps/web/src/game/
 - PixiJS is imported only by `src/game/scene/pixi/`, and only dynamically.
 - `apps/web` refuses to build with a privileged `NEXT_PUBLIC_` variable, and on
   Vercel without its public configuration (docs/DEPLOYMENT.md).
+
+## Stage progression (ADR-020)
+
+```
+StageProgress { current, highestReached, highestCleared | null }   (Game Core)
+   invariants: current ≤ highestReached, highestCleared ≤ highestReached
+   advanceStageProgress: WIN → clear current, move to current + 1
+                         LOSS → fall back stagesLostOnDefeat; records kept
+        │
+        ├─ PostgreSQL: characters.current_stage / highest_stage_reached /
+        │              highest_stage_cleared (+ CHECKs); combat_runs.stage is
+        │              the stage fought, with the records before it
+        ├─ Contract:   progression.{currentStage, highestStageReached,
+        │              highestStageCleared}, canonical strings, null allowed
+        └─ Web:        HUD shows the current stage and "Best" (highest cleared)
+```
+
+Each layer enforces the invariants itself: Game Core by `createStageProgress`,
+the database by CHECK constraints, and the contract by an exact `BigInt`
+refinement. None of them repairs a bad value. The records are the attachment
+point for stage selection and farming (FUTURE), offline progression (Phase 4)
+and the Highest Stage ranking (Phase 10, on `highestStageCleared`).
 
 ## NOT IMPLEMENTED
 

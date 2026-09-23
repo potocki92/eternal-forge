@@ -52,6 +52,11 @@ export type RunCombatResult =
       readonly serverTime: Date;
     }
   | { readonly kind: 'not-found' }
+  /**
+   * The current stage is a valid stage number, but the rule set cannot scale
+   * an enemy for it (a HugeNumber `OVERFLOW`, ADR-018). Nothing is written.
+   */
+  | { readonly kind: 'stage-not-playable' }
   | { readonly kind: 'not-ready'; readonly nextCombatAt: Date; readonly serverTime: Date };
 
 /** Re-running a stored combat did not reproduce it. Always a defect. */
@@ -73,10 +78,11 @@ export class CombatReplayMismatchError extends Error {
  *    under this key — one owner-scoped read.
  * 2. A recorded combat is replayed: same result, nothing written.
  * 3. A character still fighting (server clock before `nextCombatAt`) is refused.
- * 4. A fresh CSPRNG seed; `resolveStageAttempt` decides everything else.
- * 5. One conditional transaction writes the new progress and the combat
+ * 4. A stage the rule set cannot scale is refused before any seed is drawn.
+ * 5. A fresh CSPRNG seed; `resolveStageAttempt` decides everything else.
+ * 6. One conditional transaction writes the new progress and the combat
  *    record, only if the version is unchanged.
- * 6. On a conflict, the key is looked up again: a concurrent retry of this
+ * 7. On a conflict, the key is looked up again: a concurrent retry of this
  *    request is replayed; any other winner means this request was too late.
  */
 @Injectable()
@@ -102,6 +108,9 @@ export class RunCombatUseCase {
     const now = this.clock.now();
     if (now < target.character.nextCombatAt) {
       return { kind: 'not-ready', nextCombatAt: target.character.nextCombatAt, serverTime: now };
+    }
+    if (viewProgression(target.character).encounter === null) {
+      return { kind: 'stage-not-playable' };
     }
 
     const attempt = resolveStageAttempt({

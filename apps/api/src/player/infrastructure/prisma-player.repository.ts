@@ -1,4 +1,4 @@
-import { HugeNumber, StageNumber } from '@eternal-forge/game-core';
+import { HugeNumber } from '@eternal-forge/game-core';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import type {
@@ -12,6 +12,11 @@ import {
   type Player,
   type Profile,
 } from '../domain/player.js';
+import {
+  toStageProgress,
+  toStageProgressColumns,
+  type StageProgressColumns,
+} from './stage-progress.columns.js';
 
 /** Row shapes this adapter reads. Declared locally so Prisma types stop here. */
 interface ProfileRow {
@@ -22,13 +27,12 @@ interface ProfileRow {
   readonly updatedAt: Date;
 }
 
-export interface CharacterRow {
+export interface CharacterRow extends StageProgressColumns {
   readonly id: string;
   readonly profileId: string;
   readonly slot: number;
   readonly name: string;
   readonly level: number;
-  readonly stage: bigint;
   readonly experienceCoef: bigint;
   readonly experienceExp: number;
   readonly goldCoef: bigint;
@@ -98,7 +102,7 @@ export class PrismaPlayerRepository implements PlayerRepository {
             slot: data.characterSlot,
             name: data.characterName,
             level: data.characterLevel,
-            stage: data.characterStage.toBigInt(),
+            ...toStageProgressColumns(data.characterStages),
             experienceCoef: data.characterExperience.toParts().coefficient,
             experienceExp: data.characterExperience.toParts().exponent,
             goldCoef: data.characterGold.toParts().coefficient,
@@ -137,9 +141,7 @@ export function toCharacter(row: CharacterRow): Character {
     slot: row.slot,
     name: row.name,
     level: row.level,
-    // bigint to bigint: exact. A value outside 1…2^63 − 1 cannot pass the
-    // column type and CHECK; if one ever did, this throws instead of repairing.
-    stage: StageNumber.of(row.stage),
+    stages: toStageProgress(row),
     // HugeNumber pairs map one-to-one to toParts()/fromParts() (ADR-013).
     // fromParts rejects a non-normalised pair instead of repairing it.
     experience: HugeNumber.fromParts(row.experienceCoef, row.experienceExp),

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
-import { StageNumber } from '@eternal-forge/game-core';
+import { STAGE_NUMBER_MAX, StageNumber } from '@eternal-forge/game-core';
 import {
   apiErrorResponseSchema,
   combatResponseSchema,
@@ -190,9 +190,28 @@ describe('combat — the loop over HTTP', () => {
       rewards: { gold: '5e0', experience: '3e0' },
     });
     expect(body.combat.events.length).toBeGreaterThan(0);
-    expect(body.before).toMatchObject({ level: 1, stage: '1', gold: '0', experience: '0' });
-    expect(body.after).toMatchObject({ level: 1, stage: '2', gold: '5e0', experience: '3e0' });
-    expect(body.character).toMatchObject({ stage: '2', gold: '5e0', experience: '3e0' });
+    expect(body.before).toMatchObject({
+      level: 1,
+      gold: '0',
+      experience: '0',
+      currentStage: '1',
+      highestStageReached: '1',
+      highestStageCleared: null,
+    });
+    expect(body.after).toMatchObject({
+      level: 1,
+      gold: '5e0',
+      experience: '3e0',
+      currentStage: '2',
+      highestStageReached: '2',
+      highestStageCleared: '1',
+    });
+    expect(body.character).toMatchObject({ gold: '5e0', experience: '3e0' });
+    expect(body.progression).toMatchObject({
+      currentStage: '2',
+      highestStageReached: '2',
+      highestStageCleared: '1',
+    });
     expect(body.progression.encounter?.stage).toEqual({ number: '2', kind: 'REGULAR' });
 
     const state = playerStateResponseSchema.parse(
@@ -203,7 +222,8 @@ describe('combat — the loop over HTTP', () => {
           .expect(200)
       ).body,
     );
-    expect(state.character).toMatchObject({ stage: '2', gold: '5e0' });
+    expect(state.character).toMatchObject({ gold: '5e0' });
+    expect(state.progression).toMatchObject({ currentStage: '2', highestStageCleared: '1' });
     expect(state.progression.nextCombatAt).toBe(body.progression.nextCombatAt);
   });
 
@@ -249,7 +269,13 @@ describe('combat — the loop over HTTP', () => {
 
   it('shows the boss that Game Core places on the stage', async () => {
     const { token, characterId } = await provisionedPlayer();
-    repository.updateCharacter(characterId, { stage: StageNumber.of(10) });
+    repository.updateCharacter(characterId, {
+      stages: {
+        current: StageNumber.of(10),
+        highestReached: StageNumber.of(10),
+        highestCleared: StageNumber.of(9),
+      },
+    });
 
     const body = combatResponseSchema.parse((await fight(token, characterId).expect(201)).body);
 
@@ -257,6 +283,24 @@ describe('combat — the loop over HTTP', () => {
     expect(body.combat.enemy.archetypeId).toBe('warden');
     expect(body.combat.outcome).toBe('LOSS');
     expect(body.combat.rewards).toEqual({ gold: '0', experience: '0' });
-    expect(body.after.stage).toBe('9');
+    expect(body.after).toMatchObject({
+      currentStage: '9',
+      highestStageReached: '10',
+      highestStageCleared: '9',
+    });
+  });
+
+  it('answers 409 STAGE_NOT_PLAYABLE on a valid stage the rules cannot scale', async () => {
+    const { token, characterId } = await provisionedPlayer();
+    const deep = StageNumber.of(STAGE_NUMBER_MAX);
+    repository.updateCharacter(characterId, {
+      stages: { current: deep, highestReached: deep, highestCleared: null },
+    });
+
+    const response = await fight(token, characterId).expect(409);
+
+    expectError(response.body, 'STAGE_NOT_PLAYABLE');
+    expect(response.headers['retry-after']).toBeUndefined();
+    expect(repository.runsOf(characterId)).toHaveLength(0);
   });
 });

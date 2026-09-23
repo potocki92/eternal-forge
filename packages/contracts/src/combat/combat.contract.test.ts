@@ -6,7 +6,6 @@ const character = {
   slot: 1,
   name: 'Ember',
   level: 1,
-  stage: '2',
   experience: '3e0',
   gold: '5e0',
   createdAt: '2026-09-23T10:00:00.000Z',
@@ -29,10 +28,29 @@ const response = {
     levelsGained: 0,
     resolvedAt: '2026-09-23T10:00:00.000Z',
   },
-  before: { level: 1, experience: '0', experienceToNextLevel: '1e1', gold: '0', stage: '1' },
-  after: { level: 1, experience: '3e0', experienceToNextLevel: '1e1', gold: '5e0', stage: '2' },
+  before: {
+    level: 1,
+    experience: '0',
+    experienceToNextLevel: '1e1',
+    gold: '0',
+    currentStage: '1',
+    highestStageReached: '1',
+    highestStageCleared: null,
+  },
+  after: {
+    level: 1,
+    experience: '3e0',
+    experienceToNextLevel: '1e1',
+    gold: '5e0',
+    currentStage: '2',
+    highestStageReached: '2',
+    highestStageCleared: '1',
+  },
   character,
   progression: {
+    currentStage: '2',
+    highestStageReached: '2',
+    highestStageCleared: '1',
     experienceToNextLevel: '1e1',
     hero: { maxHealth: '1e2', damage: '1e1' },
     encounter: {
@@ -62,6 +80,28 @@ describe('combatResponseSchema', () => {
       combat: { ...response.combat, ...change },
     });
     expect(result.success).toBe(false);
+  });
+
+  it.each([
+    ['a current stage beyond the record', { currentStage: '3' }],
+    ['a clear beyond the record', { highestStageCleared: '3' }],
+    ['a numeric record', { highestStageReached: 2 }],
+  ])('rejects a snapshot with %s', (_label, change) => {
+    const result = combatResponseSchema.safeParse({
+      ...response,
+      after: { ...response.after, ...change },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts a boss defeat: back to farm, records kept', () => {
+    const after = {
+      ...response.after,
+      currentStage: '9',
+      highestStageReached: '10',
+      highestStageCleared: '9',
+    };
+    expect(combatResponseSchema.parse({ ...response, after }).after).toEqual(after);
   });
 
   it('bounds the event timeline', () => {

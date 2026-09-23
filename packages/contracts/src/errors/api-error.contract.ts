@@ -19,6 +19,11 @@ export const API_ERROR_CODES = [
    */
   'COMBAT_NOT_READY',
   /**
+   * The character's current stage is a valid stage number, but it lies beyond
+   * what the rule set can scale into an enemy. No combat is possible there.
+   */
+  'STAGE_NOT_PLAYABLE',
+  /**
    * The API cannot verify credentials right now (e.g. the signing-key endpoint
    * is unreachable). Retry later; this does not mean the session is invalid.
    */

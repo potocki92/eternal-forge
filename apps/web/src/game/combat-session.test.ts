@@ -71,6 +71,7 @@ describe('describeCombatFailure', () => {
   it.each([
     [new ApiError('offline'), 'connection', true],
     [new ApiError('busy', 409, { code: 'COMBAT_NOT_READY' }), 'busy', false],
+    [new ApiError('deep', 409, { code: 'STAGE_NOT_PLAYABLE' }), 'unplayable', false],
     [new ApiError('gone', 401, { code: 'UNAUTHENTICATED' }), 'session', false],
     [new ApiError('missing', 404, { code: 'NOT_FOUND' }), 'missing', false],
     [new ApiError('down', 503), 'unavailable', true],

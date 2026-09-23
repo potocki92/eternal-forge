@@ -160,7 +160,8 @@ describe('GET /player/state', () => {
 
     expect(playerStateResponseSchema.parse(response.body)).toMatchObject({
       profile: { id: state.profile.id, displayName: 'Kael' },
-      character: { name: 'Ember', level: 1, stage: '1' },
+      character: { name: 'Ember', level: 1 },
+      progression: { currentStage: '1', highestStageReached: '1', highestStageCleared: null },
     });
   });
 
@@ -245,7 +246,13 @@ describe('impersonation attempts', () => {
       .set('authorization', `Bearer ${token}`)
       .expect(200);
 
-    expect(characterResponseSchema.parse(response.body).character.id).toBe(state.character.id);
+    const body = characterResponseSchema.parse(response.body);
+    expect(body.character.id).toBe(state.character.id);
+    expect(body.progression).toMatchObject({
+      currentStage: '1',
+      highestStageReached: '1',
+      highestStageCleared: null,
+    });
   });
 
   it('rejects a character id that is not a UUID', async () => {

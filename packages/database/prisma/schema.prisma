@@ -56,27 +56,32 @@ model Profile {
 // `slot` makes "the main character" a data property instead of a schema
 // limit: Phase 2 provisions slot 1, and more slots need no migration.
 model Character {
-  id             String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  profileId      String      @map("profile_id") @db.Uuid
-  slot           Int         @db.SmallInt
-  name           String      @db.VarChar(24)
-  level          Int         @default(1)
-  /// Stages are effectively unlimited (docs/GAME_DESIGN.md), hence bigint.
-  stage          BigInt      @default(1)
+  id                  String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  profileId           String      @map("profile_id") @db.Uuid
+  slot                Int         @db.SmallInt
+  name                String      @db.VarChar(24)
+  level               Int         @default(1)
+  /// Stage progress (ADR-020). Stages are effectively unlimited, hence bigint.
+  /// The stage the next combat is fought on — pushed or farmed.
+  currentStage        BigInt      @default(1) @map("current_stage")
+  /// The highest stage ever unlocked. Never decreases.
+  highestStageReached BigInt      @default(1) @map("highest_stage_reached")
+  /// The highest stage ever defeated; NULL until the first clear. Never decreases.
+  highestStageCleared BigInt?     @map("highest_stage_cleared")
   /// Experience within the current level (HugeNumber pair).
-  experienceCoef BigInt      @default(0) @map("experience_coef")
-  experienceExp  Int         @default(-2147483648) @map("experience_exp")
+  experienceCoef      BigInt      @default(0) @map("experience_coef")
+  experienceExp       Int         @default(-2147483648) @map("experience_exp")
   /// Gold (HugeNumber pair).
-  goldCoef       BigInt      @default(0) @map("gold_coef")
-  goldExp        Int         @default(-2147483648) @map("gold_exp")
+  goldCoef            BigInt      @default(0) @map("gold_coef")
+  goldExp             Int         @default(-2147483648) @map("gold_exp")
   /// Server time before which the character is still fighting its last combat.
-  nextCombatAt   DateTime    @default(now()) @map("next_combat_at") @db.Timestamptz(3)
+  nextCombatAt        DateTime    @default(now()) @map("next_combat_at") @db.Timestamptz(3)
   /// Optimistic concurrency token: every progression write increments it.
-  version        BigInt      @default(0)
-  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt      DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
-  profile        Profile     @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  combatRuns     CombatRun[]
+  version             BigInt      @default(0)
+  createdAt           DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+  profile             Profile     @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  combatRuns          CombatRun[]
 
   @@unique([profileId, slot], map: "characters_profile_id_slot_key")
   @@map("characters")
@@ -107,32 +112,35 @@ enum CombatEndReason {
 // `(character_id, idempotency_key)` is unique: a retried request finds the
 // combat it already produced instead of fighting again.
 model CombatRun {
-  id                   String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  characterId          String          @map("character_id") @db.Uuid
+  id                        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  characterId               String          @map("character_id") @db.Uuid
   /// Client-generated per fight intent. Carries no gameplay input.
-  idempotencyKey       String          @map("idempotency_key") @db.Uuid
+  idempotencyKey            String          @map("idempotency_key") @db.Uuid
   /// GAME_RULES_VERSION the combat was resolved under (docs/DATABASE.md).
-  rulesVersion         Int             @map("rules_version")
+  rulesVersion              Int             @map("rules_version")
   /// Server CSPRNG seed. Never chosen by or sent to the client.
-  seed                 String          @db.VarChar(64)
-  // Progression before the combat: the replay input.
-  stage                BigInt
-  characterLevel       Int             @map("character_level")
-  experienceBeforeCoef BigInt          @map("experience_before_coef")
-  experienceBeforeExp  Int             @map("experience_before_exp")
-  goldBeforeCoef       BigInt          @map("gold_before_coef")
-  goldBeforeExp        Int             @map("gold_before_exp")
+  seed                      String          @db.VarChar(64)
+  // Progression before the combat: the replay input. `stage` is the stage
+  // actually fought (the current stage then), whatever the character moved to.
+  stage                     BigInt
+  highestStageReachedBefore BigInt          @map("highest_stage_reached_before")
+  highestStageClearedBefore BigInt?         @map("highest_stage_cleared_before")
+  characterLevel            Int             @map("character_level")
+  experienceBeforeCoef      BigInt          @map("experience_before_coef")
+  experienceBeforeExp       Int             @map("experience_before_exp")
+  goldBeforeCoef            BigInt          @map("gold_before_coef")
+  goldBeforeExp             Int             @map("gold_before_exp")
   // Summary of the result: the audit record.
-  outcome              CombatOutcome
-  endReason            CombatEndReason @map("end_reason")
-  durationMs           Int             @map("duration_ms")
-  rewardGoldCoef       BigInt          @map("reward_gold_coef")
-  rewardGoldExp        Int             @map("reward_gold_exp")
-  rewardExperienceCoef BigInt          @map("reward_experience_coef")
-  rewardExperienceExp  Int             @map("reward_experience_exp")
+  outcome                   CombatOutcome
+  endReason                 CombatEndReason @map("end_reason")
+  durationMs                Int             @map("duration_ms")
+  rewardGoldCoef            BigInt          @map("reward_gold_coef")
+  rewardGoldExp             Int             @map("reward_gold_exp")
+  rewardExperienceCoef      BigInt          @map("reward_experience_coef")
+  rewardExperienceExp       Int             @map("reward_experience_exp")
   /// Server time the combat was resolved and committed.
-  createdAt            DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
-  character            Character       @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  createdAt                 DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  character                 Character       @relation(fields: [characterId], references: [id], onDelete: Cascade)
 
   @@unique([characterId, idempotencyKey], map: "combat_runs_character_id_idempotency_key_key")
   @@map("combat_runs")

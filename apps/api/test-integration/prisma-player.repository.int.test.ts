@@ -1,5 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { HugeNumber, STAGE_NUMBER_MAX, StageNumber } from '@eternal-forge/game-core';
+import {
+  HugeNumber,
+  INITIAL_STAGE_PROGRESS,
+  STAGE_NUMBER_MAX,
+  StageNumber,
+} from '@eternal-forge/game-core';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { ProvisionPlayerData } from '../src/player/application/ports/player-repository.port.js';
 import { PrismaPlayerRepository } from '../src/player/infrastructure/prisma-player.repository.js';
@@ -32,7 +37,7 @@ function provisionData(
     characterName: names.c,
     characterSlot: 1,
     characterLevel: 1,
-    characterStage: StageNumber.FIRST,
+    characterStages: INITIAL_STAGE_PROGRESS,
     characterExperience: HugeNumber.ZERO,
     characterGold: HugeNumber.ZERO,
     characterNextCombatAt: new Date('2026-09-23T10:00:00.000Z'),
@@ -56,7 +61,10 @@ describe('PrismaPlayerRepository — provisioning', () => {
     expect(outcome.created).toBe(true);
     expect(found).toEqual(outcome.player);
     expect(found?.mainCharacter).toMatchObject({ slot: 1, level: 1, name: 'Ember' });
-    expect(found?.mainCharacter.stage.toString()).toBe('1');
+    const stages = found?.mainCharacter.stages;
+    expect(stages?.current.toString()).toBe('1');
+    expect(stages?.highestReached.toString()).toBe('1');
+    expect(stages?.highestCleared).toBeNull();
   });
 
   it('is idempotent: a retry changes nothing and reports created=false', async () => {
@@ -188,7 +196,7 @@ describe('schema constraints', () => {
 
   it.each([
     ['level 0', 'level', '0'],
-    ['stage 0', 'stage', '0'],
+    ['current stage 0', 'current_stage', '0'],
     ['slot 0', 'slot', '0'],
   ])('rejects a character with %s', async (_label, column, value) => {
     const constraint = new RegExp(`characters_${column}_check`, 'u');
@@ -210,25 +218,40 @@ describe('schema constraints', () => {
     const { player } = await repository.provision(data);
     await prisma.client.character.update({
       where: { id: player.mainCharacter.id },
-      data: { stage: stored },
+      data: {
+        currentStage: stored - 2n,
+        highestStageReached: stored,
+        highestStageCleared: stored - 1n,
+      },
     });
 
     const found = await repository.findByAuthUserId(data.authUserId);
     const owned = await repository.findOwnedCharacter(data.authUserId, player.mainCharacter.id);
 
-    expect(found?.mainCharacter.stage.toBigInt()).toBe(stored);
-    expect(owned?.stage.toBigInt()).toBe(stored);
+    for (const stages of [found?.mainCharacter.stages, owned?.stages]) {
+      expect(stages?.current.toBigInt()).toBe(stored - 2n);
+      expect(stages?.highestReached.toBigInt()).toBe(stored);
+      expect(stages?.highestCleared?.toBigInt()).toBe(stored - 1n);
+    }
   });
 
   it('writes the provisioned stage as a bigint', async () => {
-    const data = { ...provisionData(), characterStage: StageNumber.of(2n ** 53n + 1n) };
+    const deep = StageNumber.of(2n ** 53n + 1n);
+    const data = {
+      ...provisionData(),
+      characterStages: { current: deep, highestReached: deep, highestCleared: null },
+    };
 
     await repository.provision(data);
 
-    const [row] = await prisma.client.$queryRawUnsafe<{ stage: bigint }[]>(
-      'SELECT stage FROM characters',
-    );
-    expect(row?.stage).toBe(2n ** 53n + 1n);
+    const [row] = await prisma.client.$queryRawUnsafe<
+      { current_stage: bigint; highest_stage_reached: bigint; highest_stage_cleared: null }[]
+    >('SELECT current_stage, highest_stage_reached, highest_stage_cleared FROM characters');
+    expect(row).toEqual({
+      current_stage: 2n ** 53n + 1n,
+      highest_stage_reached: 2n ** 53n + 1n,
+      highest_stage_cleared: null,
+    });
   });
 
   it.each([
@@ -239,9 +262,9 @@ describe('schema constraints', () => {
 
     await expect(
       prisma.client.$executeRawUnsafe(
-        `UPDATE characters SET stage = ${value} WHERE id = '${player.mainCharacter.id}'`,
+        `UPDATE characters SET current_stage = ${value} WHERE id = '${player.mainCharacter.id}'`,
       ),
-    ).rejects.toThrow(/characters_stage_check|out of range/u);
+    ).rejects.toThrow(/characters_current_stage_check|out of range/u);
   });
 
   it('deletes characters with their profile', async () => {

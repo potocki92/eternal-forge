@@ -1,8 +1,12 @@
 import { isUniqueConstraintViolation } from '@eternal-forge/database';
-import { HugeNumber, StageNumber } from '@eternal-forge/game-core';
+import { HugeNumber } from '@eternal-forge/game-core';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import { toCharacter } from '../../player/infrastructure/prisma-player.repository.js';
+import {
+  toStageProgress,
+  toStageProgressColumns,
+} from '../../player/infrastructure/stage-progress.columns.js';
 import type {
   CombatRepository,
   CombatTarget,
@@ -18,7 +22,10 @@ interface CombatRunRow {
   readonly idempotencyKey: string;
   readonly rulesVersion: number;
   readonly seed: string;
+  /** The stage actually fought. */
   readonly stage: bigint;
+  readonly highestStageReachedBefore: bigint;
+  readonly highestStageClearedBefore: bigint | null;
   readonly characterLevel: number;
   readonly experienceBeforeCoef: bigint;
   readonly experienceBeforeExp: number;
@@ -92,7 +99,7 @@ export class PrismaCombatRepository implements CombatRepository {
           },
           data: {
             level: progress.level,
-            stage: progress.stage.toBigInt(),
+            ...toStageProgressColumns(progress.stages),
             experienceCoef: experience.coefficient,
             experienceExp: experience.exponent,
             goldCoef: gold.coefficient,
@@ -111,7 +118,9 @@ export class PrismaCombatRepository implements CombatRepository {
             idempotencyKey: run.idempotencyKey,
             rulesVersion: run.rulesVersion,
             seed: run.seed,
-            stage: run.before.stage.toBigInt(),
+            stage: run.before.stages.current.toBigInt(),
+            highestStageReachedBefore: run.before.stages.highestReached.toBigInt(),
+            highestStageClearedBefore: run.before.stages.highestCleared?.toBigInt() ?? null,
             characterLevel: run.before.level,
             experienceBeforeCoef: experienceBefore.coefficient,
             experienceBeforeExp: experienceBefore.exponent,
@@ -149,7 +158,11 @@ function toCombatRun(row: CombatRunRow): CombatRun {
     seed: row.seed,
     before: {
       level: row.characterLevel,
-      stage: StageNumber.of(row.stage),
+      stages: toStageProgress({
+        currentStage: row.stage,
+        highestStageReached: row.highestStageReachedBefore,
+        highestStageCleared: row.highestStageClearedBefore,
+      }),
       experience: HugeNumber.fromParts(row.experienceBeforeCoef, row.experienceBeforeExp),
       gold: HugeNumber.fromParts(row.goldBeforeCoef, row.goldBeforeExp),
     },

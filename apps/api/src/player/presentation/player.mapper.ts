@@ -3,8 +3,9 @@ import type {
   EncounterDto,
   PlayerStateResponse,
   ProgressionDto,
+  StageProgressDto,
 } from '@eternal-forge/contracts';
-import type { Enemy } from '@eternal-forge/game-core';
+import type { Enemy, StageProgress } from '@eternal-forge/game-core';
 import type { Character, Player } from '../domain/player.js';
 import type { ProgressionView } from '../domain/progression-view.js';
 
@@ -32,7 +33,6 @@ export function toCharacterDto(character: Character): CharacterDto {
     slot: character.slot,
     name: character.name,
     level: character.level,
-    stage: character.stage.toString(),
     experience: character.experience.toString(),
     gold: character.gold.toString(),
     createdAt: character.createdAt.toISOString(),
@@ -41,6 +41,7 @@ export function toCharacterDto(character: Character): CharacterDto {
 
 export function toProgressionDto(view: ProgressionView): ProgressionDto {
   return {
+    ...toStageProgressDto(view.stages),
     experienceToNextLevel: view.experienceToNextLevel.toString(),
     hero: {
       maxHealth: view.character.stats.maxHealth.toString(),
@@ -48,6 +49,15 @@ export function toProgressionDto(view: ProgressionView): ProgressionDto {
     },
     encounter: view.encounter === null ? null : toEncounterDto(view.encounter),
     nextCombatAt: view.nextCombatAt.toISOString(),
+  };
+}
+
+/** Exact canonical strings; `null` stays `null` before the first clear (ADR-020). */
+export function toStageProgressDto(stages: StageProgress): StageProgressDto {
+  return {
+    currentStage: stages.current.toString(),
+    highestStageReached: stages.highestReached.toString(),
+    highestStageCleared: stages.highestCleared?.toString() ?? null,
   };
 }
 
