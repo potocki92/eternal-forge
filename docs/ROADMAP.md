@@ -8,9 +8,10 @@ PHASE 3 — FIRST GAMEPLAY LOOP
 
 Status:
 
-IMPLEMENTED — awaiting GitHub Actions and user approval. Decision record:
-ADR-019 (the server-authoritative combat transaction). See "Validation" under
-Phase 3. Phase 4 must not start without approval.
+IMPLEMENTED — GitHub Actions green on PR #6 (run #17, `ee23348`); awaiting user
+approval. Decision record: ADR-019 (the server-authoritative combat
+transaction). See "Validation" under Phase 3. Phase 4 must not start without
+approval.
 
 Phase 2 is COMPLETE / APPROVED: the post-audit hardening (ADR-018) was merged
 as PR #5, and GitHub Actions is green on `main` (run #13 on `fb3db8b`, the merge
@@ -380,7 +381,7 @@ Validation (2026-09-23, local, PostgreSQL 16 and Redis 7):
 
 # Phase 3 — First Gameplay Loop
 
-Status: IMPLEMENTED — awaiting GitHub Actions and user approval (2026-09-23)
+Status: IMPLEMENTED — CI green on PR #6; awaiting user approval (2026-09-23)
 
 Goal:
 
@@ -436,7 +437,10 @@ Tasks:
       privileged `NEXT_PUBLIC_` names anywhere); owner steps documented
 - [x] documentation — ADR-019, ARCHITECTURE, GAME_DESIGN, DATABASE, SECURITY,
       UI_SYSTEM, DEPLOYMENT, README, ADR index
-- [ ] GitHub Actions green on the pull request
+- [x] GitHub Actions green on the pull request — PR #6, run #17 on `ee23348`:
+      quality (format, lint, typecheck, unit tests, build), PostgreSQL
+      integration and smoke, Playwright end-to-end. Runs #14 and #15 on
+      intermediate commits failed on a test type error, fixed in `ee23348`
 - [ ] Supabase DEV project created and migrated — OWNER ACTION
       (docs/DEPLOYMENT.md)
 - [ ] Vercel deployment — OWNER ACTION, and a playable deployment is
