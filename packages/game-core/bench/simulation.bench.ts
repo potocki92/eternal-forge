@@ -5,9 +5,13 @@ import {
   createCharacter,
   createEnemyForStage,
   getGameRules,
+  HugeNumber,
+  resolveOfflineProgress,
   simulateCombat,
   simulateStages,
+  type CharacterProgress,
   type CombatResult,
+  type OfflineProgressResult,
   type StageRunResult,
 } from '../src/index.js';
 
@@ -57,7 +61,42 @@ describe('simulateStages', () => {
   });
 });
 
-export const observed = (): readonly [CombatResult | undefined, StageRunResult | undefined] => [
-  combat,
-  run,
-];
+let offline: OfflineProgressResult | undefined;
+
+/** A hero pushing stage `stage + 1`, farming `stage` offline (ADR-023). */
+function farming(level: number, stage: bigint): CharacterProgress {
+  return {
+    level,
+    experience: HugeNumber.ZERO,
+    gold: HugeNumber.ZERO,
+    stages: {
+      current: StageNumber.of(stage + 1n),
+      highestReached: StageNumber.of(stage + 1n),
+      highestCleared: StageNumber.of(stage),
+    },
+  };
+}
+
+describe('resolveOfflineProgress', () => {
+  for (const [label, level, stage, elapsedMs] of [
+    ['5 minutes, stage 9', 10, 9n, 5 * 60_000],
+    ['1 hour, stage 9', 10, 9n, 3_600_000],
+    ['8 hours (cap), stage 9', 10, 9n, 8 * 3_600_000],
+    ['8 hours (cap), stage 1 000 — 28 800 fights', 2_000, 1_000n, 8 * 3_600_000],
+  ] as const) {
+    bench(label, () => {
+      offline = resolveOfflineProgress({
+        progress: farming(level, stage),
+        elapsedMs,
+        seed: 'bench',
+        rulesVersion: GAME_RULES_VERSION,
+      });
+    });
+  }
+});
+
+export const observed = (): readonly [
+  CombatResult | undefined,
+  StageRunResult | undefined,
+  OfflineProgressResult | undefined,
+] => [combat, run, offline];

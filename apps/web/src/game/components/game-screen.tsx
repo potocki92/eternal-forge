@@ -13,12 +13,15 @@ import { useCombatScene } from '../scene/use-combat-scene';
 import { useCombatPlayback } from '../use-combat-playback';
 import { useCombatSession } from '../use-combat-session';
 import { useStageSelection } from '../stage-selection/use-stage-selection';
+import { blocksFighting } from '../offline/offline-claim';
+import { useOfflineClaim } from '../offline/use-offline-claim';
 import { useNow } from '../use-now';
 import { usePrefersReducedMotion } from '../use-reduced-motion';
 import { BattleControls } from './battle-controls';
 import { CombatReport, type ReportState } from './combat-report';
 import { CombatStage, type CombatantHealth } from './combat-stage';
 import { GameHud, type HudValues } from './game-hud';
+import { OfflineSummary } from './offline-summary';
 import { StageSelector } from './stage-selector';
 
 /** How long a finished combat stays on screen before the next enemy steps in. */
@@ -56,6 +59,10 @@ export function GameScreen({
   const session = useCombatSession(userId, player.character.id);
   const { state, fight, finish } = session;
   const stageSelection = useStageSelection(userId, player.character.id);
+  // Offline progress (ADR-023) is asked for before any fight on entering the
+  // game and after the page was hidden: an online fight ends the idle time.
+  const offlineClaim = useOfflineClaim(userId, player.character.id, !signingOut);
+  const offlinePending = blocksFighting(offlineClaim.state);
   const response =
     state.phase === 'fighting' || state.phase === 'finished' ? state.response : undefined;
 
@@ -208,21 +215,24 @@ export function GameScreen({
   const blocked =
     busy ||
     stageSelection.pending ||
+    offlinePending ||
     player.progression.encounter === null ||
     (!retrying && waitSeconds > 0) ||
     (state.phase === 'failed' && state.failure.kind === 'session');
   const fightLabel =
-    state.phase === 'requesting'
-      ? 'Engaging…'
-      : state.phase === 'fighting'
-        ? 'Fighting…'
-        : retrying
-          ? 'Try again'
-          : waitSeconds > 0
-            ? `Ready in ${String(waitSeconds)}s`
-            : player.progression.encounter?.stage.kind === 'BOSS'
-              ? 'Fight boss'
-              : 'Fight';
+    offlinePending && !busy
+      ? 'Returning…'
+      : state.phase === 'requesting'
+        ? 'Engaging…'
+        : state.phase === 'fighting'
+          ? 'Fighting…'
+          : retrying
+            ? 'Try again'
+            : waitSeconds > 0
+              ? `Ready in ${String(waitSeconds)}s`
+              : player.progression.encounter?.stage.kind === 'BOSS'
+                ? 'Fight boss'
+                : 'Fight';
 
   const auto = useAutoBattle(
     session,
@@ -231,7 +241,7 @@ export function GameScreen({
       readyAt,
       stateReceivedAt: receivedAt,
       hasEncounter: player.progression.encounter !== null,
-      otherWritePending: stageSelection.pending,
+      otherWritePending: stageSelection.pending || offlinePending,
     },
     !signingOut,
   );
@@ -260,6 +270,8 @@ export function GameScreen({
         onSelect={stageSelection.select}
         onDismissError={stageSelection.clearError}
       />
+
+      <OfflineSummary claim={offlineClaim} />
 
       <main className="flex min-h-0 flex-1 flex-col">
         <CombatStage
