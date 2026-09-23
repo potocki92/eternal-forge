@@ -2,7 +2,8 @@
 
 ## Status
 
-Proposed — 2026-09-23 (Phase 4, PR 4.1). Awaiting user approval.
+Accepted — 2026-09-23. Proposed with Phase 4 PR 4.1; accepted when PR #9 was
+merged and the user started PR 4.2.
 
 ## Date
 

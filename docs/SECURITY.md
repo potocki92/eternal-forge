@@ -1,6 +1,6 @@
 # Eternal Forge — Security Model
 
-Status: PARTIALLY IMPLEMENTED (Phases 0–3, Phase 4 PR 4.1) / EVOLVING
+Status: PARTIALLY IMPLEMENTED (Phases 0–3, Phase 4 PRs 4.1–4.2) / EVOLVING
 
 The principles below are binding from the first line of gameplay code. A
 per-control implementation status is listed at the end of this document.
@@ -550,6 +550,52 @@ See ADR-021.
   comparison (`2^53 + 4` is not accepted against a frontier of `2^53 + 3`).
 - Can the operation leave partial state? No: one single-row `UPDATE`.
 
+## IMPLEMENTED (Phase 4 PR 4.2) — online auto-battle
+
+See ADR-022. Online auto-battle is not offline progression: it exists only
+while a client sends requests.
+
+- **No new attack surface.** No endpoint, field, header or contract was
+  added. Each auto fight is the ordinary combat request with no body; the
+  server cannot distinguish the loop from a tap, so the loop has no privilege
+  a script does not already have — and none is needed.
+- **The server paces it.** The loop sends the next fight at the server's
+  `nextCombatAt`, read relative to `serverTime`. A changed device clock,
+  a throttled tab, a script firing every 250 ms or several tabs only change
+  when requests arrive; early ones are `409 COMBAT_NOT_READY` and write
+  nothing. Integration tests prove combats never overlap under a greedy
+  client and across two API instances.
+- **No catch-up.** Nothing in the browser or on the server credits time the
+  loop did not fight. A hidden page starts no fight; a late timer sends one
+  request.
+- **Bounded retries.** Same-key retries with backoff (2–30 s) for transient
+  errors and 429; a re-read before retrying after `COMBAT_NOT_READY`; a halt
+  after 5 (or 10 "busy") consecutive failures and on any 401, 403, 404 or
+  `STAGE_NOT_PLAYABLE`. The loop cannot become a request storm against a
+  failing API.
+- **Observability.** Structured events `combat.replayed`, `combat.conflict`,
+  `combat.stage_not_playable` and `combat.not_ready` (debug level, since a
+  spammer produces one per request) carry the character and combat ids and
+  never a token, seed or body.
+
+## Standing review answers — Phase 4 PR 4.2 (online auto-battle)
+
+- Can the client fake it? No. The loop sends no gameplay value; every fight
+  is decided by the server from persisted state.
+- Can it be replayed? A retried key replays the recorded combat (200); the
+  loop reuses a key only for retries of the same intent.
+- Can it be called concurrently? Yes, from any number of tabs and devices;
+  one combat commits per gate window, the others get `409`. Verified against
+  PostgreSQL across two API instances and in the browser with two tabs.
+- Can rewards be duplicated? No: combat idempotency and the version check are
+  unchanged.
+- Can another player's resource be targeted? No: 404, as for any combat.
+- Can invalid numeric values enter? No: nothing new is accepted. Stages stay
+  exact strings; stage 2^53 + 1 is served exactly and refused as
+  `STAGE_NOT_PLAYABLE` under rules v1.
+- Can the operation leave partial state? No: Stop never aborts a request;
+  each combat commits whole or not at all.
+
 ## Known limitations
 
 - **Revocation lag:** after sign-out, the access token remains valid at the API
@@ -558,7 +604,10 @@ See ADR-021.
   Security Policy is not yet configured.
 - **No general rate limiting** on API endpoints yet. Combat is bounded per
   character by the pacing gate, and even refused requests cost an owner-scoped
-  read. Supabase Auth applies its own limits to sign-in and sign-up.
+  read. Legitimate online auto-battle sends at most one combat request per
+  combat duration plus about 1.2 s (≈ 0.5 requests/s per character under
+  rules v1, where a combat lasts 1–30 s), plus bounded retries; a limit must
+  allow that cadence per character and several tabs (ADR-022). Supabase Auth applies its own limits to sign-in and sign-up.
 
 ## PLANNED
 

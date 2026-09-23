@@ -15,7 +15,13 @@ import { ApiError } from '@/lib/api-client';
 export type CombatSessionState =
   | { readonly phase: 'idle' }
   | { readonly phase: 'requesting'; readonly key: string }
-  | { readonly phase: 'failed'; readonly key: string; readonly failure: CombatFailure }
+  | {
+      readonly phase: 'failed';
+      readonly key: string;
+      readonly failure: CombatFailure;
+      /** Local epoch ms the failure was reported: anchors a retry's backoff. */
+      readonly failedAt: number;
+    }
   | {
       readonly phase: 'fighting' | 'finished';
       readonly response: CombatResponse;
@@ -26,11 +32,19 @@ export type CombatSessionState =
 export type CombatSessionAction =
   | { readonly type: 'request'; readonly key: string }
   | { readonly type: 'resolve'; readonly response: CombatResponse; readonly receivedAt: number }
-  | { readonly type: 'fail'; readonly failure: CombatFailure }
+  | { readonly type: 'fail'; readonly failure: CombatFailure; readonly at: number }
   | { readonly type: 'finish' };
 
 export interface CombatFailure {
-  readonly kind: 'connection' | 'unavailable' | 'busy' | 'unplayable' | 'missing' | 'session';
+  readonly kind:
+    | 'connection'
+    | 'unavailable'
+    | 'limited'
+    | 'busy'
+    | 'unplayable'
+    | 'missing'
+    | 'rejected'
+    | 'session';
   readonly message: string;
   /**
    * Retrying reuses the same idempotency key: a lost response is answered by
@@ -57,7 +71,7 @@ export function combatSessionReducer(
         : state;
     case 'fail':
       return state.phase === 'requesting'
-        ? { phase: 'failed', key: state.key, failure: action.failure }
+        ? { phase: 'failed', key: state.key, failure: action.failure, failedAt: action.at }
         : state;
     case 'finish':
       return state.phase === 'fighting' ? { ...state, phase: 'finished' } : state;
@@ -100,6 +114,18 @@ export function describeCombatFailure(error: unknown): CombatFailure {
   }
   if (error.status === 404) {
     return { kind: 'missing', message: 'Your hero could not be found.', retryable: false };
+  }
+  if (error.status === 429) {
+    // Not a verdict on the fight: the same key may be sent again, later.
+    return {
+      kind: 'limited',
+      message: 'Too many requests. Your fight is safe — try again in a moment.',
+      retryable: true,
+    };
+  }
+  if (error.status >= 400 && error.status < 500 && error.status !== 408) {
+    // Forbidden, invalid or otherwise refused: repeating it cannot help.
+    return { kind: 'rejected', message: 'The forge refused this fight.', retryable: false };
   }
   return {
     kind: 'unavailable',

@@ -33,3 +33,41 @@ export async function placeHeroOnStage(heroName: string, stage: bigint): Promise
     await client.end();
   }
 }
+
+export interface RecordedCombat {
+  readonly stage: string;
+  readonly stageMode: string;
+  readonly createdAt: Date;
+  readonly durationMs: number;
+}
+
+/**
+ * The combats the server recorded for the hero named `heroName`, oldest
+ * first. Read-only: used to prove what the server accepted, never to arrange.
+ */
+export async function recordedCombats(heroName: string): Promise<RecordedCombat[]> {
+  const client = new pg.Client({ connectionString: databaseUrl });
+  await client.connect();
+  try {
+    const result = await client.query<{
+      stage: string;
+      stage_mode: string;
+      created_at: Date;
+      duration_ms: number;
+    }>(
+      `SELECT r.stage::text AS stage, r.stage_mode, r.created_at, r.duration_ms
+         FROM combat_runs r JOIN characters c ON c.id = r.character_id
+        WHERE c.name = $1
+        ORDER BY r.created_at`,
+      [heroName],
+    );
+    return result.rows.map((row) => ({
+      stage: row.stage,
+      stageMode: row.stage_mode,
+      createdAt: row.created_at,
+      durationMs: row.duration_ms,
+    }));
+  } finally {
+    await client.end();
+  }
+}

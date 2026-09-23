@@ -161,8 +161,9 @@ minutes of farming, stage 50 about 48 minutes and stage 100 about 4 hours.
 Walls at each boss are intended. Builds (Phases 5–8) are meant to break them.
 
 IMPLEMENTED (Phase 4 PR 4.1): a player-controlled "stay and farm" choice —
-see "Stage selection and farming". FUTURE: auto-battle and offline
-progression (Phase 4 PR 4.2+).
+see "Stage selection and farming". IMPLEMENTED (Phase 4 PR 4.2): online
+auto-battle — see "Online auto-battle". FUTURE: offline progression
+(Phase 4 PR 4.3).
 
 ## Stage selection and farming — IMPLEMENTED (Phase 4 PR 4.1, ADR-021)
 
@@ -182,6 +183,25 @@ progression (Phase 4 PR 4.2+).
 - **Persistence.** The mode and stage are server state: they survive a
   refresh, a new session, an API restart and another device.
 
+## Online auto-battle — IMPLEMENTED (Phase 4 PR 4.2, ADR-022)
+
+- **What it is.** The player presses *Auto battle*; while the game is open and
+  visible, the hero fights one combat after another, in the selected mode.
+  *Stop auto battle* ends it after the fight in progress.
+- **Same fights, same pace.** Every auto fight is an ordinary combat: same
+  enemy, rules, rewards and stage transition, and the same pacing gate (a
+  combat occupies the hero for its duration). Auto-battle only saves the
+  taps; it never earns more per minute than tapping Fight at the right time.
+- **Modes.** Climbing on auto moves on after each win and falls back after a
+  loss, exactly as by hand. Farming on auto stays on the farm stage whatever
+  happens; the first win on an uncleared frontier stage is a real clear
+  (ADR-021). A mode or stage change while auto-battle runs applies to the next
+  fight.
+- **Online only.** It pauses while the game is hidden and stops on reload,
+  sign-out or a lasting error, and nothing is earned for time the game was
+  not in front of the player. Progress while away is offline progression
+  (PR 4.3), a separate, capped server calculation.
+
 Still FUTURE:
 
 - **FARM (original sketch).** The player picks any stage from 1 to
@@ -194,7 +214,8 @@ Still FUTURE:
 - **Auto modes.** *Push*, the Phase 3 behaviour: advance on a win, fall back
   on a loss. *Farm*: stay on the chosen stage. *Push then farm*: push until
   the first loss, then farm one stage below the wall. The server executes the
-  mode and the client only chooses it.
+  mode and the client only chooses it. (Online auto-battle, PR 4.2, runs the
+  two existing modes; *push then farm* is still FUTURE.)
 - **Offline progression (Phase 4)** simulates from `currentStage` under the
   selected mode and applies the same transition, so the records only ever
   rise offline as well.

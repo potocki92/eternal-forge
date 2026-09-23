@@ -92,7 +92,7 @@ export function useCombatSession(userId: string, characterId: string): CombatSes
           // The server knows better: fetch its current state.
           void queryClient.invalidateQueries({ queryKey: stateKey });
         }
-        dispatch({ type: 'fail', failure });
+        dispatch({ type: 'fail', failure, at: Date.now() });
       },
       onSettled: () => {
         inFlight.current = false;

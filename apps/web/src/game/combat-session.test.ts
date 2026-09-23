@@ -36,10 +36,10 @@ describe('combatSessionReducer', () => {
   it('keeps the key of a failed request', () => {
     const failed = reduce(
       { phase: 'requesting', key: 'k1' },
-      { type: 'fail', failure: connectionLost },
+      { type: 'fail', failure: connectionLost, at: 7 },
     );
 
-    expect(failed).toEqual({ phase: 'failed', key: 'k1', failure: connectionLost });
+    expect(failed).toEqual({ phase: 'failed', key: 'k1', failure: connectionLost, failedAt: 7 });
   });
 
   it('ignores responses that arrive for no pending request', () => {
@@ -54,16 +54,18 @@ describe('keyForNextFight', () => {
   const fresh = () => 'fresh';
 
   it('retries a retryable failure with the same key, so no second combat is fought', () => {
-    expect(keyForNextFight({ phase: 'failed', key: 'k1', failure: connectionLost }, fresh)).toBe(
-      'k1',
-    );
+    expect(
+      keyForNextFight({ phase: 'failed', key: 'k1', failure: connectionLost, failedAt: 0 }, fresh),
+    ).toBe('k1');
   });
 
   it('uses a new key for a new intent', () => {
     const busy = describeCombatFailure(new ApiError('busy', 409, { code: 'COMBAT_NOT_READY' }));
     expect(keyForNextFight(INITIAL_SESSION, fresh)).toBe('fresh');
     expect(keyForNextFight({ phase: 'finished', response, receivedAt: 0 }, fresh)).toBe('fresh');
-    expect(keyForNextFight({ phase: 'failed', key: 'k1', failure: busy }, fresh)).toBe('fresh');
+    expect(keyForNextFight({ phase: 'failed', key: 'k1', failure: busy, failedAt: 0 }, fresh)).toBe(
+      'fresh',
+    );
   });
 });
 
@@ -75,6 +77,10 @@ describe('describeCombatFailure', () => {
     [new ApiError('gone', 401, { code: 'UNAUTHENTICATED' }), 'session', false],
     [new ApiError('missing', 404, { code: 'NOT_FOUND' }), 'missing', false],
     [new ApiError('down', 503), 'unavailable', true],
+    [new ApiError('timeout', 408), 'unavailable', true],
+    [new ApiError('slow down', 429, { code: 'HTTP_ERROR' }), 'limited', true],
+    [new ApiError('forbidden', 403, { code: 'HTTP_ERROR' }), 'rejected', false],
+    [new ApiError('invalid', 400, { code: 'VALIDATION_FAILED' }), 'rejected', false],
     [new Error('bug'), 'unavailable', true],
   ])('%s → %s', (error, kind, retryable) => {
     expect(describeCombatFailure(error)).toMatchObject({ kind, retryable });
