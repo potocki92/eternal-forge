@@ -3,6 +3,7 @@ export type {
   CombatRules,
   EnemyArchetype,
   GameRules,
+  OfflineRules,
   ProgressionRules,
   RewardRules,
   StageRules,

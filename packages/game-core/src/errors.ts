@@ -15,6 +15,8 @@ export type GameCoreErrorCode =
   | 'INVALID_ARGUMENT'
   /** A stage the character has not reached was requested (ADR-021). */
   | 'STAGE_LOCKED'
+  /** A bounded computation would exceed its hard work limit (ADR-023). */
+  | 'LIMIT_EXCEEDED'
   | 'UNSUPPORTED_RULES_VERSION';
 
 export class GameCoreError extends Error {

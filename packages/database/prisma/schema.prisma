@@ -4,7 +4,9 @@
 // introduced by the phase that needs them. Phase 2 adds identity-linked player
 // data only: `profiles` and `characters` (ADR-017). Phase 3 adds progression
 // to `characters` and the combat record `combat_runs` (ADR-019). Phase 4 adds
-// the stage mode for stage selection and farming (ADR-021).
+// the stage mode for stage selection and farming (ADR-021), and offline
+// progression: the offline seed on `characters` and the claim record
+// `offline_runs` (ADR-023).
 //
 // Domain entities are NOT Prisma models. Prisma models are persistence models,
 // mapped to domain entities by repository implementations (CLAUDE.md —
@@ -57,34 +59,41 @@ model Profile {
 // `slot` makes "the main character" a data property instead of a schema
 // limit: Phase 2 provisions slot 1, and more slots need no migration.
 model Character {
-  id                  String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  profileId           String      @map("profile_id") @db.Uuid
-  slot                Int         @db.SmallInt
-  name                String      @db.VarChar(24)
-  level               Int         @default(1)
+  id                  String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  profileId           String       @map("profile_id") @db.Uuid
+  slot                Int          @db.SmallInt
+  name                String       @db.VarChar(24)
+  level               Int          @default(1)
   /// Stage progress (ADR-020). Stages are effectively unlimited, hence bigint.
   /// The stage the next combat is fought on — pushed or farmed.
-  currentStage        BigInt      @default(1) @map("current_stage")
+  currentStage        BigInt       @default(1) @map("current_stage")
   /// The highest stage ever unlocked. Never decreases.
-  highestStageReached BigInt      @default(1) @map("highest_stage_reached")
+  highestStageReached BigInt       @default(1) @map("highest_stage_reached")
   /// The highest stage ever defeated; NULL until the first clear. Never decreases.
-  highestStageCleared BigInt?     @map("highest_stage_cleared")
+  highestStageCleared BigInt?      @map("highest_stage_cleared")
   /// What a victory does to `current_stage` (ADR-021): climb on, or stay and farm.
-  stageMode           StageMode   @default(PROGRESS) @map("stage_mode")
+  stageMode           StageMode    @default(PROGRESS) @map("stage_mode")
   /// Experience within the current level (HugeNumber pair).
-  experienceCoef      BigInt      @default(0) @map("experience_coef")
-  experienceExp       Int         @default(-2147483648) @map("experience_exp")
+  experienceCoef      BigInt       @default(0) @map("experience_coef")
+  experienceExp       Int          @default(-2147483648) @map("experience_exp")
   /// Gold (HugeNumber pair).
-  goldCoef            BigInt      @default(0) @map("gold_coef")
-  goldExp             Int         @default(-2147483648) @map("gold_exp")
+  goldCoef            BigInt       @default(0) @map("gold_coef")
+  goldExp             Int          @default(-2147483648) @map("gold_exp")
   /// Server time before which the character is still fighting its last combat.
-  nextCombatAt        DateTime    @default(now()) @map("next_combat_at") @db.Timestamptz(3)
+  /// Also the processed boundary of offline progression (ADR-023): every
+  /// instant before it is accounted for, by a fight online or offline.
+  nextCombatAt        DateTime     @default(now()) @map("next_combat_at") @db.Timestamptz(3)
+  /// Server-held seed of the next offline claim (ADR-023). Never sent to a
+  /// client; replaced by a fresh CSPRNG seed on every committed claim, so the
+  /// fights of a claim cannot be re-rolled by asking again.
+  offlineSeed         String       @default(dbgenerated("(replace((gen_random_uuid())::text, '-'::text, ''::text) || replace((gen_random_uuid())::text, '-'::text, ''::text))")) @map("offline_seed") @db.VarChar(64)
   /// Optimistic concurrency token: every progression write increments it.
-  version             BigInt      @default(0)
-  createdAt           DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt           DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
-  profile             Profile     @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  version             BigInt       @default(0)
+  createdAt           DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  profile             Profile      @relation(fields: [profileId], references: [id], onDelete: Cascade)
   combatRuns          CombatRun[]
+  offlineRuns         OfflineRun[]
 
   @@unique([profileId, slot], map: "characters_profile_id_slot_key")
   @@map("characters")
@@ -158,4 +167,58 @@ model CombatRun {
 
   @@unique([characterId, idempotencyKey], map: "combat_runs_character_id_idempotency_key_key")
   @@map("combat_runs")
+}
+
+// One offline claim that fought (ADR-023): the replay inputs and the audited
+// summary of every fight in it. Claims that fight nothing write no row.
+//
+// Offline fights are not written to `combat_runs` one by one: an 8-hour claim
+// holds up to 28 800 of them. `resolveOfflineProgress(inputs, seed,
+// rules_version)` regenerates each fight exactly, and the summary columns are
+// the ledger entry for the gold and experience the claim granted.
+//
+// `(character_id, idempotency_key)` is unique: a retried claim finds the
+// result it already produced instead of claiming again.
+model OfflineRun {
+  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  characterId          String    @map("character_id") @db.Uuid
+  /// Client-generated per claim intent. Carries no gameplay input.
+  idempotencyKey       String    @map("idempotency_key") @db.Uuid
+  /// GAME_RULES_VERSION the claim was resolved under.
+  rulesVersion         Int       @map("rules_version")
+  /// Server seed of the claim. Never chosen by or sent to the client.
+  seed                 String    @db.VarChar(64)
+  // Time, all server clock. Idle time ran from `idle_since` (the processed
+  // boundary before the claim) to `created_at` (the claim). Fights filled
+  // `rewarded_from` … `processed_until`, the new boundary.
+  idleSince            DateTime  @map("idle_since") @db.Timestamptz(3)
+  rewardedFrom         DateTime  @map("rewarded_from") @db.Timestamptz(3)
+  processedUntil       DateTime  @map("processed_until") @db.Timestamptz(3)
+  // Progression at the claim: the replay input. The stage progress is the
+  // same after it; offline fights never move a stage or a record.
+  currentStage         BigInt    @map("current_stage")
+  highestStageReached  BigInt    @map("highest_stage_reached")
+  highestStageCleared  BigInt    @map("highest_stage_cleared")
+  characterLevel       Int       @map("character_level")
+  experienceBeforeCoef BigInt    @map("experience_before_coef")
+  experienceBeforeExp  Int       @map("experience_before_exp")
+  goldBeforeCoef       BigInt    @map("gold_before_coef")
+  goldBeforeExp        Int       @map("gold_before_exp")
+  // Summary of the result: the audit record.
+  /// The stage farmed: always a stage already cleared.
+  targetStage          BigInt    @map("target_stage")
+  fights               Int
+  wins                 Int
+  losses               Int
+  levelsGained         Int       @map("levels_gained")
+  rewardGoldCoef       BigInt    @map("reward_gold_coef")
+  rewardGoldExp        Int       @map("reward_gold_exp")
+  rewardExperienceCoef BigInt    @map("reward_experience_coef")
+  rewardExperienceExp  Int       @map("reward_experience_exp")
+  /// Server time of the claim: the end of the idle time it counted.
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  character            Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@unique([characterId, idempotencyKey], map: "offline_runs_character_id_idempotency_key_key")
+  @@map("offline_runs")
 }

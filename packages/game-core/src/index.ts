@@ -29,6 +29,7 @@ export type {
   CombatRules,
   EnemyArchetype,
   GameRules,
+  OfflineRules,
   ProgressionRules,
   RewardRules,
   StageRules,
@@ -99,3 +100,10 @@ export type {
   StageProgress,
   StageSelection,
 } from './progression/index.js';
+
+export { MAX_OFFLINE_FIGHTS, offlineFarmStage, resolveOfflineProgress } from './offline/index.js';
+export type {
+  OfflineIdleReason,
+  OfflineProgressInput,
+  OfflineProgressResult,
+} from './offline/index.js';

@@ -103,3 +103,14 @@ export type {
   ProgressSnapshotDto,
   RewardsDto,
 } from './combat/combat.contract.js';
+
+export {
+  offlineIdleReasonSchema,
+  offlineProgressResponseSchema,
+  offlineProgressSchema,
+} from './game/offline-progress.contract.js';
+export type {
+  OfflineIdleReasonDto,
+  OfflineProgressDto,
+  OfflineProgressResponse,
+} from './game/offline-progress.contract.js';
