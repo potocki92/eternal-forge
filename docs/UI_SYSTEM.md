@@ -17,6 +17,9 @@ IMPLEMENTED (Phase 3): the first game screen and the PixiJS combat scene —
 see "Game screen (Phase 3)" at the end of this document — plus the
 `ProgressBar` primitive and the HugeNumber formatter.
 
+IMPLEMENTED (Phase 4 PR 4.1): the stage selector on the game screen — see
+"Stage selector (Phase 4 PR 4.1)" at the end of this document.
+
 PLANNED: everything else in this document, including bottom navigation, item
 presentation and final art.
 
@@ -554,3 +557,44 @@ CombatScene interface  ──  PixiCombatScene (lazy import of pixi.js)
 - The scene's colours live in one palette module that mirrors the design
   tokens. Enemy looks are a data table keyed by archetype id, with a generic
   fallback, so new content never needs scene code.
+
+---
+
+# Stage selector (Phase 4 PR 4.1)
+
+Status: IMPLEMENTED (ADR-021).
+
+```
+┌──────────────────────────────┐
+│ HUD (unchanged)              │
+├──────────────────────────────┤
+│ Farming stage 42 · stays on  │  summary + [Change] (aria-expanded)
+│ this stage          [Change] │
+├──────────────────────────────┤  ── open: an overlay over the battlefield
+│ Where should your hero fight?│     (fieldset + legend)
+│ (•) Continue climbing        │     radio, described by its hint
+│ ( ) Stay on this stage       │
+│ Stage to farm                │
+│ [ − ] [    42    ] [ + ]     │     bigint stepper + typed stage
+│ Stages 1 to 100 are open.    │     hint; inline error when out of range
+│ [Cancel]   [Farm stage 42]   │
+└──────────────────────────────┘
+```
+
+- **Scales to any stage.** No list of stages is rendered: a stepper and a
+  typed number work the same at stage 12 and at stage 12 billion. Stages stay
+  canonical strings, compared and stepped as `BigInt`.
+- **Server truth only.** The open range is the server's
+  `highestStageReached`; the draft check is convenience. There is no
+  optimistic update: the summary, the HUD and the next enemy change when the
+  server's answer arrives, so a locked stage is never shown.
+- **States.** Saving (button "Saving…", form `aria-busy`, Fight disabled),
+  refused (danger `Alert` with the API's sentence, state re-read), locked
+  while a combat plays ("Change" disabled), unchanged choice ("Already
+  selected", disabled).
+- **Keyboard and screen readers.** Native radios (arrow keys), labelled input
+  with hint and error in `aria-describedby`, `aria-invalid`, focus moves to
+  the checked choice on open and back to "Change" on close; Escape closes.
+- **Layout.** At 390×844 the open form overlays the battlefield instead of
+  squeezing it (found by screenshot review); on desktop it overlays the same
+  framed column.

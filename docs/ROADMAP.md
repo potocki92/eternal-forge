@@ -4,16 +4,16 @@ Last updated: 2026-09-23
 
 # Current Phase
 
-PHASE 3 — FIRST GAMEPLAY LOOP
+PHASE 4 — OFFLINE PROGRESSION (delivered as several PRs)
 
 Status:
 
-IMPLEMENTED — final audit fixes and the stage progression model (ADR-020)
-added to PR #6; GitHub Actions green (run #25, `610e633`); awaiting user
-approval. Decision records:
-ADR-019 (the server-authoritative combat transaction) and ADR-020 (stage
-progression model). See "Validation" and "Final audit" under Phase 3. Phase 4
-must not start without approval.
+IN PROGRESS — PR 4.1 "Stage Selection & Farming" implemented and awaiting
+review (ADR-021, proposed). PR 4.2 and later must not start without the
+user's approval of PR 4.1. See "Phase 4" below.
+
+Phase 3 was merged to `main` as PR #6 (followed by the Supabase deployment
+PRs #7 and #8). The user started Phase 4 on 2026-09-23 with the PR 4.1 task.
 
 Phase 2 is COMPLETE / APPROVED: the post-audit hardening (ADR-018) was merged
 as PR #5, and GitHub Actions is green on `main` (run #13 on `fb3db8b`, the merge
@@ -383,8 +383,8 @@ Validation (2026-09-23, local, PostgreSQL 16 and Redis 7):
 
 # Phase 3 — First Gameplay Loop
 
-Status: IMPLEMENTED — final audit applied; CI green on PR #6 (run #25);
-awaiting user approval (2026-09-23)
+Status: MERGED — PR #6 merged to `main` after CI run #25; the user started
+Phase 4 on 2026-09-23
 
 Goal:
 
@@ -453,7 +453,7 @@ Tasks:
       (docs/DEPLOYMENT.md)
 - [ ] Vercel deployment — OWNER ACTION, and a playable deployment is
       BLOCKED on the API host decision (ADR-012, owner decision)
-- [ ] user approval
+- [x] merged — PR #6
 
 Validation (2026-09-23, local, PostgreSQL 16 and Redis 7):
 
@@ -575,7 +575,80 @@ the generic idempotency table, and hosting the API (ADR-012).
 
 # Phase 4 — Offline Progression
 
-Status: NOT STARTED
+Status: IN PROGRESS — PR 4.1 implemented, awaiting review
+
+Phase 4 is delivered as a sequence of PRs, one at a time. Each waits for the
+user's approval before the next begins.
+
+## PR 4.1 — Stage Selection & Farming
+
+Status: IMPLEMENTED — awaiting review and CI. Decision: ADR-021 (proposed).
+
+Scope: the foundation auto-battle and offline progression attach to — where
+the hero fights and what a victory does to that position. No auto-battle,
+timers, background combat, worker jobs, offline rewards or
+`last_processed_at`.
+
+- [x] Game Core — `StageMode` (`PROGRESS` / `FARM`), `selectStage` (bound
+      `1 … highestReached`, `STAGE_LOCKED`), `advanceStageProgress` and
+      `resolveStageAttempt` take the mode. Records move identically in both
+      modes; a farm win stays on the stage. `GAME_RULES_VERSION` stays 1:
+      Phase 3 golden fingerprints unchanged, a new FARM golden vector added
+- [x] persistence — migration `20260923140000_stage_selection`: enum
+      `stage_mode`, `characters.stage_mode` (default `PROGRESS`),
+      `combat_runs.stage_mode` (replay input, backfilled `PROGRESS`, no
+      default). `current_stage` is reused as the selected stage
+- [x] use case — `SelectStageUseCase`: owner-scoped read, Game Core
+      validation, version-conditional write of `current_stage` and
+      `stage_mode` only, bounded re-validation on conflict, no-op when
+      unchanged
+- [x] API — `PUT /player/characters/:characterId/stage-selection`;
+      `409 STAGE_LOCKED`, `409 CONCURRENT_UPDATE`
+- [x] combat — reads the mode from persisted state, records it, replays with
+      it; transaction, idempotency and pacing unchanged
+- [x] contracts — `stageModeSchema`, `progression.stageMode`,
+      `stageSelectionRequestSchema` (strict), `stageSelectionResponseSchema`,
+      two error codes
+- [x] web — `StageSelector` under the HUD: summary + "Change", radio choice
+      "Continue climbing" / "Stay on this stage", bigint stepper and typed
+      stage, range hint, validation, overlay panel at 390×844, no optimistic
+      update; defeat text "stays on stage N" when farming
+- [x] fix found while testing — an oversized request body (`413` from the
+      body parser) was answered as a logged `500`; the exception filter now
+      keeps exposed 4xx statuses from Express middleware
+- [x] documentation — ADR-021, ARCHITECTURE, GAME_DESIGN, DATABASE,
+      SECURITY, UI_SYSTEM
+- [ ] GitHub Actions green on the pull request
+- [ ] user review and approval
+
+Validation (2026-09-23, local, PostgreSQL 16 and Redis 7):
+
+- format check, lint, typecheck, production build: pass.
+- Unit tests: 1 025 pass (Phase 3 final: 868) — `game-core` 473,
+  `contracts` 141, `api` 198, `web` 148, `config` 33, `ui` 18, `database` 10,
+  `worker` 4.
+- PostgreSQL integration: 81 pass (was 64), five consecutive runs. New:
+  selection persisted across a fresh API process and a new token; a farm
+  stage of 2^53 + 1 stored and served exactly; locked stage leaves the row
+  byte-identical; 20 farm wins below an unbeaten stage-100 boss keep
+  `99 / 100 / 99` with every run recorded as `FARM`; climbing after farming
+  fights the boss; replay after a mode change; selections, climbs and combats
+  racing across two API instances keep every invariant; stale and
+  foreign-owner selection writes rejected; enum and CHECK constraints.
+- Playwright: 46 pass (was 42), mobile 390×844 and desktop; the new scenario
+  (register → fight twice → locked stage refused → farm stage 1 → farm win →
+  reload → sign out/in → climb again → fight) and a keyboard-only scenario;
+  both stable over three repeats.
+- Migrations: applied to the development database and to a database with
+  Phase 3 data (characters farming and climbing, a recorded boss loss):
+  every row backfilled `PROGRESS`, no other value changed; `prisma migrate
+  diff --exit-code` reports no drift.
+
+Deferred to PR 4.2+: auto-battle, offline progression (`last_processed_at`,
+elapsed time, cap, rewards, claim, the generic idempotency table, summary UI)
+and the decision whether an offline run may climb or only farm.
+
+## Phase 4 scope (whole phase)
 
 Implement:
 

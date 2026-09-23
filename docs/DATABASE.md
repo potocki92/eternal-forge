@@ -9,8 +9,9 @@ speculative schema. Phase 2 added `profiles` and `characters` (ADR-017). Phase 3
 added progression columns to `characters` and the `combat_runs` table (migration
 `20260923053138_gameplay_loop`, ADR-019). The Phase 3 final audit split the
 stage into the current stage and two records (migration
-`20260923090000_stage_progression`, ADR-020). Everything else under "Planned
-domains" below is PLANNED.
+`20260923090000_stage_progression`, ADR-020). Phase 4 PR 4.1 added the stage
+mode (migration `20260923140000_stage_selection`, ADR-021). Everything else
+under "Planned domains" below is PLANNED.
 
 Database:
 
@@ -154,6 +155,18 @@ stage 7 with no combats becomes `7 / 7 / NULL`, so nothing is claimed that the
 data does not prove. The migration was verified from an empty database, from
 the Phase 2 schema and from Phase 3 data, with no drift in any case.
 
+Stage mode — added by Phase 4 PR 4.1 (ADR-021, migration
+`20260923140000_stage_selection`):
+
+| Column       | Type                                   | Rules                                                                 |
+| ------------ | -------------------------------------- | --------------------------------------------------------------------- |
+| `stage_mode` | enum `stage_mode` (`PROGRESS`, `FARM`) | NOT NULL, default `PROGRESS`; what a victory does to `current_stage` |
+
+`current_stage` doubles as the selected farm stage; no second column exists.
+The existing CHECK `current_stage ≤ highest_stage_reached` bounds every
+selection in the database as well. A selection writes only `current_stage`,
+`stage_mode` and `version`. Backfill: every existing character `PROGRESS`.
+
 Rankings (Phase 10, PLANNED) will rank `highest_stage_cleared`: a proven,
 monotonic value that farming cannot lower. The index for that query arrives
 with the ranking, not before.
@@ -254,7 +267,7 @@ combat_runs — one row per resolved combat
 | Group        | Columns                                                                                     |
 | ------------ | ------------------------------------------------------------------------------------------- |
 | identity     | `id` uuid PK, `character_id` FK → `characters` ON DELETE CASCADE, `idempotency_key` uuid, `created_at` (resolution time, API clock) |
-| replay input | `rules_version`, `seed` varchar(64), `stage` bigint (the stage fought), `highest_stage_reached_before` bigint, `highest_stage_cleared_before` bigint NULL (ADR-020), `character_level`, `experience_before_*`, `gold_before_*` |
+| replay input | `rules_version`, `seed` varchar(64), `stage` bigint (the stage fought), `highest_stage_reached_before` bigint, `highest_stage_cleared_before` bigint NULL (ADR-020), `stage_mode` enum NOT NULL, no default (ADR-021; existing rows backfilled `PROGRESS`), `character_level`, `experience_before_*`, `gold_before_*` |
 | audit output | `outcome` (enum WIN/LOSS), `end_reason` (enum), `duration_ms`, `reward_gold_*`, `reward_experience_*` |
 
 Constraints: UNIQUE `(character_id, idempotency_key)`. Every HugeNumber pair is
@@ -470,6 +483,12 @@ exactly one matches. Game Core runs before the transaction, which stays two
 statements long. Integration tests fire 25 simultaneous combats at one
 character and interleave retried requests across two API instances. Each
 case produces exactly one combat, one reward and one stage change.
+
+Implemented example (Phase 4 PR 4.1, ADR-021): stage selection uses the same
+`version`. Its write is `UPDATE … WHERE version = <read version>`, so a
+combat simulated before a selection cannot commit after it, and a selection
+that loses to a combat re-validates against the fresh row. An integration
+test races selections, climbs and combats across two API instances.
 
 Example:
 

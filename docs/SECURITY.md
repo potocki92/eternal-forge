@@ -1,6 +1,6 @@
 # Eternal Forge — Security Model
 
-Status: PARTIALLY IMPLEMENTED (Phases 0–3) / EVOLVING
+Status: PARTIALLY IMPLEMENTED (Phases 0–3, Phase 4 PR 4.1) / EVOLVING
 
 The principles below are binding from the first line of gameplay code. A
 per-control implementation status is listed at the end of this document.
@@ -511,6 +511,44 @@ See ADR-019.
   by CHECK. Level is bounded by Game Core and the column.
 - Can the operation leave partial state? No. The progress update and the
   combat row commit in one transaction or not at all.
+
+## IMPLEMENTED (Phase 4 PR 4.1) — stage selection
+
+See ADR-021.
+
+- **The client states an intent, the server decides.** The body is
+  `{ mode: "PROGRESS" }` or `{ mode: "FARM", stage }`, validated by a strict
+  shared schema: any extra field (a record, a reward, an owner) is a 400, and
+  the stage must be a canonical decimal string of 1 … 2^63 − 1. Game Core's
+  `selectStage` then checks the stage against the character's own
+  `highestStageReached`; beyond it is `409 STAGE_LOCKED`, never clamped. The
+  database CHECK `current_stage ≤ highest_stage_reached` backs it.
+- **No record can be written by a selection.** The repository writes only
+  `current_stage`, `stage_mode` and `version`. Records rise only through a
+  committed win, in either mode.
+- **Ownership** is in the read and in the conditional write; another player's
+  character is a 404.
+- **Combat reads the mode from the database**, never from the request, and
+  records it on `combat_runs` for replay.
+- **Error bodies never echo the submitted value.** An oversized body is now a
+  `413` with the standard phrase; it used to be a logged `500`.
+
+## Standing review answers — Phase 4 PR 4.1 (stage selection)
+
+- Can the client fake it? It can ask for any stage; only a reached stage is
+  accepted, and the choice grants nothing by itself.
+- Can it be replayed? Repeating a selection sets the same value; no key is
+  needed.
+- Can it be called concurrently? Yes. Selection and combat share the version
+  check; the loser writes nothing. Verified against PostgreSQL across two API
+  instances.
+- Can rewards be duplicated? No: a selection grants none, and combat
+  idempotency is unchanged.
+- Can another player's resource be targeted? No: 404, and the write is
+  owner-scoped.
+- Can invalid numeric values enter? No: canonical strings, exact `bigint`
+  comparison (`2^53 + 4` is not accepted against a frontier of `2^53 + 3`).
+- Can the operation leave partial state? No: one single-row `UPDATE`.
 
 ## Known limitations
 

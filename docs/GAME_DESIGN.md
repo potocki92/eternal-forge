@@ -160,17 +160,34 @@ reached after about 1 minute of combat time. The first boss takes about 8
 minutes of farming, stage 50 about 48 minutes and stage 100 about 4 hours.
 Walls at each boss are intended. Builds (Phases 5–8) are meant to break them.
 
-FUTURE: a player-controlled "stay and farm" toggle, auto-battle, and offline
-progression (Phase 4).
+IMPLEMENTED (Phase 4 PR 4.1): a player-controlled "stay and farm" choice —
+see "Stage selection and farming". FUTURE: auto-battle and offline
+progression (Phase 4 PR 4.2+).
 
-## Stage selection and farming — FUTURE (UX direction, not implemented)
+## Stage selection and farming — IMPLEMENTED (Phase 4 PR 4.1, ADR-021)
 
-The records make these possible without a schema change. None of them exists
-yet.
+- **Two modes.** *Continue climbing* (`PROGRESS`) is the Phase 3 behaviour:
+  a win moves on, a loss falls back one stage. *Stay on this stage* (`FARM`)
+  keeps the hero on the chosen stage after a win **and** after a loss.
+- **Choosing a stage.** Farming may use any stage from 1 to
+  `highestStageReached`, including the frontier itself (to retry a boss).
+  A higher stage is refused (`STAGE_LOCKED`). "Continue climbing" always
+  resumes from `highestStageReached`; the player sends no stage.
+- **Same fight, same pay.** A farm combat uses the same enemy, combat,
+  rewards and experience as climbing. Only the next position differs.
+- **Records.** A win clears the stage fought and unlocks the next, in either
+  mode; a loss changes no record. Farming stage 99 below an unbeaten stage-100
+  boss keeps `99 / 100 / 99` however often it is won. Winning a reached but
+  uncleared stage while farming it is a real clear and is recorded as one.
+- **Persistence.** The mode and stage are server state: they survive a
+  refresh, a new session, an API restart and another device.
 
-- **FARM.** The player picks any stage from 1 to `highestStageReached` as the
-  current stage. Rewards are those of the chosen stage. The records do not
-  move until the player wins beyond them.
+Still FUTURE:
+
+- **FARM (original sketch).** The player picks any stage from 1 to
+  `highestStageReached` as the current stage. Rewards are those of the chosen
+  stage. The records do not move until the player wins beyond them —
+  implemented as described above.
 - **CHALLENGE BOSS.** Farming stops below a boss. A single action moves the
   hero to the boss stage it has reached. On defeat it returns to the farm
   stage the player chose, instead of the default fallback.

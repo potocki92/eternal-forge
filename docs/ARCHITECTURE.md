@@ -1,6 +1,6 @@
 # Eternal Forge — Software Architecture
 
-Status: PARTIALLY IMPLEMENTED (Phases 0–3) / EVOLVING
+Status: PARTIALLY IMPLEMENTED (Phases 0–3, Phase 4 PR 4.1) / EVOLVING
 
 The architectural style, boundaries and package layout described here are
 IMPLEMENTED as of Phase 0. The headless Game Core simulation (HugeNumber, RNG,
@@ -8,7 +8,8 @@ versioned rules, combat, stages, rewards) is IMPLEMENTED as of Phase 1.
 Authentication, player identity persistence and the first authenticated API are
 IMPLEMENTED in Phase 2. The first persistent gameplay loop — server-authoritative
 combat, progression persistence, the game screen and the PixiJS combat scene —
-is IMPLEMENTED in Phase 3 (ADR-019 and ADR-020, awaiting approval). Domain events, CQRS
+is IMPLEMENTED in Phase 3 (ADR-019 and ADR-020). Stage selection and farming
+are IMPLEMENTED in Phase 4 PR 4.1 (ADR-021, proposed). Domain events, CQRS
 infrastructure, offline processing and leaderboards are PLANNED.
 
 See the "Phase N implementation status" sections at the end of this document
@@ -148,7 +149,9 @@ contracts (`PlayerStateResponse`, `ProvisionPlayerRequest`,
 `CharacterResponse`), and — Phase 3 — the HugeNumber wire format
 (`hugeNumberSchema`, delegating to Game Core's `HugeNumber.isCanonical` as
 ADR-013 approved), the derived `progression` block and the combat contract
-(`CombatResponse`, `IDEMPOTENCY_KEY_HEADER`).
+(`CombatResponse`, `IDEMPOTENCY_KEY_HEADER`). Phase 4 PR 4.1 added the stage
+mode (`stageModeSchema`, `progression.stageMode`) and the stage-selection
+contract (`StageSelectionRequest`, `StageSelectionResponse`).
 
 ---
 
@@ -835,3 +838,63 @@ Offline progression (Phase 4 attaches at `next_combat_at` and the version
 check, ADR-019 §10), the generic idempotency table, rate limiting beyond the
 per-character pacing gate, combat history endpoints, auto-battle, and a
 production host for the API (ADR-012, owner decision — docs/DEPLOYMENT.md).
+
+---
+
+# Phase 4 PR 4.1 implementation status — stage selection and farming
+
+Status: IMPLEMENTED — awaiting review. Decision: ADR-021 (proposed).
+
+## Request flow
+
+```
+Browser (StageSelector)
+  │  PUT /player/characters/:characterId/stage-selection
+  │  { "mode": "FARM", "stage": "42" }  or  { "mode": "PROGRESS" }
+  v
+apps/api
+  AuthGuard ── verified identity (ADR-016)
+  StageSelectionController (thin: strict shared Zod schema, StageNumber.parse)
+  SelectStageUseCase
+    1. StageSelectionRepository.loadOwnedCharacter(authUserId, characterId)
+    2. Game Core selectStage(stages, selection)   ── STAGE_LOCKED → 409
+    3. unchanged → no write
+    4. saveSelection: UPDATE characters SET current_stage, stage_mode,
+         version = version + 1 WHERE id AND version AND owner RETURNING *
+       conflict → re-read and re-validate (≤ 3 attempts) → 409 CONCURRENT_UPDATE
+  │
+  │  200 { character, progression (with stageMode), serverTime }
+  v
+Browser — writes the authoritative state into the player-state cache
+```
+
+The combat flow of Phase 3 is unchanged except that `RunCombatUseCase` passes
+the persisted `stageMode` to `resolveStageAttempt` and records it on
+`combat_runs`; a replay resolves under the recorded mode.
+
+## Module layout
+
+```
+packages/game-core/src/progression/stage-progress.ts   StageMode, selectStage,
+                                                        advanceStageProgress(mode)
+apps/api/src/player/
+  application/select-stage.use-case.ts
+  application/ports/stage-selection-repository.port.ts
+  infrastructure/prisma-stage-selection.repository.ts
+  presentation/stage-selection.controller.ts
+packages/contracts/src/game/stage-selection.contract.ts
+apps/web/src/game/stage-selection/   API call, mutation hook, pure draft helpers
+apps/web/src/game/components/stage-selector.tsx
+```
+
+## Concurrency
+
+Selection and combat share `characters.version`. Whichever commits first
+wins; the other's conditional write matches no row. A losing combat writes
+nothing (and answers `409`); a losing selection re-validates against the
+fresh row. No lock is held across a simulation and nothing is process-local.
+
+## NOT IMPLEMENTED
+
+Auto-battle, offline progression, background combat and worker gameplay jobs
+(Phase 4 PR 4.2+).
