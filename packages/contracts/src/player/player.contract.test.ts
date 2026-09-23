@@ -20,6 +20,7 @@ const state = {
     currentStage: '1',
     highestStageReached: '1',
     highestStageCleared: null,
+    stageMode: 'PROGRESS',
     experienceToNextLevel: '1e1',
     hero: { maxHealth: '1e2', damage: '1e1' },
     encounter: {
@@ -129,5 +130,25 @@ describe('provisionPlayerRequestSchema', () => {
     });
 
     expect(result.success).toBe(false);
+  });
+});
+
+describe('progression.stageMode (ADR-021)', () => {
+  it.each(['PROGRESS', 'FARM'])('accepts %s', (stageMode) => {
+    expect(
+      playerStateResponseSchema.parse({
+        ...state,
+        progression: { ...state.progression, stageMode },
+      }).progression.stageMode,
+    ).toBe(stageMode);
+  });
+
+  it.each([['farm'], ['CLIMB'], [''], [1], [null], [undefined]])('rejects %j', (stageMode) => {
+    expect(
+      playerStateResponseSchema.safeParse({
+        ...state,
+        progression: { ...state.progression, stageMode },
+      }).success,
+    ).toBe(false);
   });
 });

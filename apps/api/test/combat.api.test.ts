@@ -40,6 +40,7 @@ beforeEach(async () => {
     issuer,
     players: repository,
     combats: repository,
+    selections: repository,
     seeds: sequentialSeeds('http'),
     clock,
   });

@@ -1,4 +1,4 @@
-import type { HugeNumber, StageProgress } from '@eternal-forge/game-core';
+import type { HugeNumber, StageMode, StageProgress } from '@eternal-forge/game-core';
 import type { Character, Player } from '../../domain/player.js';
 
 export interface ProvisionPlayerData {
@@ -8,6 +8,7 @@ export interface ProvisionPlayerData {
   readonly characterSlot: number;
   readonly characterLevel: number;
   readonly characterStages: StageProgress;
+  readonly characterStageMode: StageMode;
   readonly characterExperience: HugeNumber;
   readonly characterGold: HugeNumber;
   /**

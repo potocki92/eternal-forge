@@ -1,7 +1,9 @@
 import {
   HugeNumber,
+  INITIAL_STAGE_MODE,
   INITIAL_STAGE_PROGRESS,
   type CharacterProgress,
+  type StageMode,
   type StageProgress,
 } from '@eternal-forge/game-core';
 
@@ -40,6 +42,11 @@ export interface Character {
    * to 2^63 − 1, a PostgreSQL `bigint` (ADR-018).
    */
   readonly stages: StageProgress;
+  /**
+   * What a victory does to the current stage: climb on, or stay and farm
+   * (ADR-021). Chosen by the player, validated and applied by Game Core.
+   */
+  readonly stageMode: StageMode;
   /** Experience within the current level. A whole, non-negative amount. */
   readonly experience: HugeNumber;
   readonly gold: HugeNumber;
@@ -75,6 +82,7 @@ export const MAIN_CHARACTER_SLOT = 1;
 export const NEW_CHARACTER_STATE = {
   level: 1,
   stages: INITIAL_STAGE_PROGRESS,
+  stageMode: INITIAL_STAGE_MODE,
   experience: HugeNumber.ZERO,
   gold: HugeNumber.ZERO,
 } as const;

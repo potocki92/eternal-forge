@@ -1,4 +1,4 @@
-import { HugeNumber } from '@eternal-forge/game-core';
+import { HugeNumber, type StageMode } from '@eternal-forge/game-core';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import type {
@@ -29,6 +29,7 @@ interface ProfileRow {
 
 export interface CharacterRow extends StageProgressColumns {
   readonly id: string;
+  readonly stageMode: StageMode;
   readonly profileId: string;
   readonly slot: number;
   readonly name: string;
@@ -103,6 +104,7 @@ export class PrismaPlayerRepository implements PlayerRepository {
             name: data.characterName,
             level: data.characterLevel,
             ...toStageProgressColumns(data.characterStages),
+            stageMode: data.characterStageMode,
             experienceCoef: data.characterExperience.toParts().coefficient,
             experienceExp: data.characterExperience.toParts().exponent,
             goldCoef: data.characterGold.toParts().coefficient,
@@ -142,6 +144,7 @@ export function toCharacter(row: CharacterRow): Character {
     name: row.name,
     level: row.level,
     stages: toStageProgress(row),
+    stageMode: row.stageMode,
     // HugeNumber pairs map one-to-one to toParts()/fromParts() (ADR-013).
     // fromParts rejects a non-normalised pair instead of repairing it.
     experience: HugeNumber.fromParts(row.experienceCoef, row.experienceExp),

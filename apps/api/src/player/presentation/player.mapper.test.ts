@@ -32,6 +32,7 @@ function character(stage: StageNumber, stages: StageProgress = pushingAt(stage))
     name: 'Ember',
     level: 1,
     stages,
+    stageMode: 'PROGRESS',
     experience: HugeNumber.ZERO,
     gold: HugeNumber.fromDecimal('1e30'),
     nextCombatAt: new Date('2026-09-22T10:00:00.000Z'),

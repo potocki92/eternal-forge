@@ -30,7 +30,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const response = http.getResponse<Response>();
 
     const status: number =
-      exception instanceof HttpException ? exception.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
+      exception instanceof HttpException
+        ? exception.getStatus()
+        : (clientErrorStatus(exception) ?? HttpStatus.INTERNAL_SERVER_ERROR);
 
     const requestId = request.header(REQUEST_ID_HEADER);
 
@@ -64,6 +66,24 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     response.status(status).json(body);
   }
+}
+
+/**
+ * The status of a client error raised before routing by Express middleware —
+ * the body parser's `413 Payload Too Large` or `415 Unsupported Media Type`.
+ * They follow the `http-errors` convention: a 4xx `status` and `expose: true`.
+ * They are the client's fault, not a server defect, so they must not become a
+ * logged 500. Their message is still never sent: only the status phrase is.
+ */
+function clientErrorStatus(exception: unknown): number | undefined {
+  if (typeof exception !== 'object' || exception === null) {
+    return undefined;
+  }
+  const status = 'status' in exception ? exception.status : undefined;
+  const expose = 'expose' in exception ? exception.expose : undefined;
+  return typeof status === 'number' && status >= 400 && status < 500 && expose === true
+    ? status
+    : undefined;
 }
 
 function codeFor(exception: unknown, status: number): ApiErrorCode {

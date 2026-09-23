@@ -2,6 +2,7 @@ import {
   GAME_RULES_VERSION,
   describeProgress,
   type ProgressDescription,
+  type StageMode,
   type StageProgress,
 } from '@eternal-forge/game-core';
 import { progressOf, type Character } from './player.js';
@@ -15,6 +16,8 @@ import { progressOf, type Character } from './player.js';
  */
 export interface ProgressionView extends ProgressDescription {
   readonly stages: StageProgress;
+  /** Climbing or farming (ADR-021). */
+  readonly stageMode: StageMode;
   readonly nextCombatAt: Date;
 }
 
@@ -25,6 +28,7 @@ export function viewProgression(
   return {
     ...describeProgress(progressOf(character), rulesVersion),
     stages: character.stages,
+    stageMode: character.stageMode,
     nextCombatAt: character.nextCombatAt,
   };
 }

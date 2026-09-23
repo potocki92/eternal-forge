@@ -28,6 +28,7 @@ record; it is never edited away (CLAUDE.md — "ADR").
 | [018](ADR-018-stage-number.md) | StageNumber: an exact integer for stage progression | Accepted |
 | [019](ADR-019-server-authoritative-combat-transaction.md) | The server-authoritative combat transaction | Accepted (amended by 020) |
 | [020](ADR-020-stage-progression-model.md) | Stage progression model: current stage and records | Accepted |
+| [021](ADR-021-stage-selection-and-farming.md) | Stage selection and farming | Proposed |
 
 ## Format
 

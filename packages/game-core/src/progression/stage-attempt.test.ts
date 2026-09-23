@@ -10,7 +10,7 @@ import { getGameRules } from '../rules/index.js';
 import { GAME_RULES_VERSION } from '../rules-version.js';
 import { STAGE_NUMBER_MAX, StageNumber } from '../stage/index.js';
 import { experienceToNextLevel } from './level.js';
-import { INITIAL_STAGE_PROGRESS, type StageProgress } from './stage-progress.js';
+import { INITIAL_STAGE_PROGRESS, type StageMode, type StageProgress } from './stage-progress.js';
 import { describeProgress, resolveStageAttempt, type CharacterProgress } from './stage-attempt.js';
 
 const rules = getGameRules(GAME_RULES_VERSION);
@@ -37,9 +37,14 @@ function pushingAt(stage: bigint | number): StageProgress {
   };
 }
 
-function attempt(overrides: Partial<CharacterProgress> = {}, seed = 'attempt') {
+function attempt(
+  overrides: Partial<CharacterProgress> = {},
+  seed = 'attempt',
+  mode: StageMode = 'PROGRESS',
+) {
   return resolveStageAttempt({
     progress: progress(overrides),
+    mode,
     seed,
     rulesVersion: GAME_RULES_VERSION,
   });
@@ -192,7 +197,7 @@ describe('resolveStageAttempt — validation and limits', () => {
 
   it('rejects an unsupported rules version', () => {
     expect(() =>
-      resolveStageAttempt({ progress: progress(), seed: 'x', rulesVersion: 999 }),
+      resolveStageAttempt({ progress: progress(), mode: 'PROGRESS', seed: 'x', rulesVersion: 999 }),
     ).toThrow(expect.objectContaining({ code: 'UNSUPPORTED_RULES_VERSION' }));
   });
 
@@ -227,7 +232,12 @@ describe('resolveStageAttempt — invariants (property)', () => {
           gold: HugeNumber.fromBigInt(gold),
           experience: required.mul(n(experienceFraction)).div(n(100)).floor(),
         });
-        const result = resolveStageAttempt({ progress: before, seed, rulesVersion: 1 });
+        const result = resolveStageAttempt({
+          progress: before,
+          mode: 'PROGRESS',
+          seed,
+          rulesVersion: 1,
+        });
         const { after } = result;
 
         // The stage fought is always the current one, and the records only move up.
@@ -258,6 +268,62 @@ describe('resolveStageAttempt — invariants (property)', () => {
       }),
       { numRuns: 300 },
     );
+  });
+});
+
+describe('resolveStageAttempt — FARM mode (ADR-021)', () => {
+  /** Farming stage 99 below an unbeaten stage-100 boss. */
+  const belowBoss: StageProgress = {
+    current: StageNumber.of(99),
+    highestReached: StageNumber.of(100),
+    highestCleared: StageNumber.of(99),
+  };
+  const strong = { level: 400, stages: belowBoss, gold: n(10), experience: n(0) };
+
+  it('fights the same enemy with the same combat and rewards as climbing', () => {
+    const farmed = attempt(strong, 'farm-seed', 'FARM');
+    const climbed = attempt(strong, 'farm-seed', 'PROGRESS');
+
+    expect(farmed.combat.outcome).toBe('WIN');
+    expect(farmed.enemy).toEqual(climbed.enemy);
+    expect(farmed.combat).toEqual(climbed.combat);
+    expect(farmed.rewards).toEqual(climbed.rewards);
+    expect(farmed.after.gold.eq(climbed.after.gold)).toBe(true);
+    expect(farmed.after.level).toBe(climbed.after.level);
+    expect(farmed.after.experience.eq(climbed.after.experience)).toBe(true);
+  });
+
+  it('a farm victory pays the stage and stays on it; the boss stays unbeaten', () => {
+    const farmed = attempt(strong, 'farm-seed', 'FARM');
+
+    expect(farmed.rewards).toEqual(calculateStageRewards(farmed.stage, rules.rewards));
+    expect(farmed.after.stages).toEqual(belowBoss);
+    expect(attempt(strong, 'farm-seed', 'PROGRESS').after.stages.current.toString()).toBe('100');
+  });
+
+  it('a farm defeat grants nothing and stays on the stage', () => {
+    const lost = attempt({ stages: pushingAt(10), gold: n(7) }, 'attempt', 'FARM');
+
+    expect(lost.combat.outcome).toBe('LOSS');
+    expect(lost.rewards).toEqual(NO_REWARDS);
+    expect(lost.after.gold.eq(n(7))).toBe(true);
+    expect(lost.after.stages).toEqual(pushingAt(10));
+  });
+
+  it('farming the same stage repeatedly keeps paying and keeps the records', () => {
+    let state = progress(strong);
+    for (let fight = 0; fight < 20; fight += 1) {
+      const result = resolveStageAttempt({
+        progress: state,
+        mode: 'FARM',
+        seed: `farm-${String(fight)}`,
+        rulesVersion: GAME_RULES_VERSION,
+      });
+      expect(result.combat.outcome).toBe('WIN');
+      expect(result.after.gold.gt(state.gold)).toBe(true);
+      state = result.after;
+    }
+    expect(state.stages).toEqual(belowBoss);
   });
 });
 

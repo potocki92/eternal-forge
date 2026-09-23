@@ -28,14 +28,21 @@ import {
   PLAYER_REPOSITORY,
   type PlayerRepository,
 } from '../../src/player/application/ports/player-repository.port.js';
+import {
+  STAGE_SELECTION_REPOSITORY,
+  type StageSelectionRepository,
+} from '../../src/player/application/ports/stage-selection-repository.port.js';
 import { ProvisionPlayerUseCase } from '../../src/player/application/provision-player.use-case.js';
+import { SelectStageUseCase } from '../../src/player/application/select-stage.use-case.js';
 import { PlayerController } from '../../src/player/presentation/player.controller.js';
+import { StageSelectionController } from '../../src/player/presentation/stage-selection.controller.js';
 import { TEST_AUDIENCE, TEST_ISSUER, type TestTokenIssuer } from './token-issuer.js';
 
 export interface TestAppOptions {
   readonly issuer: TestTokenIssuer;
   readonly players: PlayerRepository;
   readonly combats: CombatRepository;
+  readonly selections: StageSelectionRepository;
   /** Defaults to {@link sequentialSeeds}, so combats are reproducible. */
   readonly seeds?: CombatSeedSource;
   readonly clock?: Clock;
@@ -76,7 +83,7 @@ export class ManualClock implements Clock {
 export async function createTestApp(options: TestAppOptions): Promise<INestApplication> {
   const clock = options.clock ?? { now: () => new Date() };
   const moduleRef = await Test.createTestingModule({
-    controllers: [PlayerController, CombatController],
+    controllers: [PlayerController, CombatController, StageSelectionController],
     providers: [
       { provide: CLOCK, useValue: clock },
       {
@@ -93,11 +100,13 @@ export async function createTestApp(options: TestAppOptions): Promise<INestAppli
       { provide: APP_GUARD, useClass: AuthGuard },
       { provide: PLAYER_REPOSITORY, useValue: options.players },
       { provide: COMBAT_REPOSITORY, useValue: options.combats },
+      { provide: STAGE_SELECTION_REPOSITORY, useValue: options.selections },
       { provide: COMBAT_SEED_SOURCE, useValue: options.seeds ?? sequentialSeeds() },
       GetPlayerStateUseCase,
       ProvisionPlayerUseCase,
       GetOwnedCharacterUseCase,
       RunCombatUseCase,
+      SelectStageUseCase,
     ],
   }).compile();
 

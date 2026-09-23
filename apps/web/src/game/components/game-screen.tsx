@@ -11,11 +11,13 @@ import { loadPixiCombatScene } from '../scene/load-pixi-combat-scene';
 import { useCombatScene } from '../scene/use-combat-scene';
 import { useCombatPlayback } from '../use-combat-playback';
 import { useCombatSession } from '../use-combat-session';
+import { useStageSelection } from '../stage-selection/use-stage-selection';
 import { useNow } from '../use-now';
 import { usePrefersReducedMotion } from '../use-reduced-motion';
 import { CombatReport, type ReportState } from './combat-report';
 import { CombatStage, type CombatantHealth } from './combat-stage';
 import { GameHud, type HudValues } from './game-hud';
+import { StageSelector } from './stage-selector';
 
 /** How long a finished combat stays on screen before the next enemy steps in. */
 const REVEAL_DELAY_MS = 1_200;
@@ -49,6 +51,7 @@ export function GameScreen({
 }: GameScreenProps) {
   const reducedMotion = usePrefersReducedMotion();
   const { state, fight, finish } = useCombatSession(userId, player.character.id);
+  const stageSelection = useStageSelection(userId, player.character.id);
   const response =
     state.phase === 'fighting' || state.phase === 'finished' ? state.response : undefined;
 
@@ -200,6 +203,7 @@ export function GameScreen({
   const busy = state.phase === 'requesting' || state.phase === 'fighting';
   const blocked =
     busy ||
+    stageSelection.pending ||
     player.progression.encounter === null ||
     (!retrying && waitSeconds > 0) ||
     (state.phase === 'failed' && state.failure.kind === 'session');
@@ -224,6 +228,14 @@ export function GameScreen({
         values={hud}
         signingOut={signingOut}
         onSignOut={onSignOut}
+      />
+      <StageSelector
+        progression={player.progression}
+        locked={busy}
+        pending={stageSelection.pending}
+        error={stageSelection.error}
+        onSelect={stageSelection.select}
+        onDismissError={stageSelection.clearError}
       />
 
       <main className="flex min-h-0 flex-1 flex-col">

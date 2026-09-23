@@ -75,7 +75,8 @@ export class CombatReplayMismatchError extends Error {
  * Core, from persisted state. The whole flow:
  *
  * 1. Load the owned character, its version and any combat already recorded
- *    under this key — one owner-scoped read.
+ *    under this key — one owner-scoped read. The stage and the stage mode
+ *    come from this persisted state (ADR-020, ADR-021), never the request.
  * 2. A recorded combat is replayed: same result, nothing written.
  * 3. A character still fighting (server clock before `nextCombatAt`) is refused.
  * 4. A stage the rule set cannot scale is refused before any seed is drawn.
@@ -115,6 +116,9 @@ export class RunCombatUseCase {
 
     const attempt = resolveStageAttempt({
       progress: progressOf(target.character),
+      // The persisted choice, never a request value: the client cannot pick
+      // the stage or the mode of this combat (ADR-021).
+      mode: target.character.stageMode,
       seed: this.seeds.next(),
       rulesVersion: GAME_RULES_VERSION,
     });
@@ -129,6 +133,7 @@ export class RunCombatUseCase {
       run: recordAttempt(attempt, {
         characterId: target.character.id,
         idempotencyKey: command.idempotencyKey,
+        stageMode: target.character.stageMode,
         resolvedAt: now,
       }),
     });
@@ -187,6 +192,7 @@ export class RunCombatUseCase {
   private replay(character: Character, run: CombatRun): RunCombatResult {
     const attempt = resolveStageAttempt({
       progress: run.before,
+      mode: run.stageMode,
       seed: run.seed,
       rulesVersion: run.rulesVersion,
     });
@@ -210,7 +216,17 @@ function resolved(
   character: Character,
   nextCombatAt: Date,
 ): ResolvedCombat {
-  const after: Character = { ...character, ...attempt.after, nextCombatAt };
+  // Everything that describes the character after this combat comes from the
+  // same snapshot: its progress from the attempt and its mode from the record.
+  // On a replay the character may have switched mode since (ADR-021); mixing
+  // the current mode with the recorded stage would describe a state that never
+  // existed.
+  const after: Character = {
+    ...character,
+    ...attempt.after,
+    stageMode: run.stageMode,
+    nextCombatAt,
+  };
 
   return {
     run,

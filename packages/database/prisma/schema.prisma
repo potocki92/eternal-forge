@@ -3,7 +3,8 @@
 // PostgreSQL is the persistent source of truth (docs/DATABASE.md). Tables are
 // introduced by the phase that needs them. Phase 2 adds identity-linked player
 // data only: `profiles` and `characters` (ADR-017). Phase 3 adds progression
-// to `characters` and the combat record `combat_runs` (ADR-019).
+// to `characters` and the combat record `combat_runs` (ADR-019). Phase 4 adds
+// the stage mode for stage selection and farming (ADR-021).
 //
 // Domain entities are NOT Prisma models. Prisma models are persistence models,
 // mapped to domain entities by repository implementations (CLAUDE.md —
@@ -68,6 +69,8 @@ model Character {
   highestStageReached BigInt      @default(1) @map("highest_stage_reached")
   /// The highest stage ever defeated; NULL until the first clear. Never decreases.
   highestStageCleared BigInt?     @map("highest_stage_cleared")
+  /// What a victory does to `current_stage` (ADR-021): climb on, or stay and farm.
+  stageMode           StageMode   @default(PROGRESS) @map("stage_mode")
   /// Experience within the current level (HugeNumber pair).
   experienceCoef      BigInt      @default(0) @map("experience_coef")
   experienceExp       Int         @default(-2147483648) @map("experience_exp")
@@ -85,6 +88,15 @@ model Character {
 
   @@unique([profileId, slot], map: "characters_profile_id_slot_key")
   @@map("characters")
+}
+
+// What a victory does to the current stage (ADR-021). PROGRESS climbs on to
+// the next stage (and falls back on a defeat); FARM stays on the stage.
+enum StageMode {
+  PROGRESS
+  FARM
+
+  @@map("stage_mode")
 }
 
 enum CombatOutcome {
@@ -125,6 +137,8 @@ model CombatRun {
   stage                     BigInt
   highestStageReachedBefore BigInt          @map("highest_stage_reached_before")
   highestStageClearedBefore BigInt?         @map("highest_stage_cleared_before")
+  /// The character's stage mode when it fought (ADR-021): a replay input.
+  stageMode                 StageMode       @map("stage_mode")
   characterLevel            Int             @map("character_level")
   experienceBeforeCoef      BigInt          @map("experience_before_coef")
   experienceBeforeExp       Int             @map("experience_before_exp")

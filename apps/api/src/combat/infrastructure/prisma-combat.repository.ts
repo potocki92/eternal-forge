@@ -1,5 +1,5 @@
 import { isUniqueConstraintViolation } from '@eternal-forge/database';
-import { HugeNumber } from '@eternal-forge/game-core';
+import { HugeNumber, type StageMode } from '@eternal-forge/game-core';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import { toCharacter } from '../../player/infrastructure/prisma-player.repository.js';
@@ -26,6 +26,7 @@ interface CombatRunRow {
   readonly stage: bigint;
   readonly highestStageReachedBefore: bigint;
   readonly highestStageClearedBefore: bigint | null;
+  readonly stageMode: StageMode;
   readonly characterLevel: number;
   readonly experienceBeforeCoef: bigint;
   readonly experienceBeforeExp: number;
@@ -121,6 +122,7 @@ export class PrismaCombatRepository implements CombatRepository {
             stage: run.before.stages.current.toBigInt(),
             highestStageReachedBefore: run.before.stages.highestReached.toBigInt(),
             highestStageClearedBefore: run.before.stages.highestCleared?.toBigInt() ?? null,
+            stageMode: run.stageMode,
             characterLevel: run.before.level,
             experienceBeforeCoef: experienceBefore.coefficient,
             experienceBeforeExp: experienceBefore.exponent,
@@ -166,6 +168,7 @@ function toCombatRun(row: CombatRunRow): CombatRun {
       experience: HugeNumber.fromParts(row.experienceBeforeCoef, row.experienceBeforeExp),
       gold: HugeNumber.fromParts(row.goldBeforeCoef, row.goldBeforeExp),
     },
+    stageMode: row.stageMode,
     outcome: row.outcome,
     endReason: row.endReason,
     durationMs: row.durationMs,

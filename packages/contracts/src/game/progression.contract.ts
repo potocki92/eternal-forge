@@ -11,6 +11,14 @@ import { stageNumberSchema } from '../stage/stage-number.contract.js';
 export const stageKindSchema = z.enum(['REGULAR', 'BOSS']);
 export type StageKind = z.infer<typeof stageKindSchema>;
 
+/**
+ * What a victory does to the current stage (ADR-021): `PROGRESS` climbs on to
+ * the next stage, `FARM` stays on the chosen one. The player chooses it; the
+ * server validates and applies it.
+ */
+export const stageModeSchema = z.enum(['PROGRESS', 'FARM']);
+export type StageModeDto = z.infer<typeof stageModeSchema>;
+
 export const stageSchema = z.object({
   number: stageNumberSchema,
   kind: stageKindSchema,
@@ -80,6 +88,8 @@ export type StageProgressDto = z.infer<typeof stageProgressSchema>;
 export const progressionSchema = z
   .object({
     ...stageProgressShape,
+    /** Climbing or farming `currentStage` (ADR-021). */
+    stageMode: stageModeSchema,
     /** Experience needed to go from the current level to the next. */
     experienceToNextLevel: hugeAmountSchema,
     hero: heroStatsSchema,

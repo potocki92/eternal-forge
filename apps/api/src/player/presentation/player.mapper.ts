@@ -42,6 +42,7 @@ export function toCharacterDto(character: Character): CharacterDto {
 export function toProgressionDto(view: ProgressionView): ProgressionDto {
   return {
     ...toStageProgressDto(view.stages),
+    stageMode: view.stageMode,
     experienceToNextLevel: view.experienceToNextLevel.toString(),
     hero: {
       maxHealth: view.character.stats.maxHealth.toString(),

@@ -24,6 +24,17 @@ export const API_ERROR_CODES = [
    */
   'STAGE_NOT_PLAYABLE',
   /**
+   * The requested stage has not been reached yet (ADR-021). Only stages from 1
+   * to `progression.highestStageReached` can be selected.
+   */
+  'STAGE_LOCKED',
+  /**
+   * The character kept changing while the request was applied (for example,
+   * a combat committed at the same moment). Nothing was written; read the
+   * state again and retry.
+   */
+  'CONCURRENT_UPDATE',
+  /**
    * The API cannot verify credentials right now (e.g. the signing-key endpoint
    * is unreachable). Retry later; this does not mean the session is invalid.
    */

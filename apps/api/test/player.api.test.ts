@@ -29,7 +29,12 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   const repository = new InMemoryGameRepository();
-  app = await createTestApp({ issuer, players: repository, combats: repository });
+  app = await createTestApp({
+    issuer,
+    players: repository,
+    combats: repository,
+    selections: repository,
+  });
 });
 
 afterEach(async () => {
@@ -120,6 +125,7 @@ describe('signing keys unavailable', () => {
       issuer,
       players: new InMemoryGameRepository(),
       combats: new InMemoryGameRepository(),
+      selections: new InMemoryGameRepository(),
       verifier: { verify: () => Promise.reject(new AccessTokenVerificationUnavailableError()) },
     });
 

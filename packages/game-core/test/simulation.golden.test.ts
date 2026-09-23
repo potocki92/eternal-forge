@@ -167,6 +167,9 @@ describe(`golden simulations — rules v${GAME_RULES_VERSION}`, () => {
           highestCleared: stage.equals(StageNumber.FIRST) ? null : stage.stepBack(1),
         },
       },
+      // The Phase 3 mode. ADR-021 made the mode an explicit input; these
+      // fingerprints are unchanged, which proves PROGRESS behaves as before.
+      mode: 'PROGRESS',
       seed: golden.seed,
       rulesVersion: GAME_RULES_VERSION,
     });
@@ -182,3 +185,58 @@ describe(`golden simulations — rules v${GAME_RULES_VERSION}`, () => {
     expect(fingerprint(result)).toBe(golden.fingerprint);
   });
 });
+
+// Recorded with ADR-021, when FARM mode was introduced. Farming stage 9 below
+// the unbeaten stage-10 boss: the combat and rewards are those of any stage-9
+// win, and the hero stays on stage 9 with its records unchanged.
+describe(`golden farming — rules v${GAME_RULES_VERSION}`, () => {
+  it('stage attempt: a farm win below the boss wall', () => {
+    const result = resolveStageAttempt({
+      progress: {
+        level: 4,
+        experience: HugeNumber.fromDecimal('3'),
+        gold: HugeNumber.fromDecimal('41'),
+        stages: {
+          current: StageNumber.of(9),
+          highestReached: StageNumber.of(10),
+          highestCleared: StageNumber.of(9),
+        },
+      },
+      mode: 'FARM',
+      seed: 'golden-attempt-farm',
+      rulesVersion: GAME_RULES_VERSION,
+    });
+    const { stages } = result.after;
+    const climbing = resolveStageAttempt({ ...input(result), mode: 'PROGRESS' });
+
+    // Same fight, same pay: only where the hero goes next differs.
+    expect(fingerprint(climbing.combat)).toBe(fingerprint(result.combat));
+    expect(fingerprint(climbing.rewards)).toBe(fingerprint(result.rewards));
+    expect({
+      outcome: result.combat.outcome,
+      level: result.after.level,
+      experience: result.after.experience.toString(),
+      gold: result.after.gold.toString(),
+      stages: `${stages.current.toString()} / ${stages.highestReached.toString()} / ${stages.highestCleared?.toString() ?? 'null'}`,
+    }).toEqual({
+      outcome: 'WIN',
+      level: 4,
+      experience: '9e0',
+      gold: '5.3e1',
+      stages: '9 / 10 / 9',
+    });
+    expect(fingerprint(result.combat)).toBe(
+      '9e85032f4b32b72b9054346c40958d54c4ecf18a3874bcfb447938a7fdd4b3f9',
+    );
+    expect(fingerprint(result.rewards)).toBe(
+      '7bd8e4d625948511af93e0d1302c26ec82469ee9d8ebaa1ebc44d598e9bbe5aa',
+    );
+    expect(fingerprint(result)).toBe(
+      'f03dd0c8e71c218a401ecd0035b5707c7a0192a412bbc5c081f91ec8b3f91ac3',
+    );
+  });
+});
+
+function input(result: ReturnType<typeof resolveStageAttempt>) {
+  return { progress: result.before, seed: result.seed, rulesVersion: result.rulesVersion };
+}

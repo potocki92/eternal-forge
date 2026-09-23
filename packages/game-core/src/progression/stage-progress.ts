@@ -60,33 +60,98 @@ export function createStageProgress(progress: StageProgress): StageProgress {
 }
 
 /**
- * The stage progress after a combat on `progress.current` (ADR-020).
+ * What the hero does with the stage after a victory (ADR-021).
+ *
+ * - `PROGRESS` — climb: a win moves the hero on to the next stage, a loss
+ *   falls back `stagesLostOnDefeat` stages. The Phase 3 behaviour.
+ * - `FARM` — stay: the hero keeps fighting the stage it was placed on,
+ *   whatever the outcome. Rewards are exactly those of a `PROGRESS` fight.
+ *
+ * The mode never changes a record by itself: in both modes a record rises only
+ * through a victory on the stage actually fought.
+ */
+export type StageMode = 'PROGRESS' | 'FARM';
+
+export const STAGE_MODES: readonly StageMode[] = Object.freeze(['PROGRESS', 'FARM']);
+
+/** A new character climbs. */
+export const INITIAL_STAGE_MODE: StageMode = 'PROGRESS';
+
+/**
+ * A player's request for where to fight (ADR-021). The player picks the mode
+ * and, when farming, the stage. Whether that stage is available is decided by
+ * {@link selectStage}, never by the caller.
+ */
+export type StageSelection =
+  { readonly mode: 'PROGRESS' } | { readonly mode: 'FARM'; readonly stage: StageNumber };
+
+/**
+ * The stage progress after the player's selection (ADR-021).
+ *
+ * - `PROGRESS` returns the hero to its frontier: `current` becomes
+ *   `highestReached`, the furthest stage it has unlocked.
+ * - `FARM` places the hero on the chosen stage, which must be unlocked:
+ *   `1 ≤ stage ≤ highestReached`. A stage beyond that is refused with
+ *   `STAGE_LOCKED`; nothing is clamped.
+ *
+ * Only `current` moves. The records are returned untouched, so a selection can
+ * never raise or lower `highestReached` or `highestCleared`.
+ *
+ * @throws {GameCoreError} `STAGE_LOCKED` for a stage the hero has not reached,
+ * `INVALID_ARGUMENT` for progress that breaks its invariants.
+ */
+export function selectStage(progress: StageProgress, selection: StageSelection): StageProgress {
+  const before = createStageProgress(progress);
+
+  if (selection.mode === 'PROGRESS') {
+    return { ...before, current: before.highestReached };
+  }
+  if (selection.stage.compare(before.highestReached) > 0) {
+    throw new GameCoreError(
+      'STAGE_LOCKED',
+      'Only a stage the hero has already reached can be selected.',
+    );
+  }
+  return { ...before, current: selection.stage };
+}
+
+/**
+ * The stage progress after a combat on `progress.current` (ADR-020, ADR-021).
+ *
+ * The records move the same way in every mode:
  *
  * - **Win:** the stage fought is cleared, which raises `highestCleared` if it
- *   is a new record, and unlocks the next stage, which raises
- *   `highestReached` if needed. The hero moves on to the next stage — Phase 3
- *   always pushes forward; a "stay and farm" choice is FUTURE.
- * - **Loss:** nothing is cleared or unlocked. The hero falls back
- *   `stagesLostOnDefeat` stages to farm, never below stage 1. The records are
- *   untouched, so a lost boss fight never erases how far the hero came.
+ *   is a new record, and the next stage is unlocked, which raises
+ *   `highestReached` if needed.
+ * - **Loss:** nothing is cleared or unlocked. The records are untouched, so a
+ *   lost boss fight never erases how far the hero came.
+ *
+ * Where the hero fights next depends on `mode`:
+ *
+ * - `PROGRESS`: a win moves on to the next stage; a loss falls back
+ *   `stagesLostOnDefeat` stages to farm, never below stage 1.
+ * - `FARM`: the hero stays on the stage it fought, win or lose.
  *
  * `highestReached` and `highestCleared` never decrease.
  */
 export function advanceStageProgress(
   progress: StageProgress,
   outcome: CombatOutcome,
+  mode: StageMode,
   rules: ProgressionRules,
 ): StageProgress {
   const before = createStageProgress(progress);
   const fought = before.current;
 
   if (outcome === 'LOSS') {
-    return { ...before, current: fought.stepBack(rules.stagesLostOnDefeat) };
+    return mode === 'FARM'
+      ? before
+      : { ...before, current: fought.stepBack(rules.stagesLostOnDefeat) };
   }
 
   const next = fought.next();
   return {
-    current: next,
+    current: mode === 'FARM' ? fought : next,
     highestReached: maxStage(before.highestReached, next),
     highestCleared:
       before.highestCleared === null ? fought : maxStage(before.highestCleared, fought),
