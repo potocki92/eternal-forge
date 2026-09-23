@@ -38,6 +38,14 @@ const DEATH_MS = 480;
 const ENTRANCE_MS = 520;
 const BOSS_ENTRANCE_MS = 900;
 
+/**
+ * Canvas pixels covered by the DOM overlays (enemy nameplate and health bar at
+ * the top, the hero's at the bottom). Actors are laid out between them, so the
+ * DOM never hides the scene and the scene never hides the DOM.
+ */
+const OVERLAY_TOP = 84;
+const OVERLAY_BOTTOM = 84;
+
 export async function createPixiCombatScene(
   host: HTMLElement,
   options: CombatSceneOptions,
@@ -379,23 +387,38 @@ class PixiCombatScene implements CombatScene {
 
   // --- Layout and state ---------------------------------------------------
 
-  /** One layout unit: a fraction of the smaller canvas dimension. */
+  /** The area between the DOM overlays, where the actors stand. */
+  private playArea(): { top: number; height: number } {
+    const { height } = this.app.screen;
+    const top = Math.min(OVERLAY_TOP, height * 0.2);
+    const bottom = Math.min(OVERLAY_BOTTOM, height * 0.2);
+    return { top, height: Math.max(1, height - top - bottom) };
+  }
+
+  /**
+   * One layout unit: a fifth of the play area's smaller side. At that size a
+   * boss (crown to aura, about 1.7 units) and the hero (about 1.3 units) fit
+   * the play area at any aspect ratio without touching.
+   */
   private unit(): number {
-    return Math.min(this.app.screen.width, this.app.screen.height) / 5;
+    return Math.min(this.app.screen.width, this.playArea().height) / 5;
   }
 
   private readonly layout = (): void => {
     const { width, height } = this.app.screen;
     const unit = this.unit();
+    const area = this.playArea();
+    const enemyY = area.top + area.height * 0.4;
+    const heroY = area.top + area.height * 0.9;
     this.backdrop.clear();
     this.backdrop
-      .ellipse(width / 2, height * 0.8, width * 0.42, unit * 0.35)
+      .ellipse(width / 2, heroY, Math.min(width * 0.42, unit * 2.4), unit * 0.3)
       .fill({ color: palette.ground, alpha: 0.55 })
-      .ellipse(width / 2, height * 0.36, width * 0.34, unit * 0.28)
+      .ellipse(width / 2, enemyY + unit * 0.2, Math.min(width * 0.34, unit * 2), unit * 0.24)
       .fill({ color: palette.ground, alpha: 0.35 });
-    this.place(this.hero, width / 2, height * 0.74, unit / 60);
+    this.place(this.hero, width / 2, heroY, unit / 60);
     if (this.enemy !== undefined) {
-      this.place(this.enemy, width / 2, height * 0.3, (unit / 60) * this.enemyLook.scale);
+      this.place(this.enemy, width / 2, enemyY, (unit / 60) * this.enemyLook.scale);
     }
     if (this.vignette.alpha > 0) {
       this.vignette.clear();
