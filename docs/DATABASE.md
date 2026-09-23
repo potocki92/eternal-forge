@@ -88,13 +88,18 @@ characters
 | `slot`       | `smallint`       | CHECK ≥ 1; UNIQUE (`profile_id`, `slot`); main = 1   |
 | `name`       | `varchar(24)`    | CHECK 3–24 characters, no surrounding whitespace     |
 | `level`      | `integer`        | default 1, CHECK ≥ 1                                 |
-| `stage`      | `bigint`         | default 1, CHECK ≥ 1 — stages are unbounded          |
+| `stage`      | `bigint`         | default 1, CHECK ≥ 1 — read exactly as `StageNumber` |
 | `created_at` | `timestamptz(3)` | default `now()`                                      |
 | `updated_at` | `timestamptz(3)` | maintained by Prisma                                 |
 
 Indexes: the two unique constraints are the only indexes, and they cover the
 actual queries — profile by `auth_user_id`, character by `(profile_id, slot)`,
 characters of a profile (leading column `profile_id`).
+
+`stage` maps one-to-one to Game Core's `StageNumber` (ADR-018): every value
+the column accepts, 1 to 2^63 − 1, is read and written as an exact `bigint`
+and is never converted to a JavaScript `number`. The column type bounds it
+from above and the CHECK from below.
 
 Only source state is stored. Combat stats are derived from `level` by Game Core
 and are not persisted. Experience, gold and other resources arrive with Phase 3

@@ -249,6 +249,8 @@ score(v) = (e + 1) · 10^6 + floor(c / 10^12)        for v ≥ 1
   equal-score groups at both boundaries. It then orders those groups by the
   exact `(exp, coef, achieved_at, id)` from PostgreSQL.
 - Integer-range ladders such as Highest Stage use the raw value as the score.
+  _Qualified by ADR-018:_ stages are exact up to 2^63 − 1, but a score is exact
+  only up to 2^53, so Phase 10 must bound the stage or use a projection.
 - Redis still holds only the ordering, never the value (ADR-006). A lost sorted
   set is rebuilt from PostgreSQL.
 

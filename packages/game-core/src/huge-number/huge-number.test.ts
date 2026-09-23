@@ -251,6 +251,20 @@ describe('HugeNumber — arithmetic edge cases', () => {
     expectCode(() => h('2e0').pow(-1), 'INVALID_ARGUMENT');
     expectCode(() => h('2e0').pow(1.5), 'INVALID_ARGUMENT');
     expectCode(() => h('2e0').pow(2 ** 53), 'INVALID_ARGUMENT');
+    expectCode(() => h('2e0').pow(-1n), 'INVALID_ARGUMENT');
+  });
+
+  it('takes bigint powers exactly like number powers, and beyond the safe range', () => {
+    const growth = h('1.12e0');
+    for (const power of [0, 1, 2, 3, 100, 12_345]) {
+      expect(growth.pow(BigInt(power))).toEqual(growth.pow(power));
+    }
+    expect(
+      h('1e0')
+        .pow(2n ** 63n)
+        .toString(),
+    ).toBe('1e0');
+    expectCode(() => h('2e0').pow(2n ** 63n), 'OVERFLOW');
   });
 
   it('negates and takes absolute values', () => {

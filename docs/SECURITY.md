@@ -435,8 +435,11 @@ See ADR-016 and ADR-017.
 - Can it be called concurrently? Yes; provisioning converges on one player.
 - Can rewards be duplicated? No rewards exist in Phase 2.
 - Can another player's resource be targeted? No; ownership is part of the query.
-- Can invalid numeric values enter? Level/stage are server-set, CHECK-constrained,
-  and bounded to safe integers on read.
+- Can invalid numeric values enter? Level/stage are server-set and
+  CHECK-constrained. A stage is an exact `bigint` end to end (ADR-018), so
+  nothing is rounded on read or write. The wire format accepts only the
+  canonical decimal string, and anything outside 1 … 2^63 − 1 is rejected
+  rather than clamped.
 - Can the operation leave partial state? Provisioning is one transaction; a
   profile without a character is repaired by the next call.
 

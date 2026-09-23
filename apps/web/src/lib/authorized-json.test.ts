@@ -16,7 +16,7 @@ const state = {
     slot: 1,
     name: 'Ember',
     level: 1,
-    stage: 1,
+    stage: '1',
     createdAt: '2026-09-22T10:00:00.000Z',
   },
   serverTime: '2026-09-22T10:00:00.000Z',

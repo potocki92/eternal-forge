@@ -42,7 +42,13 @@ export type { Character } from './character/character.js';
 export { createEnemyForStage } from './enemy/enemy.js';
 export type { Enemy } from './enemy/enemy.js';
 
-export { enemyStatsForStage, resolveStage, scaleByStage } from './stage/index.js';
+export {
+  STAGE_NUMBER_MAX,
+  StageNumber,
+  enemyStatsForStage,
+  resolveStage,
+  scaleByStage,
+} from './stage/index.js';
 export type { Stage, StageKind } from './stage/index.js';
 
 export { NO_REWARDS, addRewards, calculateStageRewards } from './rewards/rewards.js';

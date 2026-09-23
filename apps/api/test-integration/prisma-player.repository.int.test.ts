@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { STAGE_NUMBER_MAX, StageNumber } from '@eternal-forge/game-core';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { ProvisionPlayerData } from '../src/player/application/ports/player-repository.port.js';
 import { PrismaPlayerRepository } from '../src/player/infrastructure/prisma-player.repository.js';
@@ -31,7 +32,7 @@ function provisionData(
     characterName: names.c,
     characterSlot: 1,
     characterLevel: 1,
-    characterStage: 1,
+    characterStage: StageNumber.FIRST,
   };
 }
 
@@ -51,7 +52,8 @@ describe('PrismaPlayerRepository — provisioning', () => {
 
     expect(outcome.created).toBe(true);
     expect(found).toEqual(outcome.player);
-    expect(found?.mainCharacter).toMatchObject({ slot: 1, level: 1, stage: 1, name: 'Ember' });
+    expect(found?.mainCharacter).toMatchObject({ slot: 1, level: 1, name: 'Ember' });
+    expect(found?.mainCharacter.stage.toString()).toBe('1');
   });
 
   it('is idempotent: a retry changes nothing and reports created=false', async () => {
@@ -196,17 +198,47 @@ describe('schema constraints', () => {
     ).rejects.toThrow(constraint);
   });
 
-  it('stores stages beyond the 32-bit range', async () => {
+  it.each([
+    ['beyond the 32-bit range', 5_000_000_000n],
+    ['beyond the safe-integer range', 2n ** 53n + 1n],
+    ['at the bigint maximum', STAGE_NUMBER_MAX],
+  ])('reads a stage %s back exactly', async (_label, stored) => {
     const data = provisionData();
     const { player } = await repository.provision(data);
     await prisma.client.character.update({
       where: { id: player.mainCharacter.id },
-      data: { stage: 5_000_000_000n },
+      data: { stage: stored },
     });
 
-    expect((await repository.findByAuthUserId(data.authUserId))?.mainCharacter.stage).toBe(
-      5_000_000_000,
+    const found = await repository.findByAuthUserId(data.authUserId);
+    const owned = await repository.findOwnedCharacter(data.authUserId, player.mainCharacter.id);
+
+    expect(found?.mainCharacter.stage.toBigInt()).toBe(stored);
+    expect(owned?.stage.toBigInt()).toBe(stored);
+  });
+
+  it('writes the provisioned stage as a bigint', async () => {
+    const data = { ...provisionData(), characterStage: StageNumber.of(2n ** 53n + 1n) };
+
+    await repository.provision(data);
+
+    const [row] = await prisma.client.$queryRawUnsafe<{ stage: bigint }[]>(
+      'SELECT stage FROM characters',
     );
+    expect(row?.stage).toBe(2n ** 53n + 1n);
+  });
+
+  it.each([
+    ['a negative stage', '-1'],
+    ['a stage above the bigint maximum', '9223372036854775808'],
+  ])('rejects %s at the database', async (_label, value) => {
+    const { player } = await repository.provision(provisionData());
+
+    await expect(
+      prisma.client.$executeRawUnsafe(
+        `UPDATE characters SET stage = ${value} WHERE id = '${player.mainCharacter.id}'`,
+      ),
+    ).rejects.toThrow(/characters_stage_check|out of range/u);
   });
 
   it('deletes characters with their profile', async () => {

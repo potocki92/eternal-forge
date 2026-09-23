@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { useAuth } from '@/auth/auth-provider';
 import { ApiError } from '@/lib/api-client';
 import { CreatePlayerForm } from './create-player-form';
+import { formatStage } from './format-stage';
 import { usePlayerState } from './use-player';
 
 const integer = new Intl.NumberFormat('en-US');
@@ -93,7 +94,7 @@ function PlayerOverview({ state }: { readonly state: PlayerStateResponse }) {
         </div>
         <dl className="grid grid-cols-2 gap-3">
           <Stat label="Level" value={integer.format(character.level)} />
-          <Stat label="Stage" value={integer.format(character.stage)} />
+          <Stat label="Stage" value={formatStage(character.stage)} />
         </dl>
       </Panel>
 

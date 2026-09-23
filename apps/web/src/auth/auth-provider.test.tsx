@@ -126,6 +126,23 @@ describe('AuthProvider', () => {
     expect(screen.getByTestId('reason')).toHaveTextContent('signed-out');
   });
 
+  it('hides player data before the sign-out request completes', async () => {
+    const { supabase, queryClient } = setup();
+    supabase.emit('INITIAL_SESSION', session('alice'));
+    queryClient.setQueryData(['player', 'alice', 'state'], { name: 'Alice' });
+    // A sign-out whose network round trip never finishes and never emits.
+    supabase.auth.signOut.mockImplementationOnce(() => new Promise(() => undefined));
+
+    await act(async () => {
+      screen.getByRole('button', { name: 'sign out' }).click();
+      await Promise.resolve();
+    });
+
+    expect(supabase.auth.signOut).toHaveBeenCalled();
+    expect(queryClient.getQueryData(['player', 'alice', 'state'])).toBeUndefined();
+    expect(screen.getByTestId('status')).toHaveTextContent('unauthenticated');
+  });
+
   it('clears the cache when the session ends elsewhere (another tab, failed refresh)', () => {
     const { supabase, queryClient } = setup();
     supabase.emit('INITIAL_SESSION', session('alice'));

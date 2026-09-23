@@ -457,3 +457,8 @@ Game Core to compute gameplay outcomes (ADR-003).
 
 Status: PLANNED. The formatter is written with the first screen that displays a
 HugeNumber (Phase 3), in the UI layer, not in Game Core.
+
+IMPLEMENTED (ADR-018): stage numbers arrive as canonical decimal strings, and
+`formatStage` in `apps/web` groups their digits through `BigInt` and
+`Intl.NumberFormat`. It is exact at every stage and never converts to a
+`number`.

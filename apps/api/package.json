@@ -20,6 +20,7 @@
     "@eternal-forge/config": "workspace:*",
     "@eternal-forge/contracts": "workspace:*",
     "@eternal-forge/database": "workspace:*",
+    "@eternal-forge/game-core": "workspace:*",
     "@nestjs/common": "catalog:",
     "@nestjs/core": "catalog:",
     "@nestjs/platform-express": "catalog:",

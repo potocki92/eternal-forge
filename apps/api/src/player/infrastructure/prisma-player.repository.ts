@@ -1,3 +1,4 @@
+import { StageNumber } from '@eternal-forge/game-core';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import type {
@@ -92,7 +93,7 @@ export class PrismaPlayerRepository implements PlayerRepository {
             slot: data.characterSlot,
             name: data.characterName,
             level: data.characterLevel,
-            stage: BigInt(data.characterStage),
+            stage: data.characterStage.toBigInt(),
           },
         ],
         skipDuplicates: true,
@@ -126,19 +127,10 @@ function toCharacter(row: CharacterRow): Character {
     slot: row.slot,
     name: row.name,
     level: row.level,
-    stage: toSafeInteger(row.stage),
+    // bigint to bigint: exact. A value outside 1…2^63 − 1 cannot pass the
+    // column type and CHECK; if one ever did, this throws instead of repairing.
+    stage: StageNumber.of(row.stage),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
-}
-
-/**
- * The column is bigint so the schema has no stage ceiling; the domain works in
- * safe integers. A value beyond 2^53 − 1 is refused rather than rounded.
- */
-function toSafeInteger(value: bigint): number {
-  if (value > BigInt(Number.MAX_SAFE_INTEGER)) {
-    throw new RangeError('Stored stage exceeds the safe-integer range.');
-  }
-  return Number(value);
 }

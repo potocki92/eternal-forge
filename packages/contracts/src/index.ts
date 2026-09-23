@@ -46,3 +46,6 @@ export type {
   ProfileDto,
   ProvisionPlayerRequest,
 } from './player/player.contract.js';
+
+export { STAGE_NUMBER_WIRE_MAX, stageNumberSchema } from './stage/stage-number.contract.js';
+export type { StageNumberDto } from './stage/stage-number.contract.js';

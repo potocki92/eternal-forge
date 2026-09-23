@@ -140,8 +140,10 @@ CombatResponse
 LeaderboardResponse
 
 Status: IMPLEMENTED for health, the shared API error body (`ApiErrorResponse`
-with a machine-readable `code`), the player-name rule and the player contracts
-(`PlayerStateResponse`, `ProvisionPlayerRequest`, `CharacterResponse`).
+with a machine-readable `code`), the player-name rule, the stage-number wire
+format (`stageNumberSchema`, a canonical decimal string — ADR-018) and the
+player contracts (`PlayerStateResponse`, `ProvisionPlayerRequest`,
+`CharacterResponse`).
 
 ---
 
@@ -703,6 +705,15 @@ not be fetched, not that the session is invalid.
   concurrency, constraints and Row Level Security.
 - Playwright runs the production web build against the real API and PostgreSQL,
   with a GoTrue test double as identity provider (ADR-016).
+
+## Stage numbers (Phase 2 hardening, ADR-018)
+
+A stage is Game Core's `StageNumber`: an exact `bigint` from 1 to 2^63 − 1,
+never a JavaScript `number`. It is the type of `Stage.number` in Game Core and
+of `Character.stage` in the API domain and repository port. The Prisma adapter
+converts it to and from the `bigint` column without loss. On the wire it is the
+canonical decimal string. The web application only formats it for display,
+through `BigInt`. This makes `apps/api` a consumer of `@eternal-forge/game-core`.
 
 ## NOT IMPLEMENTED
 

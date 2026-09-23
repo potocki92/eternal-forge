@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted
+Accepted. The in-application stage representation is amended by ADR-018
+(2026-09-23); the schema is unchanged.
 
 ## Date
 
@@ -66,6 +67,11 @@ characters
 - **Stage is `bigint`**, because stages are effectively unlimited
   (`docs/GAME_DESIGN.md`). The domain and the wire use safe integers; the
   repository refuses a stored value above 2^53 − 1 rather than rounding it.
+
+  _Amended by ADR-018:_ the domain uses Game Core's `StageNumber` (an exact
+  `bigint`, 1 … 2^63 − 1) and the wire carries the canonical decimal string, so
+  every value the column can hold is readable and nothing is converted to a
+  JavaScript `number`.
 - **Row Level Security** is enabled on both tables with no policies, so any
   non-owner role — on Supabase, the `anon` and `authenticated` roles that
   PostgREST exposes — sees nothing. The migration also revokes their table
@@ -97,6 +103,9 @@ the phase that shows names to other players (rankings, guilds).
 - Existing rows are never modified: the first successful request's names win.
   The response is **201** when the call created something and **200** when the
   player already existed, with the same body shape.
+
+  _Reviewed in ADR-018:_ a separate "repaired" outcome was considered and not
+  adopted until a consumer (the future deletion flow's audit) needs it.
 - A profile without its main character (not reachable today, but possible
   after future partial deletions) is reported as not provisioned, and the next
   provisioning call repairs it.

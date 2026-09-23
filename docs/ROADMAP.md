@@ -1,6 +1,6 @@
 # Eternal Forge — Development Roadmap
 
-Last updated: 2026-09-22
+Last updated: 2026-09-23
 
 # Current Phase
 
@@ -10,6 +10,11 @@ Status:
 
 COMPLETE — awaiting user approval. GitHub Actions is green on PR #4 (run
 35783641779 on `1d564ff`). See "Validation" under Phase 2.
+
+Post-audit hardening (2026-09-23): the external Phase 2 audit accepted the
+architecture and asked for a small hardening pass. It is implemented and
+validated locally (StageNumber, ADR-018) — see "Phase 2 hardening" below.
+Phase 3 has not started.
 
 Phase 1 is COMPLETE / APPROVED: GitHub Actions is green on `main` (run #6 on
 `a09b2a3`, the merge of PR #3) and the user approved completion on 2026-09-22.
@@ -269,6 +274,7 @@ Tasks:
       the tree, and the incident needs dismissal by the owner
 - [x] review — Codex finding (name fields' native `maxLength` disagreed with the
       shared code-point rule) fixed in `1d564ff` with regression tests
+- [x] post-audit hardening — see "Phase 2 hardening" below
 - [ ] user approval
 
 Validation (2026-09-22, local, development container with PostgreSQL 16 and
@@ -304,6 +310,70 @@ Not in this phase, by design: combat UI, gameplay persistence (experience,
 gold, stage progression), level-up, rate limiting, password reset and email
 change screens, account deletion, display-name uniqueness. The API hosting
 decision (ADR-012) remains open and needs the owner.
+
+## Phase 2 hardening (post-audit, 2026-09-23)
+
+Scope: the items raised by the external audit. No new tables, no Phase 3
+gameplay, and the accepted request flow is unchanged.
+
+- [x] StageNumber — a Game Core Value Object backed by an exact `bigint`,
+      1 … 2^63 − 1. It replaces `stage: number` in Game Core, the API domain,
+      the repository port and adapter, and the contract. `toSafeInteger()` is
+      gone (ADR-018)
+- [x] wire format — `CharacterDto.stage` is a canonical decimal string
+      (`stageNumberSchema`). **Breaking change** for API clients; `apps/web`
+      is updated in the same change
+- [x] Game Core — `HugeNumber.pow` accepts a `bigint` exponent through the same
+      multiplication sequence. `simulateStages` uses `StageNumber`, and
+      `highestStageCleared` is `null` when nothing was cleared. No outcome
+      changed: the Phase 1 golden fingerprints and transcript pass unmodified,
+      and `GAME_RULES_VERSION` stays 1
+- [x] web — `formatStage` displays the string exactly through `BigInt`
+- [x] provisioning result reviewed — the boolean `created` (201/200) is kept.
+      The rationale is in ADR-018
+- [x] auth review — every listed behaviour already had a test. One gap was
+      closed: a unit test proves sign-out hides player data while the network
+      call is still pending (the previous test's fake resolved instantly)
+- [x] database review — `CHECK (stage >= 1)`, `bigint`, RLS with no policies
+      and the revoked `anon`/`authenticated` privileges are unchanged. No
+      migration was needed
+- [ ] GitHub Actions on this change
+
+Auth checklist — where each behaviour is proven:
+
+| Behaviour                                          | Test                                                                          |
+| -------------------------------------------------- | ----------------------------------------------------------------------------- |
+| account switch clears TanStack Query               | `auth-provider.test.tsx` (unit), `auth.spec.ts` "next account never sees…"    |
+| sign-out clears player data before the network     | `auth-provider.test.tsx` "hides player data before the sign-out request…" (new) |
+| expired session clears state                       | `auth-provider.test.tsx`, `authorized-json.test.ts`, `auth.spec.ts` (expired) |
+| invalid / tampered / unsigned JWT rejected         | `jose-access-token-verifier.test.ts`, `player.api.test.ts`                    |
+| anonymous Supabase token rejected                  | `jose-access-token-verifier.test.ts` "rejects an anonymous sign-in"           |
+| wrong issuer / audience rejected                   | `jose-access-token-verifier.test.ts`                                          |
+| `service_role` (and `anon`) token rejected         | `jose-access-token-verifier.test.ts` "rejects the %s role"                    |
+| another player's character not retrievable         | repository and HTTP integration tests, `player.api.test.ts`                   |
+
+Validation (2026-09-23, local, PostgreSQL 16 and Redis 7):
+
+- format check, lint, typecheck, production build: pass (whole workspace).
+- Unit tests: 614 pass (previously 536). New or changed tests:
+  - `game-core` 377: StageNumber properties, exact classification beyond 2^53,
+    OVERFLOW at the maximum, `bigint` powers.
+  - `contracts` 54: the wire schema.
+  - `api` 95: domain ↔ wire agreement.
+  - `web` 32: `formatStage` and the sign-out ordering test.
+- Game Core purity: the guard test and ESLint rules pass unchanged.
+- PostgreSQL integration: 28 pass (previously 22). Stages 5·10^9, 2^53 + 1 and
+  2^63 − 1 read back exactly. A provisioned stage above 2^53 is written as a
+  `bigint`. The database rejects −1 and 2^63. `GET /player/state` returns
+  `"stage":"9223372036854775807"`.
+- Migrations applied to an empty database: no drift from the Prisma schema.
+- Supabase roles simulated: migrations applied to a database where `anon` and
+  `authenticated` exist and have default privileges. Afterwards neither role
+  holds SELECT, INSERT or UPDATE on `profiles` or `characters`. RLS is enabled
+  with zero policies.
+- Playwright E2E: 34 pass, mobile and desktop. The registration scenario now
+  also asserts the rendered stage.
+- Browser bundle built with the canary service-role key: clean.
 
 ---
 

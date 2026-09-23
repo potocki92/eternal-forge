@@ -337,26 +337,32 @@ export class HugeNumber {
    * the game rules (ADR-013): do not change the algorithm without bumping
    * `GAME_RULES_VERSION`. The base is not squared after the last bit, so an
    * unused square can never overflow.
+   *
+   * A `bigint` power is exact at any size (stage numbers use it, ADR-018); a
+   * `number` power must be a safe integer. Both run the same sequence of
+   * multiplications, one per bit.
    */
-  public pow(power: number): HugeNumber {
-    if (!Number.isSafeInteger(power) || power < 0) {
+  public pow(power: number | bigint): HugeNumber {
+    if (typeof power === 'number' && !Number.isSafeInteger(power)) {
       throw new GameCoreError('INVALID_ARGUMENT', 'Power must be a non-negative safe integer.');
     }
-    return HugeNumber.power(this, power);
+    const exact = BigInt(power);
+    if (exact < 0n) {
+      throw new GameCoreError('INVALID_ARGUMENT', 'Power must be a non-negative integer.');
+    }
+    return HugeNumber.power(this, exact);
   }
 
-  private static power(initialBase: HugeNumber, power: number): HugeNumber {
+  private static power(initialBase: HugeNumber, power: bigint): HugeNumber {
     let result = HugeNumber.ONE;
     let base = initialBase;
     let remaining = power;
-    while (remaining > 0) {
-      const bit = remaining % 2;
-      if (bit === 1) {
+    while (remaining > 0n) {
+      if ((remaining & 1n) === 1n) {
         result = result.mul(base);
       }
-      // Exact for every safe integer: the numerator is even.
-      remaining = (remaining - bit) / 2;
-      if (remaining > 0) {
+      remaining >>= 1n;
+      if (remaining > 0n) {
         base = base.mul(base);
       }
     }

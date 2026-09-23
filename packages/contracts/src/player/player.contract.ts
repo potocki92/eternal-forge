@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { stageNumberSchema } from '../stage/stage-number.contract.js';
 import { playerNameSchema } from './player-name.js';
 
 /**
@@ -25,8 +26,8 @@ export const characterSchema = z.object({
   slot: z.number().int().min(1),
   name: z.string(),
   level: z.number().int().min(1),
-  /** Current stage. Unbounded in the game; safe-integer on the wire. */
-  stage: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER),
+  /** Current stage as a canonical decimal string, exact to 2^63 − 1 (ADR-018). */
+  stage: stageNumberSchema,
   createdAt: z.iso.datetime(),
 });
 export type CharacterDto = z.infer<typeof characterSchema>;
