@@ -1,6 +1,6 @@
 # Eternal Forge — Software Architecture
 
-Status: PARTIALLY IMPLEMENTED (Phases 0–3, Phase 4 PR 4.1) / EVOLVING
+Status: PARTIALLY IMPLEMENTED (Phases 0–3, Phase 4 PRs 4.1–4.2) / EVOLVING
 
 The architectural style, boundaries and package layout described here are
 IMPLEMENTED as of Phase 0. The headless Game Core simulation (HugeNumber, RNG,
@@ -9,7 +9,9 @@ Authentication, player identity persistence and the first authenticated API are
 IMPLEMENTED in Phase 2. The first persistent gameplay loop — server-authoritative
 combat, progression persistence, the game screen and the PixiJS combat scene —
 is IMPLEMENTED in Phase 3 (ADR-019 and ADR-020). Stage selection and farming
-are IMPLEMENTED in Phase 4 PR 4.1 (ADR-021, proposed). Domain events, CQRS
+are IMPLEMENTED in Phase 4 PR 4.1 (ADR-021). Online auto-battle, a client
+loop over the same combat request, is IMPLEMENTED in Phase 4 PR 4.2
+(ADR-022, proposed). Domain events, CQRS
 infrastructure, offline processing and leaderboards are PLANNED.
 
 See the "Phase N implementation status" sections at the end of this document
@@ -896,5 +898,55 @@ fresh row. No lock is held across a simulation and nothing is process-local.
 
 ## NOT IMPLEMENTED
 
-Auto-battle, offline progression, background combat and worker gameplay jobs
-(Phase 4 PR 4.2+).
+Auto-battle (since implemented, PR 4.2 below), offline progression,
+background combat and worker gameplay jobs (Phase 4 PR 4.2+).
+
+---
+
+# Phase 4 PR 4.2 implementation status — online auto-battle
+
+Status: IMPLEMENTED — awaiting review. Decision: ADR-022 (proposed).
+
+**Online auto-battle is not offline progression.** It exists only while a
+client is open, visible and sending requests. The server has no auto-battle
+state, endpoint, contract, table, worker job or loop; it cannot tell a fight
+sent by the loop from one sent by a tap.
+
+## Request flow
+
+```
+Browser (visible tab)
+  useAutoBattle ── intent: off | running | stopping | halted   (memory only)
+     │ nextAutoBattleStep(intent, screen) → wait(why) | fight at T
+     │   T = server nextCombatAt (anchored to serverTime) after the result is shown
+     │ one setTimeout(T) ── replaced on every change, cleared on unmount
+     v
+  useCombatSession.fight()   ← the same function as the Fight button
+     │ one request in flight at most; fresh key per fight, same key per retry
+     v
+  POST /player/characters/:id/combats      (ADR-019, unchanged)
+     ├─ 201/200 → shown → next step
+     ├─ 409 COMBAT_NOT_READY → re-read player state → new gate, new key
+     ├─ network / 5xx / 429  → same key, backoff 2–30 s, halt after 5
+     └─ 401 / 403 / 404 / STAGE_NOT_PLAYABLE → halt with reason
+```
+
+Throughput per character is bounded by the pacing gate on the server, not by
+the loop: several tabs, devices or a script share one timeline, and the
+losers receive `409`.
+
+## Module layout
+
+```
+apps/web/src/game/auto-battle/auto-battle.ts       reducer + step function (pure)
+apps/web/src/game/auto-battle/use-auto-battle.ts   the timer, visibility, stop on sign-out
+apps/web/src/game/use-page-visible.ts              Page Visibility API
+apps/web/src/game/components/battle-controls.tsx   Fight / Auto battle / Stop, status line
+apps/api/src/combat/application/run-combat.use-case.ts   structured log events
+```
+
+## NOT IMPLEMENTED
+
+Offline progression and its claim (PR 4.3), cross-tab coordination, general
+request rate limiting, auto-battle in a hidden tab, and auto-battle that
+survives a reload.

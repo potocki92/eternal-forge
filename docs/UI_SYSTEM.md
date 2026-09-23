@@ -17,6 +17,9 @@ IMPLEMENTED (Phase 3): the first game screen and the PixiJS combat scene —
 see "Game screen (Phase 3)" at the end of this document — plus the
 `ProgressBar` primitive and the HugeNumber formatter.
 
+IMPLEMENTED (Phase 4 PR 4.2): online auto-battle controls — see "Auto
+battle (Phase 4 PR 4.2)" at the end of this document.
+
 IMPLEMENTED (Phase 4 PR 4.1): the stage selector on the game screen — see
 "Stage selector (Phase 4 PR 4.1)" at the end of this document.
 
@@ -598,3 +601,36 @@ Status: IMPLEMENTED (ADR-021).
 - **Layout.** At 390×844 the open form overlays the battlefield instead of
   squeezing it (found by screenshot review); on desktop it overlays the same
   framed column.
+
+---
+
+# Auto battle (Phase 4 PR 4.2)
+
+Status: IMPLEMENTED (ADR-022).
+
+```
+off:                                     on:
+│ Stage 3: Husk awaits.        │         │ Fighting Stage 3: Husk…      │
+│                              │         │ Auto battle · Farming stage 3│  status line
+│ [    Fight     ][Auto battle]│         │ [ Stop auto battle  ][ Skip ]│
+```
+
+- **One obvious control per state.** Off: *Fight* (primary) and *Auto
+  battle* (secondary). On: a single full-width *Stop auto battle*; *Fight*
+  is hidden because the loop fights. *Skip* still ends an animation, never
+  the server's wait.
+- **Status line** (only while auto-battle is on or halted): the mode as the
+  server set it ("Climbing", "Farming stage 42"), "paused while the game is
+  hidden", "waits for your stage choice", "stops after this fight", or
+  "stopped" with the reason in the danger colour. A countdown ("Next fight in
+  3s", "Retrying in 4s") is shown beside it, `aria-hidden` so screen readers
+  hear state changes, not every second. The combat report keeps narrating
+  each fight as before.
+- **Stage choice while running.** The selector is locked only while a combat
+  request is in flight; a choice made during a fight's animation applies to
+  the next fight, and the loop waits while the choice is saving.
+- **No debugging information** on screen. `data-auto-status` and
+  `data-auto-step` attributes exist for tests.
+- **Layout.** Verified at 390×844 and desktop: no horizontal overflow, 48 px
+  touch targets.
+

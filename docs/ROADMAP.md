@@ -8,9 +8,10 @@ PHASE 4 — OFFLINE PROGRESSION (delivered as several PRs)
 
 Status:
 
-IN PROGRESS — PR 4.1 "Stage Selection & Farming" implemented and awaiting
-review (ADR-021, proposed). PR 4.2 and later must not start without the
-user's approval of PR 4.1. See "Phase 4" below.
+IN PROGRESS — PR 4.1 "Stage Selection & Farming" MERGED (PR #9, ADR-021
+accepted). PR 4.2 "Online Auto Battle" implemented and awaiting review
+(ADR-022, proposed). PR 4.3 (offline progression) must not start without the
+user's approval of PR 4.2. See "Phase 4" below.
 
 Phase 3 was merged to `main` as PR #6 (followed by the Supabase deployment
 PRs #7 and #8). The user started Phase 4 on 2026-09-23 with the PR 4.1 task.
@@ -575,14 +576,14 @@ the generic idempotency table, and hosting the API (ADR-012).
 
 # Phase 4 — Offline Progression
 
-Status: IN PROGRESS — PR 4.1 implemented, awaiting review
+Status: IN PROGRESS — PR 4.1 merged; PR 4.2 implemented, awaiting review
 
 Phase 4 is delivered as a sequence of PRs, one at a time. Each waits for the
 user's approval before the next begins.
 
 ## PR 4.1 — Stage Selection & Farming
 
-Status: IMPLEMENTED — awaiting review and CI. Decision: ADR-021 (proposed).
+Status: MERGED — PR #9. Decision: ADR-021 (accepted).
 
 Scope: the foundation auto-battle and offline progression attach to — where
 the hero fights and what a victory does to that position. No auto-battle,
@@ -618,8 +619,8 @@ timers, background combat, worker jobs, offline rewards or
       keeps exposed 4xx statuses from Express middleware
 - [x] documentation — ADR-021, ARCHITECTURE, GAME_DESIGN, DATABASE,
       SECURITY, UI_SYSTEM
-- [ ] GitHub Actions green on the pull request
-- [ ] user review and approval
+- [x] GitHub Actions green on the pull request
+- [x] user review and approval — merged as PR #9; PR 4.2 started 2026-09-23
 
 Validation (2026-09-23, local, PostgreSQL 16 and Redis 7):
 
@@ -647,6 +648,70 @@ Validation (2026-09-23, local, PostgreSQL 16 and Redis 7):
 Deferred to PR 4.2+: auto-battle, offline progression (`last_processed_at`,
 elapsed time, cap, rewards, claim, the generic idempotency table, summary UI)
 and the decision whether an offline run may climb or only farm.
+
+## PR 4.2 — Online Auto Battle
+
+Status: IMPLEMENTED — awaiting review and CI. Decision: ADR-022 (proposed).
+
+Scope: while the game is open and visible, the client keeps fighting through
+the existing server-authoritative combat. **Online auto-battle is not offline
+progression**: it needs an active client sending one ordinary combat request
+per fight, and nothing is computed for time the client was closed, hidden or
+asleep. No offline rewards, `last_processed_at`, worker jobs, server loops,
+Redis, WebSockets, migrations or contract changes.
+
+- [x] audit — the Phase 3 pacing gate (`next_combat_at`, `409
+      COMBAT_NOT_READY` + `Retry-After`), idempotency key, `version` check
+      and persisted stage mode already bound a repeating client; reused
+      unchanged. No rate limiter exists (documented, not added)
+- [x] web — `auto-battle/auto-battle.ts`: pure intent reducer (`off`,
+      `running`, `stopping`, `halted`) and `nextAutoBattleStep` (when to send
+      the next fight); `useAutoBattle` drives the existing
+      `useCombatSession().fight` with one timer; `usePageVisible`
+- [x] web — timing from the server's `nextCombatAt` only; no catch-up;
+      paused while the page is hidden; waits for a pending stage choice
+- [x] web — failures: same-key backoff (2–30 s) for transient errors and
+      429, re-read and new key after `COMBAT_NOT_READY`, halt with a reason
+      on 401/403/404/`STAGE_NOT_PLAYABLE`/repeated failure
+- [x] web — `BattleControls`: **Fight** + **Auto battle** when off, **Stop
+      auto battle** when on, status line (mode, paused/waiting, countdown);
+      the stage selector is locked only while a combat request is in flight
+- [x] web — combat failures classify 429 (`limited`, retryable) and other
+      4xx (`rejected`, final) instead of treating them as outages
+- [x] api — structured log events `combat.replayed`, `combat.conflict`,
+      `combat.stage_not_playable`, `combat.not_ready` (debug);
+      `PinoLoggerService` records object messages as fields
+- [x] documentation — ADR-022, ADR-021 accepted, ARCHITECTURE, GAME_DESIGN,
+      SECURITY, UI_SYSTEM
+- [ ] GitHub Actions green on the pull request
+- [ ] user review and approval
+
+Validation (2026-09-23, local, PostgreSQL 16 and Redis 7):
+
+- format check, lint, typecheck, production build: pass.
+- Unit tests: 1 075 pass (PR 4.1: 1 025) — `api` 206 (+8: log events,
+  structured logger), `web` 190 (+42: reducer, step function, game screen
+  auto-battle scenarios, failure classification); other packages unchanged.
+- PostgreSQL integration: 96 pass (was 81), three consecutive runs. New
+  `auto-battle.int.test.ts`: PROGRESS loop on server-named stages with a
+  reconciled ledger; FARM loop stays put; FARM on the uncleared frontier boss;
+  mode and stage changes between fights; a selection does not open the gate;
+  1 ms early refused with `Retry-After`; 60 spam requests write nothing; a
+  greedy 4 req/s client for 40 s never overlaps combats; lost-response retry
+  replays; two tabs across two API instances get one combat per window; a
+  phone on auto and a desktop by hand; a farm stage of 4·10⁹ exact; stage
+  2^53 + 1 refused `STAGE_NOT_PLAYABLE` with nothing written; missing,
+  expired, forged and foreign tokens.
+- Playwright: 52 pass (was 46), mobile 390×844 and desktop: farm on auto →
+  several committed fights on stage 2 → stop (no request for 12 s) → climb
+  on auto from the frontier → refresh keeps the server state with auto off;
+  two tabs on auto (database proves no overlapping combats); sign-out stops
+  the loop and sign-in starts with it off. Screenshots reviewed at 390×844:
+  no horizontal overflow.
+- Migrations: none.
+
+Deferred to PR 4.3: offline progression — `last_processed_at`, elapsed
+server time, cap, rewards, claim, the generic idempotency table, summary UI.
 
 ## Phase 4 scope (whole phase)
 
