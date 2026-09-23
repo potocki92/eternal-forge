@@ -14,7 +14,7 @@ import { GetOwnedCharacterUseCase } from '../application/get-owned-character.use
 import { GetPlayerStateUseCase } from '../application/get-player-state.use-case.js';
 import { ProvisionPlayerUseCase } from '../application/provision-player.use-case.js';
 import { InvalidPlayerNameError } from '../domain/player-name.js';
-import { toCharacterDto, toPlayerStateResponse } from './player.mapper.js';
+import { toCharacterDto, toPlayerStateResponse, toProgressionDto } from './player.mapper.js';
 
 type ProvisionPlayerBody = z.output<typeof provisionPlayerRequestSchema>;
 
@@ -41,7 +41,7 @@ export class PlayerController {
       throw notProvisioned();
     }
 
-    return toPlayerStateResponse(result.player, result.serverTime);
+    return toPlayerStateResponse(result.player, result.progression, result.serverTime);
   }
 
   /** Idempotent: 201 when this request created the player, 200 when it already existed. */
@@ -56,7 +56,7 @@ export class PlayerController {
 
       response.status(result.created ? HttpStatus.CREATED : HttpStatus.OK);
 
-      return toPlayerStateResponse(result.player, result.serverTime);
+      return toPlayerStateResponse(result.player, result.progression, result.serverTime);
     } catch (error) {
       if (error instanceof InvalidPlayerNameError) {
         throw new ApiException(
@@ -77,13 +77,16 @@ export class PlayerController {
     @CurrentIdentity() identity: AuthenticatedIdentity,
     @Param('characterId', new ZodValidationPipe(z.uuid())) characterId: string,
   ): Promise<CharacterResponse> {
-    const character = await this.getOwnedCharacter.execute(identity, characterId);
+    const owned = await this.getOwnedCharacter.execute(identity, characterId);
 
-    if (character === null) {
+    if (owned === null) {
       throw new ApiException(HttpStatus.NOT_FOUND, 'NOT_FOUND', 'Character not found.');
     }
 
-    return { character: toCharacterDto(character) };
+    return {
+      character: toCharacterDto(owned.character),
+      progression: toProgressionDto(owned.progression),
+    };
   }
 }
 

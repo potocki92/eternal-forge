@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { InMemoryPlayerRepository } from '../../../test/support/in-memory-player.repository.js';
+import { InMemoryGameRepository } from '../../../test/support/in-memory-game.repository.js';
 import type { AuthenticatedIdentity } from '../../auth/application/authenticated-identity.js';
 import { InvalidPlayerNameError } from '../domain/player-name.js';
 import { GetPlayerStateUseCase } from './get-player-state.use-case.js';
@@ -13,7 +13,7 @@ function identity(): AuthenticatedIdentity {
 }
 
 function setup() {
-  const repository = new InMemoryPlayerRepository();
+  const repository = new InMemoryGameRepository();
   return {
     provision: new ProvisionPlayerUseCase(repository, clock),
     getState: new GetPlayerStateUseCase(repository, clock),
@@ -36,7 +36,10 @@ describe('ProvisionPlayerUseCase', () => {
       slot: 1,
       level: 1,
     });
-    expect(result.player.mainCharacter.stage.toString()).toBe('1');
+    const { stages } = result.player.mainCharacter;
+    expect(stages.current.toString()).toBe('1');
+    expect(stages.highestReached.toString()).toBe('1');
+    expect(stages.highestCleared).toBeNull();
     expect(result.serverTime).toEqual(clock.now());
   });
 

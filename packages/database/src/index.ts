@@ -6,6 +6,7 @@
  * application's infrastructure layer (docs/ARCHITECTURE.md).
  */
 export { createPrismaClient, pingDatabase } from './prisma/prisma-client.js';
+export { isUniqueConstraintViolation } from './prisma/prisma-errors.js';
 export type {
   DatabaseProbeTarget,
   PrismaClient,

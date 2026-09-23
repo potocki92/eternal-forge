@@ -1,6 +1,6 @@
 # Eternal Forge — Security Model
 
-Status: PARTIALLY IMPLEMENTED (Phases 0–2) / EVOLVING
+Status: PARTIALLY IMPLEMENTED (Phases 0–3) / EVOLVING
 
 The principles below are binding from the first line of gameplay code. A
 per-control implementation status is listed at the end of this document.
@@ -443,21 +443,93 @@ See ADR-016 and ADR-017.
 - Can the operation leave partial state? Provisioning is one transaction; a
   profile without a character is repaired by the next call.
 
+## IMPLEMENTED (Phase 3) — the combat transaction
+
+See ADR-019.
+
+- **No gameplay input from the client.** `POST
+  /player/characters/:characterId/combats` has no body. Anything sent in one
+  is ignored, and a test sends a forged stage, level, seed, outcome and reward
+  to prove it. The character id is a *target*, resolved with the verified
+  owner in the `WHERE` clause. Another player's character is a 404.
+- **Seeds are server custody.** Every combat draws 256 bits from the OS
+  CSPRNG. The seed does not exist before the request and is never sent to
+  the client. The result is committed before the response leaves, so a client
+  cannot discard an unfavourable roll and try again.
+- **Game Core decides everything.** Enemy, damage, outcome, rewards,
+  experience, level-up, and stage advance or fallback all come from one pure
+  function (`resolveStageAttempt`). The API adds no rule, and a test compares
+  the API's result with Game Core's for the same seed.
+- **Replay-safe.** An idempotency key (a UUID, validated, never echoed) is
+  unique per character in `combat_runs`. A repeated key returns the recorded
+  combat, re-simulated from its stored inputs and checked against its stored
+  summary. It is never a second reward. A mismatch is a logged 500, never a
+  different result.
+- **Concurrency-safe.** An optimistic version check in the same transaction
+  as the combat insert means concurrent requests produce one combat. This is
+  verified with 25 simultaneous requests, and with retries spread across two
+  API instances, against PostgreSQL.
+- **Pacing gate.** A combat occupies the hero for its simulated duration on
+  the server clock. An earlier request is `409 COMBAT_NOT_READY` with
+  `Retry-After`. A script therefore cannot progress faster than the rules
+  allow, which a request rate limit alone would not prevent.
+- **Ledger integrity in the database.** The HugeNumber CHECKs reject
+  negative, fractional and non-normalised amounts. A combat row whose outcome
+  and end reason disagree, or a loss that pays, cannot be stored. RLS is
+  enabled on `combat_runs`, with `anon` and `authenticated` revoked.
+- **Browser boundary.** `apps/web` may import only the `HugeNumber` value
+  type from Game Core (ESLint). The web build refuses privileged
+  `NEXT_PUBLIC_` variables. Responses are validated against the shared
+  contract before rendering.
+- **Stage records are server truth (ADR-020).** The current stage, the highest
+  stage reached and the highest stage cleared are all written only by Game
+  Core's transition, inside the same version-conditional transaction. A
+  record can rise only through a committed win and never falls. No request
+  field can set them. Game Core, the CHECK constraints and the contract each
+  enforce the invariants. A future ranking reads `highest_stage_cleared`,
+  which only a recorded win can raise. A stage too deep for the rule set is
+  refused with `409 STAGE_NOT_PLAYABLE` before a seed is drawn, and nothing is
+  written.
+
+## Standing review answers — Phase 3 (combat)
+
+- Can the client fake it? No. The request carries no gameplay value, and the
+  server derives stage, enemy, seed and result from persisted state.
+- Can it be replayed? A replayed key returns the same recorded combat. A new
+  key before `nextCombatAt` is refused. After it, it is simply the next
+  legitimate fight.
+- Can it be called concurrently? Yes. Exactly one request commits, the others
+  replay or receive 409. Verified against PostgreSQL.
+- Can rewards be duplicated? No. One row per `(character, key)`, one version
+  step per combat, and no reward on a loss, even at the database level.
+- Can another player's resource be targeted? No. Ownership is in the read and
+  again in the conditional update.
+- Can invalid numeric values enter? No. Stages are exact `bigint`s (ADR-018),
+  and the three stage values must satisfy their invariants at every layer
+  (ADR-020). Nothing is clamped or truncated.
+  Amounts are canonical HugeNumbers, whole and non-negative by contract and
+  by CHECK. Level is bounded by Game Core and the column.
+- Can the operation leave partial state? No. The progress update and the
+  combat row commit in one transaction or not at all.
+
 ## Known limitations
 
 - **Revocation lag:** after sign-out, the access token remains valid at the API
   until it expires. The refresh token is revoked immediately.
 - **Tokens in `localStorage`:** an XSS flaw would expose them. A strict Content
   Security Policy is not yet configured.
-- **No rate limiting** on API endpoints yet. Supabase Auth applies its own limits
-  to sign-in and sign-up.
+- **No general rate limiting** on API endpoints yet. Combat is bounded per
+  character by the pacing gate, and even refused requests cost an owner-scoped
+  read. Supabase Auth applies its own limits to sign-in and sign-up.
 
 ## PLANNED
 
 - Rate limiting — per endpoint semantics, Redis-backed so it holds across API
   replicas. First candidates: provisioning and every future economy command.
 - Content Security Policy and further browser hardening headers for `apps/web`.
-- Economy transactionality, idempotency keys and audit trail — Phase 4 onwards.
+- The generic idempotency table for operations without a natural result row,
+  and an `economy_transactions` ledger once gold can be *spent* — Phase 4
+  onwards. Phase 3's credits are audited by `combat_runs`.
 - Account deletion covering profile, characters and all future player data.
 - Automated dependency and secret scanning in CI — Phase 20 at the latest.
 

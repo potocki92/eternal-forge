@@ -10,6 +10,8 @@ export { Button, buttonVariants } from './components/button';
 export type { ButtonProps } from './components/button';
 export { Panel } from './components/panel';
 export type { PanelProps } from './components/panel';
+export { ProgressBar, progressBarFillVariants } from './components/progress-bar';
+export type { ProgressBarProps } from './components/progress-bar';
 export { Skeleton } from './components/skeleton';
 export { StatusBadge, statusBadgeVariants } from './components/status-badge';
 export type { StatusBadgeProps } from './components/status-badge';

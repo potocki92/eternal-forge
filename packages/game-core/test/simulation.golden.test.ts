@@ -6,6 +6,7 @@ import {
   StageNumber,
   createCharacter,
   getGameRules,
+  resolveStageAttempt,
   simulateCombat,
   simulateStages,
 } from '../src/index.js';
@@ -122,6 +123,62 @@ describe(`golden simulations — rules v${GAME_RULES_VERSION}`, () => {
     expect(result.highestStageCleared?.toString()).toBe(golden.highest);
     expect(result.totalRewards.gold.toString()).toBe(golden.gold);
     expect(result.totalRewards.experience.toString()).toBe(golden.experience);
+    expect(fingerprint(result)).toBe(golden.fingerprint);
+  });
+
+  // Recorded in Phase 3 (ADR-019), when stage attempts were first persisted.
+  // They pin the progression rules of RULES_V1 — level-up, defeat fallback,
+  // the stage records of ADR-020 — and the whole attempt, not only its combat.
+  //
+  // `combat` and `rewards` fingerprints were taken from the build *before*
+  // ADR-020 replaced the single stage with StageProgress: they prove that
+  // change altered no outcome. `fingerprint` covers the whole result in its
+  // ADR-020 shape; it was re-recorded then, before any result was persisted.
+  it.each([
+    {
+      name: 'a first-stage win',
+      progress: { level: 1, experience: '8', gold: '0', stage: 1n },
+      seed: 'golden-attempt-win',
+      after: { level: 2, experience: '1e0', gold: '5e0', stages: '2 / 2 / 1' },
+      combat: '0d59b7a83cc458e03d9155496990c1526ca3b3f9fd443e7c5bd78d4ad3aaf05f',
+      rewards: '734d63eb255403f460597a3f90d45f3c936ad521113d9b3eeb2a724e3c7f7583',
+      fingerprint: 'fe7a213eec0198f631cf5f68e19a53fedefe9c6c743a8cfae3ed25bf6a348e9f',
+    },
+    {
+      name: 'a boss-wall defeat',
+      progress: { level: 4, experience: '3', gold: '41', stage: 10n },
+      seed: 'golden-attempt-boss',
+      after: { level: 4, experience: '3e0', gold: '4.1e1', stages: '9 / 10 / 9' },
+      combat: '47d0a89bfcdf42ee43ec99da0522a03deb7006d6f8dadb2e960b309233c206bb',
+      rewards: '9222fba6c915c38ac92410540a0a42cd53a993fc7c74a017467e38f518137a01',
+      fingerprint: '3c5c1c38d1bf55a31d463c3390d239345411a2b83e81bdbc65214ef249eb164b',
+    },
+  ])('stage attempt: $name', (golden) => {
+    // A hero pushing its record: every stage before this one cleared.
+    const stage = StageNumber.of(golden.progress.stage);
+    const result = resolveStageAttempt({
+      progress: {
+        level: golden.progress.level,
+        experience: HugeNumber.fromDecimal(golden.progress.experience),
+        gold: HugeNumber.fromDecimal(golden.progress.gold),
+        stages: {
+          current: stage,
+          highestReached: stage,
+          highestCleared: stage.equals(StageNumber.FIRST) ? null : stage.stepBack(1),
+        },
+      },
+      seed: golden.seed,
+      rulesVersion: GAME_RULES_VERSION,
+    });
+    const { stages } = result.after;
+    expect({
+      level: result.after.level,
+      experience: result.after.experience.toString(),
+      gold: result.after.gold.toString(),
+      stages: `${stages.current.toString()} / ${stages.highestReached.toString()} / ${stages.highestCleared?.toString() ?? 'null'}`,
+    }).toEqual(golden.after);
+    expect(fingerprint(result.combat)).toBe(golden.combat);
+    expect(fingerprint(result.rewards)).toBe(golden.rewards);
     expect(fingerprint(result)).toBe(golden.fingerprint);
   });
 });

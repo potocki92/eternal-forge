@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { GameCoreError } from '../errors.js';
+import { HugeNumber } from '../huge-number/index.js';
 import { GAME_RULES_VERSION } from '../rules-version.js';
 import { validateCombatStats } from '../stats/combat-stats.js';
 import { getGameRules, supportedRulesVersions } from './registry.js';
@@ -25,6 +26,7 @@ describe('game rules registry', () => {
     expect(Object.isFrozen(rules)).toBe(true);
     expect(Object.isFrozen(rules.stages.bossArchetype)).toBe(true);
     expect(Object.isFrozen(rules.character.baseStats)).toBe(true);
+    expect(Object.isFrozen(rules.progression)).toBe(true);
   });
 
   it('contains only internally consistent data', () => {
@@ -48,6 +50,12 @@ describe('game rules registry', () => {
       expect(rules.stages.bossInterval).toBeGreaterThan(0);
       expect(rules.combat.timeLimitMs).toBeGreaterThan(0);
       expect(rules.combat.maxCritChanceBp).toBeLessThanOrEqual(10_000);
+      // Every level must cost at least one point of experience, and never get
+      // cheaper, or a single gain could level indefinitely.
+      expect(rules.progression.experienceToLevelBase.gte(HugeNumber.ONE)).toBe(true);
+      expect(rules.progression.experienceToLevelGrowth.gte(HugeNumber.ONE)).toBe(true);
+      expect(Number.isSafeInteger(rules.progression.stagesLostOnDefeat)).toBe(true);
+      expect(rules.progression.stagesLostOnDefeat).toBeGreaterThanOrEqual(0);
     }
   });
 });

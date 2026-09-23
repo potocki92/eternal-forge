@@ -49,3 +49,46 @@ export type {
 
 export { STAGE_NUMBER_WIRE_MAX, stageNumberSchema } from './stage/stage-number.contract.js';
 export type { StageNumberDto } from './stage/stage-number.contract.js';
+
+export { hugeAmountSchema, hugeNumberSchema } from './huge-number/huge-number.contract.js';
+export type { HugeNumberDto } from './huge-number/huge-number.contract.js';
+
+export {
+  encounterSchema,
+  enemySchema,
+  heroStatsSchema,
+  progressionSchema,
+  stageKindSchema,
+  stageProgressSchema,
+  stageSchema,
+} from './game/progression.contract.js';
+export type {
+  EncounterDto,
+  EnemyDto,
+  HeroStatsDto,
+  ProgressionDto,
+  StageDto,
+  StageKind,
+  StageProgressDto,
+} from './game/progression.contract.js';
+
+export {
+  IDEMPOTENCY_KEY_HEADER,
+  combatEndReasonSchema,
+  combatEventSchema,
+  combatOutcomeSchema,
+  combatResponseSchema,
+  combatSchema,
+  idempotencyKeySchema,
+  progressSnapshotSchema,
+  rewardsSchema,
+} from './combat/combat.contract.js';
+export type {
+  CombatDto,
+  CombatEndReasonDto,
+  CombatEventDto,
+  CombatOutcomeDto,
+  CombatResponse,
+  ProgressSnapshotDto,
+  RewardsDto,
+} from './combat/combat.contract.js';

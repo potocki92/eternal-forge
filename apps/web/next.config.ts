@@ -1,4 +1,8 @@
 import type { NextConfig } from 'next';
+import { assertDeployableEnvironment } from './src/config/deployment-guard';
+
+// Fails the build on a misconfigured deployment (docs/DEPLOYMENT.md).
+assertDeployableEnvironment(process.env);
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,

@@ -14,6 +14,7 @@ export interface GameRules {
   readonly character: CharacterRules;
   readonly stages: StageRules;
   readonly rewards: RewardRules;
+  readonly progression: ProgressionRules;
 }
 
 export interface CombatRules {
@@ -66,4 +67,21 @@ export interface RewardRules {
   readonly experienceGrowth: HugeNumber;
   /** Multiplier on boss-stage rewards. */
   readonly bossRewardMultiplier: HugeNumber;
+}
+
+/**
+ * How a character moves: levels from experience, and the stage ladder after a
+ * combat (ADR-019).
+ */
+export interface ProgressionRules {
+  /** Experience needed to go from level 1 to level 2. */
+  readonly experienceToLevelBase: HugeNumber;
+  /** Per-level multiplier: level `L` needs `floor(base × growth^(L − 1))`. */
+  readonly experienceToLevelGrowth: HugeNumber;
+  /**
+   * Stages a character falls back after a lost combat, never below stage 1.
+   * Zero keeps it on the stage it lost. A positive value turns a wall into a
+   * farm: the character earns rewards on earlier stages until it can pass.
+   */
+  readonly stagesLostOnDefeat: number;
 }

@@ -33,9 +33,7 @@ test.describe('registration', () => {
     await expect(page.getByText('Level', { exact: true })).toBeVisible();
     // The stage arrives as a canonical decimal string (ADR-018) and renders as a number.
     await expect(page.locator('dt:text-is("Stage") + dd')).toHaveText('1');
-    await expect(page.getByTestId('signed-in-as')).toHaveText(
-      `Signed in as ${account.displayName}`,
-    );
+    await expect(page.getByTestId('signed-in-as')).toHaveText(account.displayName);
   });
 
   test('an invalid hero name is explained before anything is sent', async ({ page }) => {

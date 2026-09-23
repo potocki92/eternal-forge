@@ -24,6 +24,7 @@
     "clean": "rm -rf dist .turbo *.tsbuildinfo"
   },
   "dependencies": {
+    "@eternal-forge/game-core": "workspace:*",
     "zod": "catalog:"
   },
   "devDependencies": {

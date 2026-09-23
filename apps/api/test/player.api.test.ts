@@ -8,8 +8,8 @@ import {
 import request from 'supertest';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { AccessTokenVerificationUnavailableError } from '../src/auth/application/ports/access-token-verifier.port.js';
-import { createPlayerTestApp, httpServer } from './support/create-test-app.js';
-import { InMemoryPlayerRepository } from './support/in-memory-player.repository.js';
+import { createTestApp, httpServer } from './support/create-test-app.js';
+import { InMemoryGameRepository } from './support/in-memory-game.repository.js';
 import { TestTokenIssuer } from './support/token-issuer.js';
 
 /**
@@ -28,7 +28,8 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
-  app = await createPlayerTestApp({ issuer, repository: new InMemoryPlayerRepository() });
+  const repository = new InMemoryGameRepository();
+  app = await createTestApp({ issuer, players: repository, combats: repository });
 });
 
 afterEach(async () => {
@@ -115,9 +116,10 @@ describe('authentication', () => {
 
 describe('signing keys unavailable', () => {
   it('answers 503 AUTH_UNAVAILABLE with a retry hint, not 401', async () => {
-    const outage = await createPlayerTestApp({
+    const outage = await createTestApp({
       issuer,
-      repository: new InMemoryPlayerRepository(),
+      players: new InMemoryGameRepository(),
+      combats: new InMemoryGameRepository(),
       verifier: { verify: () => Promise.reject(new AccessTokenVerificationUnavailableError()) },
     });
 
@@ -158,7 +160,8 @@ describe('GET /player/state', () => {
 
     expect(playerStateResponseSchema.parse(response.body)).toMatchObject({
       profile: { id: state.profile.id, displayName: 'Kael' },
-      character: { name: 'Ember', level: 1, stage: '1' },
+      character: { name: 'Ember', level: 1 },
+      progression: { currentStage: '1', highestStageReached: '1', highestStageCleared: null },
     });
   });
 
@@ -243,7 +246,13 @@ describe('impersonation attempts', () => {
       .set('authorization', `Bearer ${token}`)
       .expect(200);
 
-    expect(characterResponseSchema.parse(response.body).character.id).toBe(state.character.id);
+    const body = characterResponseSchema.parse(response.body);
+    expect(body.character.id).toBe(state.character.id);
+    expect(body.progression).toMatchObject({
+      currentStage: '1',
+      highestStageReached: '1',
+      highestStageCleared: null,
+    });
   });
 
   it('rejects a character id that is not a UUID', async () => {

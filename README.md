@@ -5,11 +5,15 @@ theorycrafting, competitive rankings and effectively unlimited growth.
 
 > The repository is named `external-forge`; the product is **Eternal Forge**.
 
-**Current phase: Phase 2 — Authentication & Player** (implemented, awaiting
-CI and approval). Players can register, sign in and out, name a hero and see
-their persisted profile and character through an authenticated API. The
-deterministic Game Core from Phase 1 exists but is not yet wired to a combat
-screen. See [`docs/ROADMAP.md`](docs/ROADMAP.md).
+**Current phase: Phase 3 — First Gameplay Loop** (implemented, awaiting CI and
+approval). A signed-in player fights the enemy on their hero's current stage.
+The server resolves every combat with the deterministic Game Core, grants
+gold and experience, levels the hero up, advances a stage on a win and falls
+back a stage on a loss. A defeat never erases the records: the highest stage
+reached and the highest stage cleared are kept separately from the current
+stage (ADR-020). Bosses come every tenth stage. The result is
+persisted atomically and played back on a mobile-first game screen with a
+PixiJS combat scene. See [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ---
 
@@ -42,7 +46,7 @@ the end-to-end suite. To use a real project instead, set `SUPABASE_URL`,
 Then open:
 
 - http://localhost:3000 — start page, sign-in and registration
-- http://localhost:3000/play — the player shell (requires sign-in)
+- http://localhost:3000/play — the game (requires sign-in)
 - http://localhost:3000/status — live readiness of the API and its dependencies
 - http://localhost:3001/health — API liveness
 - http://localhost:3001/health/ready — API readiness
@@ -81,7 +85,7 @@ file is not read at all when `NODE_ENV=production`.
 
 ```
 apps/
-  web/        Next.js application — React UI, later the PixiJS combat scene
+  web/        Next.js application — React UI and the PixiJS combat scene
   api/        NestJS HTTP API — the authoritative server
   worker/     BullMQ worker — background and scheduled processing
 
@@ -94,7 +98,9 @@ packages/
   eslint-config/     Shared flat ESLint configurations
   typescript-config/ Shared TypeScript presets
 
-docs/         Architecture, game design, database, security, UI, roadmap
+supabase/     Supabase CLI config for the optional local stack (no credentials)
+
+docs/         Architecture, game design, database, security, UI, roadmap, deployment
 docs/adr/     Architecture Decision Records
 ```
 
@@ -122,6 +128,11 @@ docs/adr/     Architecture Decision Records
   client. Every route is authenticated unless explicitly public
   ([ADR-016](docs/adr/ADR-016-authentication-and-identity.md),
   [ADR-017](docs/adr/ADR-017-player-identity-persistence.md)).
+- **Combat is a server transaction.** The client sends a target and an
+  idempotency key, never a gameplay value. Seeds come from the server's
+  CSPRNG, Game Core decides everything, and one conditional transaction
+  records the result. Retries replay, races produce one combat, and combat
+  time cannot be skipped ([ADR-019](docs/adr/ADR-019-server-authoritative-combat-transaction.md)).
 
 Start with [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), then
 [`docs/adr/`](docs/adr/README.md).
@@ -135,7 +146,11 @@ list of offending variable names — never their values.
 Never commit `.env`. The Supabase service-role key bypasses Row Level Security;
 no current process needs it, and it must only ever exist in server-side
 environments
-([`docs/SECURITY.md`](docs/SECURITY.md)).
+([`docs/SECURITY.md`](docs/SECURITY.md)). The web build refuses to run with a
+privileged-looking `NEXT_PUBLIC_` variable.
+
+Hosted environments (Supabase DEV, Vercel) and the owner checklists are in
+[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
 ## Contributing
 

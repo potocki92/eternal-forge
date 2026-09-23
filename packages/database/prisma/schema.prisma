@@ -2,7 +2,8 @@
 //
 // PostgreSQL is the persistent source of truth (docs/DATABASE.md). Tables are
 // introduced by the phase that needs them. Phase 2 adds identity-linked player
-// data only: `profiles` and `characters` (ADR-017).
+// data only: `profiles` and `characters` (ADR-017). Phase 3 adds progression
+// to `characters` and the combat record `combat_runs` (ADR-019).
 //
 // Domain entities are NOT Prisma models. Prisma models are persistence models,
 // mapped to domain entities by repository implementations (CLAUDE.md —
@@ -43,23 +44,104 @@ model Profile {
 
 // A playable character owned by a profile.
 //
-// Only the *source* of state is stored. Combat stats are derived from `level`
-// by the versioned Game Core rules and are never persisted (ADR-017).
+// Only the *source* of state is stored. Combat stats, the experience needed for
+// the next level and the enemy on the current stage are derived by the
+// versioned Game Core rules and are never persisted (ADR-017, ADR-019).
+//
+// HugeNumber quantities use the two-column form of ADR-013: `<name>_coef`
+// (18-digit coefficient, or 0) and `<name>_exp` (scientific exponent, or the
+// zero sentinel -2147483648). The migration constrains them to normalised,
+// non-negative whole amounts.
 //
 // `slot` makes "the main character" a data property instead of a schema
 // limit: Phase 2 provisions slot 1, and more slots need no migration.
 model Character {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  profileId String   @map("profile_id") @db.Uuid
-  slot      Int      @db.SmallInt
-  name      String   @db.VarChar(24)
-  level     Int      @default(1)
-  /// Stages are effectively unlimited (docs/GAME_DESIGN.md), hence bigint.
-  stage     BigInt   @default(1)
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
-  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  id                  String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  profileId           String      @map("profile_id") @db.Uuid
+  slot                Int         @db.SmallInt
+  name                String      @db.VarChar(24)
+  level               Int         @default(1)
+  /// Stage progress (ADR-020). Stages are effectively unlimited, hence bigint.
+  /// The stage the next combat is fought on — pushed or farmed.
+  currentStage        BigInt      @default(1) @map("current_stage")
+  /// The highest stage ever unlocked. Never decreases.
+  highestStageReached BigInt      @default(1) @map("highest_stage_reached")
+  /// The highest stage ever defeated; NULL until the first clear. Never decreases.
+  highestStageCleared BigInt?     @map("highest_stage_cleared")
+  /// Experience within the current level (HugeNumber pair).
+  experienceCoef      BigInt      @default(0) @map("experience_coef")
+  experienceExp       Int         @default(-2147483648) @map("experience_exp")
+  /// Gold (HugeNumber pair).
+  goldCoef            BigInt      @default(0) @map("gold_coef")
+  goldExp             Int         @default(-2147483648) @map("gold_exp")
+  /// Server time before which the character is still fighting its last combat.
+  nextCombatAt        DateTime    @default(now()) @map("next_combat_at") @db.Timestamptz(3)
+  /// Optimistic concurrency token: every progression write increments it.
+  version             BigInt      @default(0)
+  createdAt           DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+  profile             Profile     @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  combatRuns          CombatRun[]
 
   @@unique([profileId, slot], map: "characters_profile_id_slot_key")
   @@map("characters")
+}
+
+enum CombatOutcome {
+  WIN
+  LOSS
+
+  @@map("combat_outcome")
+}
+
+enum CombatEndReason {
+  ENEMY_DEFEATED
+  PLAYER_DEFEATED
+  TIME_LIMIT
+
+  @@map("combat_end_reason")
+}
+
+// One resolved combat: the replay inputs and the audited result (ADR-019).
+//
+// The event log is not stored. `resolveStageAttempt(inputs, seed,
+// rules_version)` regenerates it exactly. The summary columns record what was
+// granted and why, which makes this table the ledger of every gold and
+// experience gain.
+//
+// `(character_id, idempotency_key)` is unique: a retried request finds the
+// combat it already produced instead of fighting again.
+model CombatRun {
+  id                        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  characterId               String          @map("character_id") @db.Uuid
+  /// Client-generated per fight intent. Carries no gameplay input.
+  idempotencyKey            String          @map("idempotency_key") @db.Uuid
+  /// GAME_RULES_VERSION the combat was resolved under (docs/DATABASE.md).
+  rulesVersion              Int             @map("rules_version")
+  /// Server CSPRNG seed. Never chosen by or sent to the client.
+  seed                      String          @db.VarChar(64)
+  // Progression before the combat: the replay input. `stage` is the stage
+  // actually fought (the current stage then), whatever the character moved to.
+  stage                     BigInt
+  highestStageReachedBefore BigInt          @map("highest_stage_reached_before")
+  highestStageClearedBefore BigInt?         @map("highest_stage_cleared_before")
+  characterLevel            Int             @map("character_level")
+  experienceBeforeCoef      BigInt          @map("experience_before_coef")
+  experienceBeforeExp       Int             @map("experience_before_exp")
+  goldBeforeCoef            BigInt          @map("gold_before_coef")
+  goldBeforeExp             Int             @map("gold_before_exp")
+  // Summary of the result: the audit record.
+  outcome                   CombatOutcome
+  endReason                 CombatEndReason @map("end_reason")
+  durationMs                Int             @map("duration_ms")
+  rewardGoldCoef            BigInt          @map("reward_gold_coef")
+  rewardGoldExp             Int             @map("reward_gold_exp")
+  rewardExperienceCoef      BigInt          @map("reward_experience_coef")
+  rewardExperienceExp       Int             @map("reward_experience_exp")
+  /// Server time the combat was resolved and committed.
+  createdAt                 DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  character                 Character       @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@unique([characterId, idempotencyKey], map: "combat_runs_character_id_idempotency_key_key")
+  @@map("combat_runs")
 }

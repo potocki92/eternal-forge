@@ -20,7 +20,8 @@
     "SUPABASE_SERVICE_ROLE_KEY",
     "FAKE_AUTH_PORT",
     "FAKE_AUTH_HOST",
-    "FAKE_AUTH_ACCESS_TOKEN_TTL"
+    "FAKE_AUTH_ACCESS_TOKEN_TTL",
+    "VERCEL"
   ],
   "tasks": {
     "db:generate": {

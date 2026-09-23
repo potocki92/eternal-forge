@@ -59,4 +59,11 @@ export const RULES_V1: GameRules = {
     experienceGrowth: d('1.10'),
     bossRewardMultiplier: d('5'),
   },
+  // Added in Phase 3, before any version-1 result was persisted, without
+  // changing an existing outcome (ADR-019). Frozen from here on.
+  progression: {
+    experienceToLevelBase: d('10'),
+    experienceToLevelGrowth: d('1.10'),
+    stagesLostOnDefeat: 1,
+  },
 };

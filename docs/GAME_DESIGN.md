@@ -108,7 +108,82 @@ Stage and reward rules v1 — IMPLEMENTED (Phase 1):
   `floor(base × growth^(stage − 1))`, multiplied for bosses. A loss yields
   nothing.
 - A character's health and damage grow per level. Level-ups from experience
-  are PLANNED (Phase 3); Phase 1 only computes the rewards.
+  are IMPLEMENTED in Phase 3 (below).
+
+## Progression rules v1 — IMPLEMENTED (Phase 3)
+
+The first persistent loop (ADR-019). The numbers are provisional balance and
+live only in `RULES_V1.progression`. Rules v1 was extended in place because
+nothing produced under it had been persisted yet. `RULES_V1` is immutable once
+PR #6 is merged. Any later change to balance or to the stage transition needs
+rules v2 (ADR-020 §8).
+
+- **One stage at a time.** The player fights the enemy on the character's
+  current stage. The server chooses the stage, the enemy and the seed. The
+  player only decides *when* to fight.
+- **Win:** the stage's gold and experience are granted, the stage counts as
+  cleared, and the character advances exactly one stage.
+- **Loss:** nothing is granted, and the character falls back one stage
+  (`stagesLostOnDefeat`), never below stage 1. A wall becomes a farm: the
+  player earns rewards on the stage before it until their level beats it.
+  Without this rule the only progression source would dry up at the first
+  wall. A simulation of the loop stalled permanently at the stage-10 boss.
+  The rule is **uniform**: a defeat on a regular stage falls back just like a
+  boss defeat. "Retry the same stage" would deadlock a hero that loses a
+  regular stage, because Phase 3 offers no other progression source and no
+  stage choice. Under `RULES_V1`, regular-stage losses do not occur in
+  simulated play (0 of 1 421 losses), so the uniform rule costs nothing. It
+  is rule data, and `0` means retry (ADR-020 §3).
+- **Records are separate from position (ADR-020).** A character has a
+  *current stage* (where it fights next), a *highest stage reached* (the
+  furthest stage unlocked) and a *highest stage cleared* (the furthest stage
+  defeated, none before the first victory). The two records never decrease. A
+  boss defeat on stage 10 therefore leaves the hero on stage 9 with stage 10
+  reached and stage 9 cleared: `9 / 10 / 9`. The game screen shows the current
+  stage and, compactly, the best stage cleared.
+- **Levels:** going from level `L` to `L + 1` costs
+  `floor(10 × 1.10^(L − 1))` experience. Experience is kept as progress
+  within the current level. One reward can grant several levels, at most
+  1 000 per reward, and any remainder is kept. The level cap is 2^31 − 1, the
+  column's range.
+- **Pacing:** a combat occupies the hero for its simulated duration. The next
+  fight unlocks on the server's clock when that time has passed, and the
+  client's animation lasts exactly as long. Time is the resource of an idle
+  game, so it cannot be skipped by sending requests faster. The animation
+  itself can be skipped; the wait cannot.
+- **Bosses:** every 10th stage, as the rule set classifies it. Bosses are
+  bigger numbers with a separate archetype and a distinct presentation. Boss
+  *mechanics* remain PLANNED.
+
+Measured with the real Game Core over simulated play (seeded): stage 10 is
+reached after about 1 minute of combat time. The first boss takes about 8
+minutes of farming, stage 50 about 48 minutes and stage 100 about 4 hours.
+Walls at each boss are intended. Builds (Phases 5–8) are meant to break them.
+
+FUTURE: a player-controlled "stay and farm" toggle, auto-battle, and offline
+progression (Phase 4).
+
+## Stage selection and farming — FUTURE (UX direction, not implemented)
+
+The records make these possible without a schema change. None of them exists
+yet.
+
+- **FARM.** The player picks any stage from 1 to `highestStageReached` as the
+  current stage. Rewards are those of the chosen stage. The records do not
+  move until the player wins beyond them.
+- **CHALLENGE BOSS.** Farming stops below a boss. A single action moves the
+  hero to the boss stage it has reached. On defeat it returns to the farm
+  stage the player chose, instead of the default fallback.
+- **Auto modes.** *Push*, the Phase 3 behaviour: advance on a win, fall back
+  on a loss. *Farm*: stay on the chosen stage. *Push then farm*: push until
+  the first loss, then farm one stage below the wall. The server executes the
+  mode and the client only chooses it.
+- **Offline progression (Phase 4)** simulates from `currentStage` under the
+  selected mode and applies the same transition, so the records only ever
+  rise offline as well.
+- **Rankings (Phase 10).** The Highest Stage ranking uses
+  `highestStageCleared`. It is proven by a recorded win and cannot be lowered
+  by farming, and a player with no clear is unranked.
 
 ---
 
@@ -132,7 +207,8 @@ IMPLEMENTED (ADR-018): a stage number is an exact integer from 1 to 2^63 − 1,
 the PostgreSQL `bigint` range. It is never a floating-point value. In practice
 the rule set is the limit: under rules v1, enemy scaling overflows `HugeNumber`
 around stage 4·10^10, and that is reported as an error rather than a wrong
-value.
+value. A combat requested there is refused with `409 STAGE_NOT_PLAYABLE`, and
+nothing is written (ADR-020 §7).
 
 Regular enemies occupy normal stages.
 

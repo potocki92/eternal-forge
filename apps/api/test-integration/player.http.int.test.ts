@@ -4,8 +4,9 @@ import { playerStateResponseSchema } from '@eternal-forge/contracts';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { PrismaService } from '../src/infrastructure/prisma/prisma.service.js';
+import { PrismaCombatRepository } from '../src/combat/infrastructure/prisma-combat.repository.js';
 import { PrismaPlayerRepository } from '../src/player/infrastructure/prisma-player.repository.js';
-import { createPlayerTestApp, httpServer } from '../test/support/create-test-app.js';
+import { createTestApp, httpServer } from '../test/support/create-test-app.js';
 import { TestTokenIssuer } from '../test/support/token-issuer.js';
 import { connectTestDatabase, resetPlayerTables } from './database.js';
 
@@ -21,7 +22,11 @@ let app: INestApplication;
 beforeAll(async () => {
   prisma = connectTestDatabase();
   issuer = await TestTokenIssuer.create();
-  app = await createPlayerTestApp({ issuer, repository: new PrismaPlayerRepository(prisma) });
+  app = await createTestApp({
+    issuer,
+    players: new PrismaPlayerRepository(prisma),
+    combats: new PrismaCombatRepository(prisma),
+  });
 });
 
 afterAll(async () => {
@@ -87,7 +92,7 @@ describe('player API against PostgreSQL', () => {
       .expect(404);
   });
 
-  it('serves a stage beyond 2^53 exactly, as a canonical string', async () => {
+  it('serves stage progress beyond 2^53 exactly, as a canonical string', async () => {
     const sub = randomUUID();
     const token = await issuer.issue({ sub });
     await request(httpServer(app))
@@ -97,7 +102,11 @@ describe('player API against PostgreSQL', () => {
       .expect(201);
     await prisma.client.character.updateMany({
       where: { profile: { authUserId: sub } },
-      data: { stage: 9_223_372_036_854_775_807n },
+      data: {
+        currentStage: 9_223_372_036_854_775_805n,
+        highestStageReached: 9_223_372_036_854_775_807n,
+        highestStageCleared: 9_223_372_036_854_775_806n,
+      },
     });
 
     const response = await request(httpServer(app))
@@ -105,9 +114,11 @@ describe('player API against PostgreSQL', () => {
       .set('authorization', `Bearer ${token}`)
       .expect(200);
 
-    expect(response.text).toContain('"stage":"9223372036854775807"');
-    expect(playerStateResponseSchema.parse(response.body).character.stage).toBe(
-      '9223372036854775807',
-    );
+    expect(response.text).toContain('"highestStageReached":"9223372036854775807"');
+    expect(playerStateResponseSchema.parse(response.body).progression).toMatchObject({
+      currentStage: '9223372036854775805',
+      highestStageReached: '9223372036854775807',
+      highestStageCleared: '9223372036854775806',
+    });
   });
 });
