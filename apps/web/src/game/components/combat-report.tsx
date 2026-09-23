@@ -73,7 +73,11 @@ function statusText(report: Exclude<ReportState, { kind: 'failed' }>): string {
       if (combat.outcome === 'WIN') {
         return `Victory! Stage ${formatStage(combat.stage.number)} cleared. +${formatHuge(combat.rewards.gold)} gold, +${formatHuge(combat.rewards.experience)} experience.`;
       }
-      return `Defeat on stage ${formatStage(combat.stage.number)}. No rewards. Your hero falls back to stage ${formatStage(after.currentStage)}.`;
+      // Where the hero goes is the server's decision (ADR-021): back down
+      // while climbing, nowhere while farming.
+      return after.currentStage === combat.stage.number
+        ? `Defeat on stage ${formatStage(combat.stage.number)}. No rewards. Your hero stays on stage ${formatStage(after.currentStage)}.`
+        : `Defeat on stage ${formatStage(combat.stage.number)}. No rewards. Your hero falls back to stage ${formatStage(after.currentStage)}.`;
     }
   }
 }

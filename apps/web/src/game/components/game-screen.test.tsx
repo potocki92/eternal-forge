@@ -1,4 +1,9 @@
-import type { CombatResponse, PlayerStateResponse } from '@eternal-forge/contracts';
+import {
+  stageSelectionRequestSchema,
+  type CombatResponse,
+  type PlayerStateResponse,
+  type StageSelectionRequest,
+} from '@eternal-forge/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
@@ -33,6 +38,29 @@ let combatReplies: CombatReply[];
 let serverState: PlayerStateResponse;
 const combatKeys: string[] = [];
 
+/** How the server answers the next stage selection. */
+type SelectionReply =
+  'accept' | { readonly status: number; readonly body: unknown } | { readonly hold: Promise<void> };
+let selectionReplies: SelectionReply[];
+const selectionBodies: unknown[] = [];
+
+/** The server's own rule, for the fake: FARM stays, PROGRESS returns to the frontier. */
+function acceptSelection(body: StageSelectionRequest) {
+  serverState = {
+    ...serverState,
+    progression: {
+      ...serverState.progression,
+      stageMode: body.mode,
+      currentStage: body.mode === 'FARM' ? body.stage : serverState.progression.highestStageReached,
+    },
+  };
+  return {
+    character: serverState.character,
+    progression: serverState.progression,
+    serverTime: serverState.serverTime,
+  };
+}
+
 function json(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -40,7 +68,23 @@ function json(body: unknown, status: number): Response {
   });
 }
 
-const fetchMock = vi.fn((url: URL, init: RequestInit) => {
+const fetchMock = vi.fn(async (url: URL, init: RequestInit) => {
+  if (init.method === 'PUT') {
+    expect(url.pathname).toMatch(/\/stage-selection$/u);
+    // The client must send exactly the shared contract's request.
+    const body = stageSelectionRequestSchema.parse(
+      JSON.parse(typeof init.body === 'string' ? init.body : 'null'),
+    );
+    selectionBodies.push(body);
+    const reply = selectionReplies.shift() ?? 'accept';
+    if (reply !== 'accept' && 'hold' in reply) {
+      await reply.hold;
+    }
+    if (reply !== 'accept' && 'status' in reply) {
+      return json(reply.body, reply.status);
+    }
+    return json(acceptSelection(body), 200);
+  }
   if (init.method === 'POST') {
     combatKeys.push(new Headers(init.headers).get('idempotency-key') ?? '');
     const reply = combatReplies.shift() ?? 'offline';
@@ -137,6 +181,8 @@ beforeEach(() => {
   fetchMock.mockClear();
   combatKeys.length = 0;
   combatReplies = [];
+  selectionReplies = [];
+  selectionBodies.length = 0;
   sceneLog = { encounters: [], hits: [], outcomes: [] };
 });
 
@@ -351,5 +397,215 @@ describe('GameScreen — failures', () => {
     await advance(4_000);
 
     expect(report()).toHaveAttribute('data-outcome', 'WIN');
+  });
+});
+
+describe('GameScreen — stage selection (ADR-021)', () => {
+  /** Reached the stage-10 boss, lost, farming stage 9 in PROGRESS mode. */
+  function belowTheWall(): PlayerStateResponse {
+    const state = readyPlayer();
+    return {
+      ...state,
+      progression: {
+        ...state.progression,
+        currentStage: '9',
+        highestStageReached: '10',
+        highestStageCleared: '9',
+        encounter: {
+          stage: { number: '9', kind: 'REGULAR' },
+          enemy: { archetypeId: 'husk', maxHealth: '1e2', damage: '6e0' },
+        },
+      },
+    };
+  }
+
+  const toggle = () => screen.getByTestId('stage-selector-toggle');
+  const submit = () => screen.getByTestId('stage-selection-submit');
+  const stageInput = () => screen.getByLabelText('Stage to farm');
+
+  async function openSelector() {
+    await advance(0);
+    fireEvent.click(toggle());
+    await advance(0);
+  }
+
+  it('summarises the current mode and opens an accessible form', async () => {
+    renderGame(belowTheWall());
+    await advance(0);
+
+    expect(screen.getByTestId('stage-mode')).toHaveTextContent(
+      'Climbing · moves on after each win',
+    );
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(toggle());
+    await advance(0);
+
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('group', { name: 'Where should your hero fight?' })).toBeVisible();
+    const climb = screen.getByRole('radio', { name: 'Continue climbing' });
+    expect(climb).toBeChecked();
+    expect(climb).toHaveFocus();
+    expect(screen.getByRole('radio', { name: 'Stay on this stage' })).not.toBeChecked();
+    // Climbing from stage 9 would return to the frontier, stage 10.
+    expect(submit()).toHaveTextContent('Continue climbing');
+    expect(submit()).toBeEnabled();
+  });
+
+  it('farms an earlier stage and shows the server’s answer, not a guess', async () => {
+    renderGame(belowTheWall());
+    await openSelector();
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Stay on this stage' }));
+    expect(stageInput()).toHaveValue('9');
+    expect(screen.getByText('Stages 1 to 10 are open.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Previous stage' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Previous stage' }));
+    expect(submit()).toHaveTextContent('Farm stage 7');
+
+    fireEvent.click(submit());
+    await advance(0);
+
+    expect(selectionBodies).toEqual([{ mode: 'FARM', stage: '7' }]);
+    expect(screen.getByTestId('stage-mode')).toHaveTextContent(
+      'Farming stage 7 · stays on this stage',
+    );
+    expect(screen.getByTestId('hud-stage')).toHaveTextContent('7');
+    expect(screen.getByTestId('hud-best-cleared')).toHaveTextContent('9');
+    expect(screen.queryByTestId('stage-selector-panel')).not.toBeInTheDocument();
+    expect(toggle()).toHaveFocus();
+  });
+
+  it('returns to climbing from the frontier', async () => {
+    const state = belowTheWall();
+    renderGame({
+      ...state,
+      progression: { ...state.progression, stageMode: 'FARM', currentStage: '4' },
+    });
+    await openSelector();
+
+    expect(screen.getByRole('radio', { name: 'Stay on this stage' })).toBeChecked();
+    fireEvent.click(screen.getByRole('radio', { name: 'Continue climbing' }));
+    fireEvent.click(submit());
+    await advance(0);
+
+    expect(selectionBodies).toEqual([{ mode: 'PROGRESS' }]);
+    expect(screen.getByTestId('stage-mode')).toHaveTextContent('Climbing');
+    expect(screen.getByTestId('hud-stage')).toHaveTextContent('10');
+  });
+
+  it('checks a typed stage against the open range before sending anything', async () => {
+    renderGame(belowTheWall());
+    await openSelector();
+    fireEvent.click(screen.getByRole('radio', { name: 'Stay on this stage' }));
+
+    fireEvent.change(stageInput(), { target: { value: '999999' } });
+
+    expect(stageInput()).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByTestId('stage-draft-error')).toHaveTextContent(
+      'Your hero has not reached that stage yet. Stages 1 to 10 are open.',
+    );
+    expect(submit()).toBeDisabled();
+    fireEvent.submit(submit());
+    await advance(0);
+    expect(selectionBodies).toEqual([]);
+  });
+
+  it('shows a refusal from the server and keeps the old, authoritative state', async () => {
+    renderGame(belowTheWall());
+    selectionReplies = [
+      {
+        status: 409,
+        body: {
+          statusCode: 409,
+          code: 'STAGE_LOCKED',
+          error: 'Your hero has not reached that stage yet. Stages 1 to 10 are open.',
+        },
+      },
+    ];
+    await openSelector();
+    fireEvent.click(screen.getByRole('radio', { name: 'Stay on this stage' }));
+    fireEvent.change(stageInput(), { target: { value: '3' } });
+
+    fireEvent.click(submit());
+    await advance(0);
+
+    expect(screen.getByTestId('stage-selection-error')).toHaveTextContent(
+      'Your hero has not reached that stage yet. Stages 1 to 10 are open.',
+    );
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(screen.getByTestId('hud-stage')).toHaveTextContent('9');
+    expect(screen.getByTestId('stage-mode')).toHaveTextContent('Climbing');
+  });
+
+  it('shows the saving state and blocks the fight until the server answers', async () => {
+    let release: () => void = () => undefined;
+    selectionReplies = [{ hold: new Promise<void>((resolve) => (release = resolve)) }];
+    renderGame(belowTheWall());
+    await openSelector();
+    fireEvent.click(screen.getByRole('radio', { name: 'Stay on this stage' }));
+    fireEvent.click(submit());
+    await advance(0);
+
+    expect(submit()).toHaveTextContent('Saving…');
+    expect(submit()).toBeDisabled();
+    expect(screen.getByTestId('stage-selector-panel')).toHaveAttribute('aria-busy', 'true');
+    expect(fightButton()).toBeDisabled();
+    // Nothing optimistic: the HUD still shows the old choice.
+    expect(screen.getByTestId('stage-mode')).toHaveTextContent('Climbing');
+
+    release();
+    await advance(0);
+
+    expect(screen.getByTestId('stage-mode')).toHaveTextContent('Farming stage 9');
+    expect(fightButton()).toBeEnabled();
+  });
+
+  it('cannot be changed while a combat is being fought', async () => {
+    combatReplies = [combatResponseFixture()];
+    renderGame(readyPlayer());
+    await advance(0);
+
+    fireEvent.click(fightButton());
+    await advance(0);
+
+    expect(report()).toHaveAttribute('data-phase', 'fighting');
+    expect(toggle()).toBeDisabled();
+  });
+
+  it('closes on Escape without sending anything', async () => {
+    renderGame(belowTheWall());
+    await openSelector();
+
+    fireEvent.keyDown(screen.getByRole('radio', { name: 'Continue climbing' }), { key: 'Escape' });
+    await advance(0);
+
+    expect(screen.queryByTestId('stage-selector-panel')).not.toBeInTheDocument();
+    expect(toggle()).toHaveFocus();
+    expect(selectionBodies).toEqual([]);
+  });
+
+  it('shows a farming player’s saved choice as the server sends it (a refresh)', async () => {
+    const state = belowTheWall();
+    renderGame({
+      ...state,
+      progression: {
+        ...state.progression,
+        stageMode: 'FARM',
+        currentStage: '9007199254740993',
+        highestStageReached: '9007199254740995',
+        highestStageCleared: '9007199254740994',
+      },
+    });
+    await advance(0);
+
+    expect(screen.getByTestId('stage-mode')).toHaveTextContent(
+      'Farming stage 9,007,199,254,740,993 · stays on this stage',
+    );
+    fireEvent.click(toggle());
+    await advance(0);
+    expect(stageInput()).toHaveValue('9007199254740993');
+    fireEvent.click(screen.getByRole('button', { name: 'Next stage' }));
+    expect(stageInput()).toHaveValue('9007199254740994');
   });
 });

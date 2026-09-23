@@ -42,7 +42,7 @@ export interface RequestOptions {
 export interface JsonRequest<TSchema extends z.ZodType> extends RequestOptions {
   readonly path: string;
   readonly schema: TSchema;
-  readonly method?: 'GET' | 'POST';
+  readonly method?: 'GET' | 'POST' | 'PUT';
   readonly body?: unknown;
   readonly accessToken?: string;
   /** Extra request headers, e.g. `Idempotency-Key`. Never an authorization header. */

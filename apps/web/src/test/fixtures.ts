@@ -28,6 +28,7 @@ export function playerStateFixture(): PlayerStateResponse {
       currentStage: '1',
       highestStageReached: '1',
       highestStageCleared: null,
+      stageMode: 'PROGRESS',
       experienceToNextLevel: '1e1',
       hero: { maxHealth: '1e2', damage: '1e1' },
       encounter: {
@@ -92,6 +93,7 @@ export function combatResponseFixture(): CombatResponse {
     character: { ...state.character, experience: '3e0', gold: '5e0' },
     progression: {
       ...state.progression,
+      stageMode: 'PROGRESS',
       currentStage: '2',
       highestStageReached: '2',
       highestStageCleared: '1',
