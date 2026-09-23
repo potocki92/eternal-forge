@@ -1,6 +1,7 @@
 import { createCharacter, type Character } from '../character/character.js';
 import { simulateCombat, type CombatOutcome, type CombatResult } from '../combat/index.js';
 import { createEnemyForStage, type Enemy } from '../enemy/enemy.js';
+import { GameCoreError } from '../errors.js';
 import type { HugeNumber } from '../huge-number/index.js';
 import { calculateStageRewards, NO_REWARDS, type StageRewards } from '../rewards/rewards.js';
 import { getGameRules, type GameRules, type ProgressionRules } from '../rules/index.js';
@@ -47,8 +48,13 @@ export interface ProgressDescription {
   /** Experience needed to reach the next level from the current one. */
   readonly experienceToNextLevel: HugeNumber;
   readonly character: Character;
-  /** The enemy waiting on the character's current stage. */
-  readonly encounter: Enemy;
+  /**
+   * The enemy waiting on the character's current stage, or `null` when the
+   * stage lies beyond what the rule set can scale (a HugeNumber `OVERFLOW`,
+   * around stage 4·10^10 under `RULES_V1`). The stage itself is still valid
+   * (ADR-018); there is simply no enemy the rules can describe there.
+   */
+  readonly encounter: Enemy | null;
 }
 
 function validateProgress(progress: CharacterProgress): CharacterProgress {
@@ -133,6 +139,17 @@ export function describeProgress(
   return {
     experienceToNextLevel: experienceToNextLevel(progress.level, rules.progression),
     character: createCharacter(progress.level, rules),
-    encounter: createEnemyForStage(progress.stage, rules),
+    encounter: encounterAt(progress.stage, rules),
   };
+}
+
+function encounterAt(stage: StageNumber, rules: GameRules): Enemy | null {
+  try {
+    return createEnemyForStage(stage, rules);
+  } catch (error) {
+    if (error instanceof GameCoreError && error.code === 'OVERFLOW') {
+      return null;
+    }
+    throw error;
+  }
 }

@@ -2,10 +2,16 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { AuthenticatedIdentity } from '../../auth/application/authenticated-identity.js';
 import { CLOCK, type Clock } from '../../common/clock/clock.port.js';
 import type { Player } from '../domain/player.js';
+import { viewProgression, type ProgressionView } from '../domain/progression-view.js';
 import { PLAYER_REPOSITORY, type PlayerRepository } from './ports/player-repository.port.js';
 
 export type GetPlayerStateResult =
-  | { readonly kind: 'found'; readonly player: Player; readonly serverTime: Date }
+  | {
+      readonly kind: 'found';
+      readonly player: Player;
+      readonly progression: ProgressionView;
+      readonly serverTime: Date;
+    }
   | { readonly kind: 'not-provisioned' };
 
 /** Query: the caller's own player state. */
@@ -21,6 +27,11 @@ export class GetPlayerStateUseCase {
 
     return player === null
       ? { kind: 'not-provisioned' }
-      : { kind: 'found', player, serverTime: this.clock.now() };
+      : {
+          kind: 'found',
+          player,
+          progression: viewProgression(player.mainCharacter),
+          serverTime: this.clock.now(),
+        };
   }
 }

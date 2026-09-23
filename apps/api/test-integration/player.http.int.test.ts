@@ -4,8 +4,9 @@ import { playerStateResponseSchema } from '@eternal-forge/contracts';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { PrismaService } from '../src/infrastructure/prisma/prisma.service.js';
+import { PrismaCombatRepository } from '../src/combat/infrastructure/prisma-combat.repository.js';
 import { PrismaPlayerRepository } from '../src/player/infrastructure/prisma-player.repository.js';
-import { createPlayerTestApp, httpServer } from '../test/support/create-test-app.js';
+import { createTestApp, httpServer } from '../test/support/create-test-app.js';
 import { TestTokenIssuer } from '../test/support/token-issuer.js';
 import { connectTestDatabase, resetPlayerTables } from './database.js';
 
@@ -21,7 +22,11 @@ let app: INestApplication;
 beforeAll(async () => {
   prisma = connectTestDatabase();
   issuer = await TestTokenIssuer.create();
-  app = await createPlayerTestApp({ issuer, repository: new PrismaPlayerRepository(prisma) });
+  app = await createTestApp({
+    issuer,
+    players: new PrismaPlayerRepository(prisma),
+    combats: new PrismaCombatRepository(prisma),
+  });
 });
 
 afterAll(async () => {

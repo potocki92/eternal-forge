@@ -14,6 +14,11 @@ export const API_ERROR_CODES = [
   'NOT_FOUND',
   'VALIDATION_FAILED',
   /**
+   * The character is still fighting its previous combat (ADR-019, "Pacing").
+   * Retry after the `Retry-After` header, or after `progression.nextCombatAt`.
+   */
+  'COMBAT_NOT_READY',
+  /**
    * The API cannot verify credentials right now (e.g. the signing-key endpoint
    * is unreachable). Retry later; this does not mean the session is invalid.
    */

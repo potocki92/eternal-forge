@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { STAGE_NUMBER_MAX, StageNumber } from '@eternal-forge/game-core';
+import { HugeNumber, STAGE_NUMBER_MAX, StageNumber } from '@eternal-forge/game-core';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { ProvisionPlayerData } from '../src/player/application/ports/player-repository.port.js';
 import { PrismaPlayerRepository } from '../src/player/infrastructure/prisma-player.repository.js';
@@ -33,6 +33,9 @@ function provisionData(
     characterSlot: 1,
     characterLevel: 1,
     characterStage: StageNumber.FIRST,
+    characterExperience: HugeNumber.ZERO,
+    characterGold: HugeNumber.ZERO,
+    characterNextCombatAt: new Date('2026-09-23T10:00:00.000Z'),
   };
 }
 

@@ -41,7 +41,7 @@ export class PlayerController {
       throw notProvisioned();
     }
 
-    return toPlayerStateResponse(result.player, result.serverTime);
+    return toPlayerStateResponse(result.player, result.progression, result.serverTime);
   }
 
   /** Idempotent: 201 when this request created the player, 200 when it already existed. */
@@ -56,7 +56,7 @@ export class PlayerController {
 
       response.status(result.created ? HttpStatus.CREATED : HttpStatus.OK);
 
-      return toPlayerStateResponse(result.player, result.serverTime);
+      return toPlayerStateResponse(result.player, result.progression, result.serverTime);
     } catch (error) {
       if (error instanceof InvalidPlayerNameError) {
         throw new ApiException(

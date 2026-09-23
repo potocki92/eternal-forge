@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { InMemoryPlayerRepository } from '../../../test/support/in-memory-player.repository.js';
+import { InMemoryGameRepository } from '../../../test/support/in-memory-game.repository.js';
 import type { AuthenticatedIdentity } from '../../auth/application/authenticated-identity.js';
 import { InvalidPlayerNameError } from '../domain/player-name.js';
 import { GetPlayerStateUseCase } from './get-player-state.use-case.js';
@@ -13,7 +13,7 @@ function identity(): AuthenticatedIdentity {
 }
 
 function setup() {
-  const repository = new InMemoryPlayerRepository();
+  const repository = new InMemoryGameRepository();
   return {
     provision: new ProvisionPlayerUseCase(repository, clock),
     getState: new GetPlayerStateUseCase(repository, clock),

@@ -8,8 +8,8 @@ import {
 import request from 'supertest';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { AccessTokenVerificationUnavailableError } from '../src/auth/application/ports/access-token-verifier.port.js';
-import { createPlayerTestApp, httpServer } from './support/create-test-app.js';
-import { InMemoryPlayerRepository } from './support/in-memory-player.repository.js';
+import { createTestApp, httpServer } from './support/create-test-app.js';
+import { InMemoryGameRepository } from './support/in-memory-game.repository.js';
 import { TestTokenIssuer } from './support/token-issuer.js';
 
 /**
@@ -28,7 +28,8 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
-  app = await createPlayerTestApp({ issuer, repository: new InMemoryPlayerRepository() });
+  const repository = new InMemoryGameRepository();
+  app = await createTestApp({ issuer, players: repository, combats: repository });
 });
 
 afterEach(async () => {
@@ -115,9 +116,10 @@ describe('authentication', () => {
 
 describe('signing keys unavailable', () => {
   it('answers 503 AUTH_UNAVAILABLE with a retry hint, not 401', async () => {
-    const outage = await createPlayerTestApp({
+    const outage = await createTestApp({
       issuer,
-      repository: new InMemoryPlayerRepository(),
+      players: new InMemoryGameRepository(),
+      combats: new InMemoryGameRepository(),
       verifier: { verify: () => Promise.reject(new AccessTokenVerificationUnavailableError()) },
     });
 

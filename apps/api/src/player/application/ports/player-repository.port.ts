@@ -1,4 +1,4 @@
-import type { StageNumber } from '@eternal-forge/game-core';
+import type { HugeNumber, StageNumber } from '@eternal-forge/game-core';
 import type { Character, Player } from '../../domain/player.js';
 
 export interface ProvisionPlayerData {
@@ -8,6 +8,14 @@ export interface ProvisionPlayerData {
   readonly characterSlot: number;
   readonly characterLevel: number;
   readonly characterStage: StageNumber;
+  readonly characterExperience: HugeNumber;
+  readonly characterGold: HugeNumber;
+  /**
+   * When the new character may fight: the application clock's "now". The
+   * pacing gate compares against the same clock, so the database clock never
+   * decides it (ADR-019).
+   */
+  readonly characterNextCombatAt: Date;
 }
 
 export interface ProvisionPlayerOutcome {

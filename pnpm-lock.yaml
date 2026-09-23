@@ -426,6 +426,9 @@ importers:
 
   packages/contracts:
     dependencies:
+      '@eternal-forge/game-core':
+        specifier: workspace:*
+        version: link:../game-core
       zod:
         specifier: 'catalog:'
         version: 4.6.5

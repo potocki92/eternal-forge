@@ -260,3 +260,17 @@ describe('describeProgress', () => {
     expect(description.encounter).toEqual(createEnemyForStage(StageNumber.of(10), rules));
   });
 });
+
+describe('describeProgress — beyond the rule set', () => {
+  it('reports no encounter where enemy scaling overflows, instead of failing', () => {
+    const description = describeProgress(progress({ stage: StageNumber.of(STAGE_NUMBER_MAX) }), 1);
+    expect(description.encounter).toBeNull();
+    expect(description.experienceToNextLevel.eq(n(10))).toBe(true);
+  });
+
+  it('still describes the deepest stages the rule set can scale', () => {
+    expect(
+      describeProgress(progress({ stage: StageNumber.of(4_000_000_000) }), 1).encounter,
+    ).not.toBeNull();
+  });
+});

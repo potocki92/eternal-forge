@@ -9,6 +9,16 @@ import {
 } from '../../src/auth/application/ports/access-token-verifier.port.js';
 import { JoseAccessTokenVerifier } from '../../src/auth/infrastructure/jose-access-token-verifier.js';
 import { AuthGuard } from '../../src/auth/presentation/auth.guard.js';
+import {
+  COMBAT_REPOSITORY,
+  type CombatRepository,
+} from '../../src/combat/application/ports/combat-repository.port.js';
+import {
+  COMBAT_SEED_SOURCE,
+  type CombatSeedSource,
+} from '../../src/combat/application/ports/combat-seed-source.port.js';
+import { RunCombatUseCase } from '../../src/combat/application/run-combat.use-case.js';
+import { CombatController } from '../../src/combat/presentation/combat.controller.js';
 import { CLOCK, type Clock } from '../../src/common/clock/clock.port.js';
 import { AllExceptionsFilter } from '../../src/common/http/all-exceptions.filter.js';
 import { RequestIdMiddleware } from '../../src/common/http/request-id.middleware.js';
@@ -24,21 +34,49 @@ import { TEST_AUDIENCE, TEST_ISSUER, type TestTokenIssuer } from './token-issuer
 
 export interface TestAppOptions {
   readonly issuer: TestTokenIssuer;
-  readonly repository: PlayerRepository;
+  readonly players: PlayerRepository;
+  readonly combats: CombatRepository;
+  /** Defaults to {@link sequentialSeeds}, so combats are reproducible. */
+  readonly seeds?: CombatSeedSource;
   readonly clock?: Clock;
   /** Replaces the real verifier; only for failure modes keys cannot produce. */
   readonly verifier?: AccessTokenVerifier;
 }
 
+/** Deterministic seeds `prefix-1`, `prefix-2`, … in place of the CSPRNG. */
+export function sequentialSeeds(prefix = 'test-seed'): CombatSeedSource {
+  let counter = 0;
+  return {
+    next: () => {
+      counter += 1;
+      return `${prefix}-${String(counter)}`;
+    },
+  };
+}
+
+/** A clock a test moves by hand. */
+export class ManualClock implements Clock {
+  constructor(private current: Date = new Date('2026-09-23T10:00:00.000Z')) {}
+
+  now(): Date {
+    return this.current;
+  }
+
+  advance(milliseconds: number): void {
+    this.current = new Date(this.current.getTime() + milliseconds);
+  }
+}
+
 /**
- * The player HTTP surface wired as production wires it — global guard, real
- * token verifier, real controller, use cases and exception filter — with the
- * repository supplied by the test and signing keys generated for the run.
+ * The player and combat HTTP surface wired as production wires it — global
+ * guard, real token verifier, real controllers, use cases and exception
+ * filter — with repositories supplied by the test and signing keys generated
+ * for the run.
  */
-export async function createPlayerTestApp(options: TestAppOptions): Promise<INestApplication> {
+export async function createTestApp(options: TestAppOptions): Promise<INestApplication> {
   const clock = options.clock ?? { now: () => new Date() };
   const moduleRef = await Test.createTestingModule({
-    controllers: [PlayerController],
+    controllers: [PlayerController, CombatController],
     providers: [
       { provide: CLOCK, useValue: clock },
       {
@@ -53,10 +91,13 @@ export async function createPlayerTestApp(options: TestAppOptions): Promise<INes
           }),
       },
       { provide: APP_GUARD, useClass: AuthGuard },
-      { provide: PLAYER_REPOSITORY, useValue: options.repository },
+      { provide: PLAYER_REPOSITORY, useValue: options.players },
+      { provide: COMBAT_REPOSITORY, useValue: options.combats },
+      { provide: COMBAT_SEED_SOURCE, useValue: options.seeds ?? sequentialSeeds() },
       GetPlayerStateUseCase,
       ProvisionPlayerUseCase,
       GetOwnedCharacterUseCase,
+      RunCombatUseCase,
     ],
   }).compile();
 

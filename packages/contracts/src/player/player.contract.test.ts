@@ -13,7 +13,18 @@ const state = {
     name: 'Kael',
     level: 1,
     stage: '1',
+    experience: '0',
+    gold: '1.5e3',
     createdAt: '2026-09-22T10:00:00.000Z',
+  },
+  progression: {
+    experienceToNextLevel: '1e1',
+    hero: { maxHealth: '1e2', damage: '1e1' },
+    encounter: {
+      stage: { number: '1', kind: 'REGULAR' },
+      enemy: { archetypeId: 'husk', maxHealth: '4e1', damage: '4e0' },
+    },
+    nextCombatAt: '2026-09-22T10:00:00.000Z',
   },
   serverTime: '2026-09-22T10:00:00.000Z',
 };
@@ -35,6 +46,32 @@ describe('playerStateResponseSchema', () => {
     const result = playerStateResponseSchema.safeParse({
       ...state,
       character: { ...state.character, stage: 1 },
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it.each([
+    ['a numeric gold amount', { gold: 1500 }],
+    ['a non-canonical gold amount', { gold: '1500' }],
+    ['negative gold', { gold: '-1e0' }],
+    ['negative experience', { experience: '-5e0' }],
+  ])('rejects %s', (_label, change) => {
+    const result = playerStateResponseSchema.safeParse({
+      ...state,
+      character: { ...state.character, ...change },
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a stage kind the rule set does not define', () => {
+    const result = playerStateResponseSchema.safeParse({
+      ...state,
+      progression: {
+        ...state.progression,
+        encounter: { ...state.progression.encounter, stage: { number: '10', kind: 'ELITE' } },
+      },
     });
 
     expect(result.success).toBe(false);

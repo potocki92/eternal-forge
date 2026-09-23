@@ -3,6 +3,7 @@ import type { AuthenticatedIdentity } from '../../auth/application/authenticated
 import { CLOCK, type Clock } from '../../common/clock/clock.port.js';
 import { MAIN_CHARACTER_SLOT, NEW_CHARACTER_STATE, type Player } from '../domain/player.js';
 import { PlayerName } from '../domain/player-name.js';
+import { viewProgression, type ProgressionView } from '../domain/progression-view.js';
 import { PLAYER_REPOSITORY, type PlayerRepository } from './ports/player-repository.port.js';
 
 export interface ProvisionPlayerCommand {
@@ -13,6 +14,7 @@ export interface ProvisionPlayerCommand {
 export interface ProvisionPlayerResult {
   readonly player: Player;
   readonly created: boolean;
+  readonly progression: ProgressionView;
   readonly serverTime: Date;
 }
 
@@ -39,6 +41,7 @@ export class ProvisionPlayerUseCase {
     const displayName = PlayerName.parse(command.displayName);
     const characterName = PlayerName.parse(command.characterName);
 
+    const now = this.clock.now();
     const outcome = await this.players.provision({
       authUserId: identity.authUserId,
       displayName: displayName.value,
@@ -46,8 +49,15 @@ export class ProvisionPlayerUseCase {
       characterSlot: MAIN_CHARACTER_SLOT,
       characterLevel: NEW_CHARACTER_STATE.level,
       characterStage: NEW_CHARACTER_STATE.stage,
+      characterExperience: NEW_CHARACTER_STATE.experience,
+      characterGold: NEW_CHARACTER_STATE.gold,
+      characterNextCombatAt: now,
     });
 
-    return { ...outcome, serverTime: this.clock.now() };
+    return {
+      ...outcome,
+      progression: viewProgression(outcome.player.mainCharacter),
+      serverTime: now,
+    };
   }
 }
