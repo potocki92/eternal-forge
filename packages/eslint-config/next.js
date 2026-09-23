@@ -17,6 +17,17 @@ export const nextConfig = [
       '@typescript-eslint/no-restricted-imports': [
         'error',
         {
+          // ADR-013: the web app may use the pure HugeNumber value type to parse
+          // and format server values. Every gameplay rule stays on the server
+          // (ADR-003), so nothing else from Game Core is importable here.
+          paths: [
+            {
+              name: '@eternal-forge/game-core',
+              allowImportNames: ['HugeNumber'],
+              message:
+                'The web app may import only HugeNumber from Game Core; gameplay is server-authoritative (ADR-003, ADR-013).',
+            },
+          ],
           patterns: [
             {
               group: ['@eternal-forge/database', '@eternal-forge/database/*', '@prisma/*'],

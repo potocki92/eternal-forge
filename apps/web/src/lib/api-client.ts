@@ -45,6 +45,8 @@ export interface JsonRequest<TSchema extends z.ZodType> extends RequestOptions {
   readonly method?: 'GET' | 'POST';
   readonly body?: unknown;
   readonly accessToken?: string;
+  /** Extra request headers, e.g. `Idempotency-Key`. Never an authorization header. */
+  readonly headers?: Readonly<Record<string, string>>;
 }
 
 /**
@@ -60,7 +62,7 @@ export async function requestJson<TSchema extends z.ZodType>(
 ): Promise<z.infer<TSchema>> {
   const baseUrl = request.baseUrl ?? env.NEXT_PUBLIC_API_URL;
   const accepted = request.acceptStatus ?? [200];
-  const headers: Record<string, string> = { accept: 'application/json' };
+  const headers: Record<string, string> = { ...request.headers, accept: 'application/json' };
   if (request.body !== undefined) {
     headers['content-type'] = 'application/json';
   }
