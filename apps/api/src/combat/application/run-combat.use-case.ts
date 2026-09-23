@@ -7,7 +7,7 @@ import {
   type HugeNumber,
   type StageAttemptResult,
 } from '@eternal-forge/game-core';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { AuthenticatedIdentity } from '../../auth/application/authenticated-identity.js';
 import { CLOCK, type Clock } from '../../common/clock/clock.port.js';
 import { progressOf, type Character } from '../../player/domain/player.js';
@@ -85,9 +85,19 @@ export class CombatReplayMismatchError extends Error {
  *    record, only if the version is unchanged.
  * 7. On a conflict, the key is looked up again: a concurrent retry of this
  *    request is replayed; any other winner means this request was too late.
+ *
+ * Every path that does not resolve a new combat is logged as a structured
+ * event (`combat.replayed`, `combat.not_ready`, `combat.conflict`,
+ * `combat.stage_not_playable`) with the character id and, where relevant, the
+ * combat id. They are what an online auto-battle loop, several tabs or a
+ * flaky connection produce, and what explains a player's "it refused to
+ * fight". No token, seed or request body is ever logged. `combat.not_ready`
+ * is at debug level: a spamming client produces one per request.
  */
 @Injectable()
 export class RunCombatUseCase {
+  private readonly logger = new Logger(RunCombatUseCase.name);
+
   constructor(
     @Inject(COMBAT_REPOSITORY) private readonly combats: CombatRepository,
     @Inject(COMBAT_SEED_SOURCE) private readonly seeds: CombatSeedSource,
@@ -103,14 +113,26 @@ export class RunCombatUseCase {
       return { kind: 'not-found' };
     }
     if (target.existingRun !== null) {
-      return this.replay(target.character, target.existingRun);
+      return this.replay(target.character, target.existingRun, 'retry');
     }
 
     const now = this.clock.now();
     if (now < target.character.nextCombatAt) {
+      this.logger.debug({
+        msg: 'Combat refused: the hero is still fighting',
+        event: 'combat.not_ready',
+        characterId: target.character.id,
+        retryAfterMs: target.character.nextCombatAt.getTime() - now.getTime(),
+      });
       return { kind: 'not-ready', nextCombatAt: target.character.nextCombatAt, serverTime: now };
     }
     if (viewProgression(target.character).encounter === null) {
+      this.logger.warn({
+        msg: 'Combat refused: the rule set cannot scale this stage',
+        event: 'combat.stage_not_playable',
+        characterId: target.character.id,
+        stage: target.character.stages.current.toString(),
+      });
       return { kind: 'stage-not-playable' };
     }
 
@@ -174,8 +196,14 @@ export class RunCombatUseCase {
     if (fresh === null) {
       return { kind: 'not-found' };
     }
+    this.logger.log({
+      msg: 'Combat lost a concurrent write',
+      event: 'combat.conflict',
+      characterId: fresh.character.id,
+      resolution: fresh.existingRun === null ? 'not_ready' : 'replayed',
+    });
     if (fresh.existingRun !== null) {
-      return this.replay(fresh.character, fresh.existingRun);
+      return this.replay(fresh.character, fresh.existingRun, 'race');
     }
     return {
       kind: 'not-ready',
@@ -189,7 +217,14 @@ export class RunCombatUseCase {
    * makes the timeline identical to the one first returned; the stored summary
    * proves it.
    */
-  private replay(character: Character, run: CombatRun): RunCombatResult {
+  private replay(character: Character, run: CombatRun, cause: 'retry' | 'race'): RunCombatResult {
+    this.logger.log({
+      msg: 'Combat replayed for a repeated idempotency key',
+      event: 'combat.replayed',
+      characterId: character.id,
+      combatId: run.id,
+      cause,
+    });
     const attempt = resolveStageAttempt({
       progress: run.before,
       mode: run.stageMode,

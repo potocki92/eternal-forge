@@ -9,7 +9,8 @@ import {
   resolveStageAttempt,
   type StageProgress,
 } from '@eternal-forge/game-core';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { Logger } from '@nestjs/common';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ManualClock, sequentialSeeds } from '../../../test/support/create-test-app.js';
 import { InMemoryGameRepository } from '../../../test/support/in-memory-game.repository.js';
 import type { AuthenticatedIdentity } from '../../auth/application/authenticated-identity.js';
@@ -350,5 +351,81 @@ describe('RunCombatUseCase — replay integrity', () => {
     Object.assign(first.combat.run, { durationMs: first.combat.run.durationMs + 1 });
 
     await expect(fight(key)).rejects.toBeInstanceOf(CombatReplayMismatchError);
+  });
+});
+
+describe('RunCombatUseCase — observability', () => {
+  /** Structured events the use case logged, by level. */
+  function captureEvents() {
+    const events: { level: string; event: unknown; fields: Record<string, unknown> }[] = [];
+    const record = (level: string) => (message: unknown) => {
+      if (typeof message === 'object' && message !== null && 'event' in message) {
+        events.push({ level, event: message.event, fields: { ...message } });
+      }
+    };
+    vi.spyOn(Logger.prototype, 'log').mockImplementation(record('info'));
+    vi.spyOn(Logger.prototype, 'debug').mockImplementation(record('debug'));
+    vi.spyOn(Logger.prototype, 'warn').mockImplementation(record('warn'));
+    return events;
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('logs nothing for a plain new combat', async () => {
+    const events = captureEvents();
+    resolved(await fight());
+    expect(events).toEqual([]);
+  });
+
+  it('logs a refusal for timing at debug level, with the wait and no request data', async () => {
+    resolved(await fight());
+    const events = captureEvents();
+
+    await fight();
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ level: 'debug', event: 'combat.not_ready' });
+    expect(events[0]?.fields['characterId']).toBe(character.id);
+    expect(events[0]?.fields['retryAfterMs']).toBeGreaterThan(0);
+    expect(Object.keys(events[0]?.fields ?? {}).sort()).toEqual(
+      ['characterId', 'event', 'msg', 'retryAfterMs'].sort(),
+    );
+  });
+
+  it('logs a replay with the combat it served', async () => {
+    const key = randomUUID();
+    const first = resolved(await fight(key));
+    const events = captureEvents();
+
+    await fight(key);
+
+    expect(events).toEqual([
+      expect.objectContaining({
+        level: 'info',
+        event: 'combat.replayed',
+        fields: expect.objectContaining({
+          characterId: character.id,
+          combatId: first.combat.run.id,
+          cause: 'retry',
+        }) as unknown,
+      }),
+    ]);
+  });
+
+  it('logs a lost concurrent write and how it was resolved', async () => {
+    repository.beforeCommit = async () => {
+      repository.beforeCommit = undefined;
+      await fight();
+    };
+    const events = captureEvents();
+
+    await fight();
+
+    expect(events.map((entry) => [entry.event, entry.fields['resolution']])).toContainEqual([
+      'combat.conflict',
+      'not_ready',
+    ]);
   });
 });

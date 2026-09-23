@@ -12,6 +12,7 @@ export default defineConfig({
   plugins: [swc.vite({ module: { type: 'es6' } })],
   test: {
     environment: 'node',
+    setupFiles: ['test/support/silence-nest-logger.ts'],
     include: ['test-integration/**/*.int.test.ts'],
     fileParallelism: false,
     testTimeout: 20_000,
