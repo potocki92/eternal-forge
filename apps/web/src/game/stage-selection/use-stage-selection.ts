@@ -66,6 +66,9 @@ export function useStageSelection(userId: string, characterId: string): StageSel
     (request: StageSelectionRequest, onSaved?: () => void) => {
       mutate(request, {
         onSuccess: (response) => {
+          // A player-state read that started before this write may still be
+          // in flight; resolving later, it would put the old stage back.
+          void queryClient.cancelQueries({ queryKey: stateKey });
           apply(response);
           onSaved?.();
         },
@@ -83,6 +86,12 @@ export function useStageSelection(userId: string, characterId: string): StageSel
     select,
     pending: mutation.isPending,
     error: mutation.isError ? describeSelectionFailure(mutation.error) : undefined,
-    clearError: reset,
+    // Only a settled result is cleared: resetting a pending mutation would
+    // report it as idle while its request can still commit.
+    clearError: () => {
+      if (!mutation.isPending) {
+        reset();
+      }
+    },
   };
 }

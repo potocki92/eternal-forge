@@ -216,7 +216,17 @@ function resolved(
   character: Character,
   nextCombatAt: Date,
 ): ResolvedCombat {
-  const after: Character = { ...character, ...attempt.after, nextCombatAt };
+  // Everything that describes the character after this combat comes from the
+  // same snapshot: its progress from the attempt and its mode from the record.
+  // On a replay the character may have switched mode since (ADR-021); mixing
+  // the current mode with the recorded stage would describe a state that never
+  // existed.
+  const after: Character = {
+    ...character,
+    ...attempt.after,
+    stageMode: run.stageMode,
+    nextCombatAt,
+  };
 
   return {
     run,

@@ -339,6 +339,12 @@ describe('RunCombatUseCase — farming (ADR-021)', () => {
     expect(replay.replayed).toBe(true);
     expect(replay.combat.run.id).toBe(first.combat.run.id);
     expect(replay.combat.attempt.after.stages.current.toString()).toBe('99');
+    // Regression: the replayed character and progression describe the state
+    // the combat left, mode included — never the recorded stage with the
+    // current mode.
+    expect(replay.combat.character.stageMode).toBe('FARM');
+    expect(replay.combat.progression.stageMode).toBe('FARM');
+    expect(replay.combat.progression.stages.current.toString()).toBe('99');
     expect(JSON.stringify(replay.combat.attempt)).toBe(JSON.stringify(first.combat.attempt));
   });
 });

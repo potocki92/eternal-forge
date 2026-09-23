@@ -102,7 +102,7 @@ export function StageSelector({
   };
 
   const onKeyDown = (event: KeyboardEvent) => {
-    if (event.key === 'Escape') {
+    if (event.key === 'Escape' && !pending) {
       event.stopPropagation();
       close();
     }
@@ -137,6 +137,8 @@ export function StageSelector({
           className="-mr-2 shrink-0"
           aria-expanded={open}
           aria-controls={panelId}
+          // Stays enabled while saving: closing only hides the form, the save
+          // keeps running (and keeps Fight blocked) until the server answers.
           disabled={locked && !open}
           onClick={open ? close : openPanel}
           data-testid="stage-selector-toggle"
@@ -262,7 +264,7 @@ export function StageSelector({
           ) : null}
 
           <div className="flex gap-2">
-            <Button variant="ghost" onClick={close} className="shrink-0">
+            <Button variant="ghost" onClick={close} disabled={pending} className="shrink-0">
               Cancel
             </Button>
             <Button

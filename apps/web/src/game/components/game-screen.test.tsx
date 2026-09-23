@@ -42,6 +42,12 @@ const combatKeys: string[] = [];
 type SelectionReply =
   'accept' | { readonly status: number; readonly body: unknown } | { readonly hold: Promise<void> };
 let selectionReplies: SelectionReply[];
+/**
+ * When set, the next player-state read captures the server state *now* and
+ * answers only once released: a read that started before a write.
+ */
+let heldStateRead: Promise<void> | undefined;
+let queryClient: QueryClient;
 const selectionBodies: unknown[] = [];
 
 /** The server's own rule, for the fake: FARM stays, PROGRESS returns to the frontier. */
@@ -103,7 +109,13 @@ const fetchMock = vi.fn(async (url: URL, init: RequestInit) => {
     return Promise.resolve(json(reply.body ?? {}, reply.status));
   }
   expect(url.pathname).toBe('/player/state');
-  return Promise.resolve(json(serverState, 200));
+  const snapshot = serverState;
+  if (heldStateRead !== undefined) {
+    const hold = heldStateRead;
+    heldStateRead = undefined;
+    await hold;
+  }
+  return json(snapshot, 200);
 });
 
 // --- A scene that records what it was told ------------------------------------
@@ -150,9 +162,9 @@ function Harness({ sceneFactory }: { readonly sceneFactory: CombatSceneFactory }
 
 function renderGame(initial: PlayerStateResponse, sceneFactory = recordingScene) {
   serverState = initial;
-  const client = new QueryClient({
+  const client = (queryClient = new QueryClient({
     defaultOptions: { queries: { staleTime: Number.POSITIVE_INFINITY, retry: false } },
-  });
+  }));
   client.setQueryData(['player', USER_ID, 'state'], { kind: 'provisioned', state: initial });
   const wrapper = ({ children }: { readonly children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
@@ -182,6 +194,7 @@ beforeEach(() => {
   combatKeys.length = 0;
   combatReplies = [];
   selectionReplies = [];
+  heldStateRead = undefined;
   selectionBodies.length = 0;
   sceneLog = { encounters: [], hits: [], outcomes: [] };
 });
@@ -551,6 +564,16 @@ describe('GameScreen — stage selection (ADR-021)', () => {
     expect(submit()).toBeDisabled();
     expect(screen.getByTestId('stage-selector-panel')).toHaveAttribute('aria-busy', 'true');
     expect(fightButton()).toBeDisabled();
+    // Regression: the pending save cannot be dismissed, so it cannot be
+    // reported idle (and Fight re-enabled) while its request may commit.
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+    fireEvent.keyDown(submit(), { key: 'Escape' });
+    expect(screen.getByTestId('stage-selector-panel')).toBeInTheDocument();
+    // Closing the form hides it but never forgets the save in flight.
+    fireEvent.click(toggle());
+    await advance(0);
+    expect(screen.queryByTestId('stage-selector-panel')).not.toBeInTheDocument();
+    expect(fightButton()).toBeDisabled();
     // Nothing optimistic: the HUD still shows the old choice.
     expect(screen.getByTestId('stage-mode')).toHaveTextContent('Climbing');
 
@@ -558,6 +581,7 @@ describe('GameScreen — stage selection (ADR-021)', () => {
     await advance(0);
 
     expect(screen.getByTestId('stage-mode')).toHaveTextContent('Farming stage 9');
+    expect(screen.queryByTestId('stage-selection-error')).not.toBeInTheDocument();
     expect(fightButton()).toBeEnabled();
   });
 
@@ -607,5 +631,30 @@ describe('GameScreen — stage selection (ADR-021)', () => {
     expect(stageInput()).toHaveValue('9007199254740993');
     fireEvent.click(screen.getByRole('button', { name: 'Next stage' }));
     expect(stageInput()).toHaveValue('9007199254740994');
+  });
+
+  it('a player-state read started before the selection cannot put the old stage back', async () => {
+    let releaseRead: () => void = () => undefined;
+    let releaseSave: () => void = () => undefined;
+    selectionReplies = [{ hold: new Promise<void>((resolve) => (releaseSave = resolve)) }];
+    renderGame(belowTheWall());
+    await openSelector();
+    fireEvent.click(screen.getByRole('radio', { name: 'Stay on this stage' }));
+    fireEvent.change(stageInput(), { target: { value: '3' } });
+    fireEvent.click(submit());
+    await advance(0);
+
+    // A refetch (as after a combat) reads the old state while the save is in flight.
+    heldStateRead = new Promise<void>((resolve) => (releaseRead = resolve));
+    void queryClient.invalidateQueries({ queryKey: ['player', USER_ID, 'state'] });
+    await advance(0);
+
+    releaseSave();
+    await advance(0);
+    releaseRead();
+    await advance(0);
+
+    expect(screen.getByTestId('stage-mode')).toHaveTextContent('Farming stage 3');
+    expect(screen.getByTestId('hud-stage')).toHaveTextContent('3');
   });
 });
