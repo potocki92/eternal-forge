@@ -489,14 +489,15 @@ describe('GameScreen — offline progress (ADR-023)', () => {
 
     expect(screen.getByTestId('offline-summary')).toBeInTheDocument();
     expect(screen.getByTestId('offline-away')).toHaveTextContent('3h 42m');
-    expect(screen.getByTestId('offline-counted')).toHaveTextContent('3h 42m');
+    expect(screen.queryByTestId('offline-counted')).not.toBeInTheDocument();
     expect(screen.getByTestId('offline-stage')).toHaveTextContent('1');
-    expect(screen.getByTestId('offline-battles')).toHaveTextContent('24 (24 won)');
+    expect(screen.getByTestId('offline-battles')).toHaveTextContent('24');
+    expect(screen.getByTestId('offline-victories')).toHaveTextContent('24');
     expect(screen.getByTestId('offline-gold')).toHaveTextContent('+120');
     expect(screen.getByTestId('offline-levels')).toHaveTextContent('+3');
     expect(screen.getByTestId('hud-gold')).toHaveTextContent('120');
-    // The summary never blocks play.
-    expect(fightButton()).toBeEnabled();
+    // Nothing fights behind the reward presentation.
+    expect(fightButton()).toBeDisabled();
 
     fireEvent.click(screen.getByTestId('offline-continue'));
     expect(screen.queryByTestId('offline-summary')).not.toBeInTheDocument();
@@ -518,17 +519,17 @@ describe('GameScreen — offline progress (ADR-023)', () => {
     renderGame(readyPlayer());
     await advance(0);
     expect(screen.getByTestId('offline-away')).toHaveTextContent('14h 32m');
-    expect(screen.getByTestId('offline-counted')).toHaveTextContent('8h (limit reached)');
+    expect(screen.getByTestId('offline-counted')).toHaveTextContent('8h of progress collected');
   });
 
-  it('a failed claim can be retried with the same key, and never blocks the game', async () => {
+  it('a failed claim can be retried with the same key while fighting stays blocked', async () => {
     offlineReplies = ['offline', 'offline', 'offline', offlineProgressFixture('collected')];
     renderGame(readyPlayer());
     await advance(0);
     await advance(5_000); // the mutation's own quick retries
 
     expect(screen.getByTestId('offline-failed')).toBeInTheDocument();
-    expect(fightButton()).toBeEnabled();
+    expect(fightButton()).toBeDisabled();
     const firstKey = offlineKeys[0];
     expect(new Set(offlineKeys)).toEqual(new Set([firstKey]));
 

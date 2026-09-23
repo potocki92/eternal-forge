@@ -52,13 +52,14 @@ describe('offlineClaimReducer', () => {
     expect(offlineClaimReducer(settled, { type: 'answer', summary: collected })).toBe(settled);
   });
 
-  it('blocks fighting only while a claim is due or in flight', () => {
+  it('blocks fighting until the claim presentation is resolved', () => {
     expect(blocksFighting(OFFLINE_CLAIM_NEEDED)).toBe(true);
     expect(blocksFighting({ status: 'claiming', key: 'k' })).toBe(true);
-    expect(blocksFighting({ status: 'shown', summary: collected })).toBe(false);
+    expect(blocksFighting({ status: 'shown', summary: collected })).toBe(true);
     expect(
       blocksFighting({ status: 'failed', key: 'k', failure: { message: 'x', retryable: true } }),
-    ).toBe(false);
+    ).toBe(true);
+    expect(blocksFighting({ status: 'settled' })).toBe(false);
   });
 });
 

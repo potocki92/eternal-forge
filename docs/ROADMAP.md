@@ -791,7 +791,21 @@ Validation (2026-09-23, local, PostgreSQL 16 and Redis 7):
 
 ## PR 4.4 — Return experience
 
-Status: NOT STARTED — requires approval of PR 4.3.
+Status: IMPLEMENTED — welcome-back presentation over the unchanged PR 4.3 claim.
+
+- [x] Meaningful claims open a mobile-first reward dialog with time away,
+      precision-safe Gold and XP, battles, victories, farmed stage, level
+      progression and the hero's current level.
+- [x] The 8-hour cap is acknowledged as a successful maximum reward, while
+      zero-fight claims remain silent.
+- [x] Focus moves into the dialog, keyboard focus is contained, explicit
+      Continue/recovery actions are required, and reduced motion removes all
+      staged entrances.
+- [x] Manual and auto battle wait until the presentation or recovery choice is
+      complete. Continue is presentation-only and never sends a second claim.
+- [x] Retry keeps the original idempotency key; refresh stores no summary in
+      browser persistence and asks the server normally.
+- [x] No API, contract, database, Game Core or gameplay-rule changes.
 
 ## Phase 4 scope (whole phase)
 
