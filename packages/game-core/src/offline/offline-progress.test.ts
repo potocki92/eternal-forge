@@ -22,6 +22,17 @@ const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const CAP = rules.offline.capMs;
 
+/**
+ * Time budget for suites that simulate whole offline claims. An 8-hour claim
+ * is up to 28 800 combats (bounded by `MAX_OFFLINE_FIGHTS`), and the
+ * equivalence tests replay every one of them a second time through the
+ * independent `resolveStageAttempt` reference. That is about 1.5 s on an idle
+ * core, but 10–15 s on a shared CI runner while every package's suite runs in
+ * parallel — beyond Vitest's 5 s default, which is meant to catch hangs, not
+ * to measure speed. Throughput is measured by `bench/`, not here.
+ */
+const WHOLE_CLAIM = { timeout: 60_000 } as const;
+
 /** 2^53 + 1: the first integer a JavaScript `number` cannot hold. */
 const BEYOND_SAFE_INTEGER = 9_007_199_254_740_993n;
 
@@ -147,7 +158,7 @@ describe('resolveOfflineProgress — nothing to collect', () => {
   });
 });
 
-describe('resolveOfflineProgress — farming', () => {
+describe('resolveOfflineProgress — farming', WHOLE_CLAIM, () => {
   it('fits at least one fight as soon as the minimum absence has passed', () => {
     // The minimum absence is at least the combat time limit, so every fight fits.
     expect(rules.offline.minimumAbsenceMs).toBeGreaterThanOrEqual(rules.combat.timeLimitMs);
@@ -228,8 +239,11 @@ describe('resolveOfflineProgress — farming', () => {
   });
 });
 
-describe('resolveOfflineProgress — the cap', () => {
+describe('resolveOfflineProgress — the cap', WHOLE_CLAIM, () => {
   const from = progress(10, stages(10n, 10n, 9n));
+  let atCapResult: OfflineProgressResult | undefined;
+  /** Exactly 8 hours with the same seed, resolved once for every capped case. */
+  const atCap = (): OfflineProgressResult => (atCapResult ??= offline(from, CAP, 'capped'));
 
   it('rewards exactly 8 hours without reaching the cap', () => {
     const result = offline(from, 8 * HOUR);
@@ -247,14 +261,13 @@ describe('resolveOfflineProgress — the cap', () => {
       expect(result.rewardedMs).toBe(CAP);
       expect(result.consumedMs).toBeLessThanOrEqual(CAP);
       // Everything beyond the cap is worth nothing: identical to exactly 8 hours.
-      const atCap = offline(from, CAP, 'capped');
-      expect(result.fights).toBe(atCap.fights);
-      expect(result.after).toEqual(atCap.after);
+      expect(result.fights).toBe(atCap().fights);
+      expect(result.after).toEqual(atCap().after);
     },
   );
 });
 
-describe('resolveOfflineProgress — numbers', () => {
+describe('resolveOfflineProgress — numbers', WHOLE_CLAIM, () => {
   it('accumulates HugeNumber rewards exactly at a deep stage (10^9)', () => {
     const deep = 1_000_000_000n;
     const from = progress(1_200_000_000, stages(deep + 1n, deep + 1n, deep));
@@ -336,7 +349,7 @@ describe('resolveOfflineProgress — determinism and replay', () => {
   });
 });
 
-describe('resolveOfflineProgress — bounded work', () => {
+describe('resolveOfflineProgress — bounded work', WHOLE_CLAIM, () => {
   it('never needs more than the fight limit under any registered rule set', () => {
     // The earliest any v1 combat can end is the first attack of either side.
     const firstAttackMs = (speedBp: number) =>
@@ -390,7 +403,7 @@ describe('resolveOfflineProgress — a record equal to the frontier', () => {
   });
 });
 
-describe('resolveOfflineProgress — invariants (property)', () => {
+describe('resolveOfflineProgress — invariants (property)', WHOLE_CLAIM, () => {
   const inputs = fc.record({
     level: fc.integer({ min: 1, max: 300 }),
     cleared: fc.option(fc.bigInt({ min: 1n, max: 150n }), { nil: null }),
