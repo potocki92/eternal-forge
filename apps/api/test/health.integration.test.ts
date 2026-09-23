@@ -10,7 +10,7 @@ import {
 } from '../src/common/http/request-id.middleware.js';
 import { LivenessService } from '../src/health/application/liveness.service.js';
 import { ReadinessService } from '../src/health/application/readiness.service.js';
-import { CLOCK } from '../src/health/application/ports/clock.port.js';
+import { CLOCK } from '../src/common/clock/clock.port.js';
 import { SERVICE_VERSION } from '../src/config/api-config.module.js';
 import {
   DEPENDENCY_PROBES,

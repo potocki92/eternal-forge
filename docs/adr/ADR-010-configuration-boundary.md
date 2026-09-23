@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted
+Accepted. The lazy validation of Supabase settings is amended by
+[ADR-016](ADR-016-authentication-and-identity.md).
 
 ## Date
 
@@ -45,6 +46,11 @@ expressed in the module graph rather than in a naming convention.
   constructed, rather than at process start: authentication arrives in Phase 2,
   and requiring them now would make every local run and every CI build depend on
   credentials nothing reads.
+  _Amended by ADR-016:_ the API now verifies Supabase access tokens, so
+  `SUPABASE_URL` (the issuer and key-set location — not a credential) is
+  validated at API start. The service-role key stays lazily validated and no
+  Phase 2 process requires it. Server-only Supabase schemas moved to their own
+  module, so the browser bundle does not even carry their names.
 
 `apps/web` passes an explicit object literal of `process.env.NEXT_PUBLIC_*`
 accesses, because Next.js only inlines statically visible member expressions.

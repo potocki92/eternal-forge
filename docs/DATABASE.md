@@ -1,10 +1,11 @@
 # Eternal Forge — Database Design
 
-Status: EARLY DESIGN — infrastructure IMPLEMENTED (Phase 0), schema PLANNED
+Status: EARLY DESIGN — infrastructure IMPLEMENTED (Phase 0), identity tables
+IMPLEMENTED (Phase 2), everything else PLANNED
 
-The Prisma schema currently declares **no models**. That is deliberate: tables
-are created by the phase that requires them, so the repository carries no
-speculative schema. Everything under "Planned domains" below is PLANNED.
+Tables are created by the phase that requires them, so the repository carries no
+speculative schema. Phase 2 added `profiles` and `characters` (ADR-017).
+Everything else under "Planned domains" below is PLANNED.
 
 Database:
 
@@ -48,6 +49,11 @@ credentials.
 
 Never store plaintext passwords.
 
+Status: IMPLEMENTED (Phase 2). No table in our schema stores a password, a
+token or any credential. Supabase Auth owns them (ADR-016). The Supabase user id
+appears in exactly one column, `profiles.auth_user_id`; every other table
+references our own `profiles.id` (ADR-017).
+
 ---
 
 # Planned domains
@@ -60,25 +66,47 @@ Tables should only be created when their phase requires them.
 
 # Player
 
+Status: `profiles` and `characters` IMPLEMENTED (Phase 2, migration
+`20260922201944_player_identity`, ADR-017). `player_settings` PLANNED.
+
 profiles
 
-Potential fields:
-
-id
-auth_user_id
-display_name
-created_at
-updated_at
+| Column         | Type             | Rules                                            |
+| -------------- | ---------------- | ------------------------------------------------ |
+| `id`           | `uuid`           | PK, `gen_random_uuid()`                          |
+| `auth_user_id` | `uuid`           | NOT NULL, UNIQUE — one profile per Supabase user |
+| `display_name` | `varchar(24)`    | CHECK 3–24 characters, no surrounding whitespace |
+| `created_at`   | `timestamptz(3)` | default `now()`                                  |
+| `updated_at`   | `timestamptz(3)` | maintained by Prisma                             |
 
 characters
 
-Potential fields:
+| Column       | Type             | Rules                                                |
+| ------------ | ---------------- | ---------------------------------------------------- |
+| `id`         | `uuid`           | PK, `gen_random_uuid()`                              |
+| `profile_id` | `uuid`           | FK → `profiles.id` ON DELETE CASCADE                 |
+| `slot`       | `smallint`       | CHECK ≥ 1; UNIQUE (`profile_id`, `slot`); main = 1   |
+| `name`       | `varchar(24)`    | CHECK 3–24 characters, no surrounding whitespace     |
+| `level`      | `integer`        | default 1, CHECK ≥ 1                                 |
+| `stage`      | `bigint`         | default 1, CHECK ≥ 1 — stages are unbounded          |
+| `created_at` | `timestamptz(3)` | default `now()`                                      |
+| `updated_at` | `timestamptz(3)` | maintained by Prisma                                 |
 
-id
-profile_id
-name
-created_at
-updated_at
+Indexes: the two unique constraints are the only indexes, and they cover the
+actual queries — profile by `auth_user_id`, character by `(profile_id, slot)`,
+characters of a profile (leading column `profile_id`).
+
+Only source state is stored. Combat stats are derived from `level` by Game Core
+and are not persisted. Experience, gold and other resources arrive with Phase 3
+as HugeNumber column pairs.
+
+Row Level Security is enabled on both tables with no policies (deny by default
+for every non-owner role); on Supabase the migration also revokes the `anon` and
+`authenticated` roles' privileges. See docs/SECURITY.md — "Supabase".
+
+Not yet enforced by the database: a foreign key from `auth_user_id` to Supabase's
+`auth.users` (ADR-017 explains why). Account deletion must remove the profile
+explicitly.
 
 player_settings
 
@@ -316,7 +344,8 @@ results, arena snapshots, offline progression — must record the
 Without it, a replay after a balance patch is compared against rules that did
 not apply at the time. See ADR-005.
 
-Status: PLANNED; applies from the first such table in Phase 3.
+Status: PLANNED; applies from the first such table in Phase 3. The Phase 2
+tables store player state, not simulation results, and carry no rules version.
 
 ---
 
@@ -326,6 +355,12 @@ Every schema change must use a migration.
 
 Never manually alter production schema without reflecting the change in the
 repository migration history.
+
+Status: IMPLEMENTED. Migrations live in `packages/database/prisma/migrations`
+and are applied with `pnpm run db:deploy`. Constraints Prisma cannot model
+(CHECKs, Row Level Security, privilege revocations) are written into the
+migration SQL. CI applies the migrations to a fresh PostgreSQL and fails if they
+drift from `schema.prisma` (`prisma migrate diff --exit-code`).
 
 ---
 
@@ -348,6 +383,11 @@ All succeed or all fail.
 # Concurrency
 
 Consider concurrent requests.
+
+Implemented example (Phase 2): player provisioning runs `INSERT … ON CONFLICT DO
+NOTHING` for the profile and the main character inside one transaction, relying
+on the unique constraints. Concurrent requests converge on one profile and one
+character; an integration test fires 25 in parallel against PostgreSQL.
 
 Example:
 

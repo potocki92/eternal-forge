@@ -18,9 +18,9 @@ test.describe('foundation smoke', () => {
     expect(overflow).toBeLessThanOrEqual(0);
   });
 
-  test('status page reports the API as unreachable when it is not running', async ({ page }) => {
-    // The API is deliberately not started for this suite: the web application
-    // must degrade to a readable message rather than a blank screen.
+  test('status page reports the API as unreachable when it cannot be reached', async ({ page }) => {
+    // The request is failed on purpose: the web application must degrade to a
+    // readable message rather than a blank screen when the API is down.
     await page.route('**/health/ready', (route) => route.abort('connectionrefused'));
     await page.goto('/status');
 

@@ -4,8 +4,14 @@ Status: EARLY DESIGN — foundations IMPLEMENTED (Phase 0)
 
 IMPLEMENTED: design tokens (colour, typography, radius, elevation, motion,
 layering, item rarity) as Tailwind v4 `@theme` variables in
-`packages/ui/src/styles/tokens.css`, plus the `Button`, `Panel` and
-`StatusBadge` primitives, a reduced-motion guard and safe-area handling.
+`packages/ui/src/styles/tokens.css`, plus the `Alert`, `Button`, `Panel`,
+`Skeleton`, `StatusBadge` and `TextField` primitives, a reduced-motion guard and
+safe-area handling.
+
+IMPLEMENTED (Phase 2): the account screens — sign-in, registration, first-run
+"Name your hero" onboarding and a simple player shell (display name, hero,
+level, stage, sign-out). They are mobile-first single-column layouts verified at
+390x844 and on desktop. This is not the final game UI.
 
 PLANNED: everything else in this document, including bottom navigation, the
 combat screen, item presentation and the PixiJS scene.
@@ -203,8 +209,9 @@ Do not create all components immediately.
 
 Create them as features require them.
 
-IMPLEMENTED so far: Button, Panel, StatusBadge. Each exists because a Phase 0
-screen needed it.
+IMPLEMENTED so far: Button, Panel, StatusBadge (Phase 0); TextField, Alert,
+Skeleton (Phase 2, for the account forms and loading states). Each exists
+because a screen needed it.
 
 ---
 
@@ -374,6 +381,12 @@ Never fake completion of server-authoritative economy operations.
 Errors should tell the player what happened in useful language.
 
 Do not display raw backend exceptions.
+
+Implemented (Phase 2): Supabase Auth errors are mapped by error code to
+fixed sentences (`describeAuthError`); API errors show the message from the
+shared error contract, which the API writes for players. Transport failures
+show a generic "could not be reached" message. A session that ends because it
+expired returns the player to sign-in with "Your session has expired".
 
 Important actions should recover gracefully.
 

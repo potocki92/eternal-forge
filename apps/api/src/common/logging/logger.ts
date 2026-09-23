@@ -20,6 +20,13 @@ const REDACTED_PATHS = [
   '*.accessToken',
   'refreshToken',
   '*.refreshToken',
+  // Supabase's own spelling, in case a session object reaches a log call.
+  'access_token',
+  '*.access_token',
+  'refresh_token',
+  '*.refresh_token',
+  'token',
+  '*.token',
   'serviceRoleKey',
   '*.serviceRoleKey',
 ];

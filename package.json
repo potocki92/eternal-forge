@@ -14,12 +14,14 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "test:integration": "turbo run test:integration",
     "test:e2e": "turbo run test:e2e",
     "clean": "turbo run clean",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "db:generate": "pnpm --filter @eternal-forge/database run db:generate",
     "db:migrate": "pnpm --filter @eternal-forge/database run db:migrate",
+    "db:deploy": "pnpm --filter @eternal-forge/database run db:deploy",
     "verify": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run build"
   },
   "devDependencies": {

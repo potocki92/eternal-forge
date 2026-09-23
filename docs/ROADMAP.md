@@ -4,16 +4,19 @@ Last updated: 2026-09-22
 
 # Current Phase
 
-PHASE 1 — GAME CORE FOUNDATION
+PHASE 2 — AUTHENTICATION & PLAYER
 
 Status:
 
-COMPLETE — awaiting user approval. Validated locally; see "Validation" under
-Phase 1.
+COMPLETE — awaiting user approval. GitHub Actions is green on PR #4 (run
+35783641779 on `1d564ff`). See "Validation" under Phase 2.
+
+Phase 1 is COMPLETE / APPROVED: GitHub Actions is green on `main` (run #6 on
+`a09b2a3`, the merge of PR #3) and the user approved completion on 2026-09-22.
 
 Phase 0 is COMPLETE: GitHub Actions is green on `main` and the user approved
 completion on 2026-09-22. One owner-only task (the Vercel deployment) is carried
-forward and does not block Game Core work.
+forward and does not block later phases.
 
 Claude must NOT begin another phase without explicit user approval.
 
@@ -104,7 +107,8 @@ by the user's decision of 2026-09-22, does not block Game Core work.
 
 # Phase 1 — Game Core Foundation
 
-Status: COMPLETE — awaiting user approval (2026-09-22)
+Status: COMPLETE / APPROVED — approved by the user on 2026-09-22 after GitHub
+Actions passed on the pull request (run #5) and on `main` (run #6, `a09b2a3`)
 
 Goal:
 
@@ -206,26 +210,100 @@ progress, prestige, rankings, PvP and any combat UI. Deferred from ADR-013: the
 Zod wire schema, the PostgreSQL columns and their `ORDER BY` test, and the
 Redis score projection.
 
-Completion requires user approval. Phase 2 must not start without it.
+Approved by the user on 2026-09-22; Phase 2 started on the same date.
 
 ---
 
 # Phase 2 — Authentication & Player
 
-Status: NOT STARTED
+Status: COMPLETE — awaiting user approval (2026-09-22). Phase 3 must not start
+without that approval.
 
-Implement:
+Goal:
 
-- Supabase Auth
-- registration
-- login
-- logout
-- profile
-- character
-- authenticated backend
-- persistence
-- GET /player/state
-- authorization tests
+Authentication → Profile → Character → persistent player state → a secure,
+authenticated API, built as the foundation later phases attach to.
+
+Decisions: ADR-016 (authentication, identity and sessions), ADR-017 (player
+identity persistence and provisioning). ADR-010 amended.
+
+Tasks:
+
+- [x] Supabase Auth — browser `supabase-js` client with the public anon key;
+      session persisted, auto-refreshed, synchronised across tabs
+- [x] registration — email/password; handles projects with email confirmation
+- [x] login
+- [x] logout — clears client state before the network call; revokes the session
+- [x] session handling — reload, new tab, expiry, refresh failure, invalid
+      token, loading state
+- [x] protected routes — `/play` requires a session; `/login`, `/register` are
+      guest-only (navigation, not security)
+- [x] authenticated backend — local JWT verification (JWKS, optional legacy
+      HS256), global default-deny guard, RFC 6750 errors, 503 on key outage
+- [x] profile — `profiles` table, own UUID, unique `auth_user_id`
+- [x] character — `characters` table, slot model, source state only
+      (`level`, `stage`)
+- [x] persistence — Prisma models, first migration with CHECK constraints and
+      Row Level Security (deny by default)
+- [x] provisioning — `POST /player`, transactional and idempotent under
+      concurrency
+- [x] GET /player/state — shared contract in `packages/contracts`
+- [x] GET /player/characters/:characterId — ownership-scoped read
+- [x] shared error contract — `ApiErrorResponse` with machine-readable codes
+- [x] frontend — sign-in, registration, "Name your hero" onboarding, player shell
+      with display name, hero, level, stage and sign-out; mobile-first
+- [x] UI primitives — `TextField`, `Alert`, `Skeleton` in `packages/ui`
+- [x] tests — unit, application, API (HTTP), repository integration against
+      PostgreSQL, authorization, provisioning concurrency, Playwright E2E
+- [x] Supabase test double — GoTrue-compatible, real ES256 tokens; no hosted
+      Supabase in CI
+- [x] CI — PostgreSQL for E2E, migrations applied, integration tests, schema
+      drift check, service-role canary check on the browser bundle
+- [x] documentation — ADR-016, ADR-017, ADR-010 amendment, ARCHITECTURE,
+      DATABASE, SECURITY, UI_SYSTEM, README
+- [x] GitHub Actions green on the pull request — PR #4, run 35783641779 on
+      `1d564ff`: quality (format, lint, typecheck, unit tests, build),
+      PostgreSQL integration and smoke, Playwright end-to-end. The separate
+      GitGuardian app check reports two synthetic, unsigned JWT test fixtures in
+      earlier commits of the branch; they are not credentials, no longer exist in
+      the tree, and the incident needs dismissal by the owner
+- [x] review — Codex finding (name fields' native `maxLength` disagreed with the
+      shared code-point rule) fixed in `1d564ff` with regression tests
+- [ ] user approval
+
+Validation (2026-09-22, local, development container with PostgreSQL 16 and
+Redis 7):
+
+- format check, lint, typecheck, production build: pass (whole workspace).
+- Unit and application tests: 536 pass across the workspace (Phase 1: 421).
+  New or changed: `api` 82 (token verifier with real ES256/HS256 keys and a
+  real HTTP key-set server; guard and HTTP authorization with an in-memory
+  repository; use cases), `contracts` 33, `config` 33, `web` 27, `ui` 14.
+  `game-core` 338, unchanged.
+- PostgreSQL integration (`pnpm run test:integration`): 22 pass — provisioning,
+  25 concurrent provisioning calls converging on one profile and one character,
+  12 concurrent HTTP requests (one 201, eleven 200), ownership, every CHECK and
+  unique constraint, bigint stages, cascade delete, Row Level Security denying a
+  non-owner role. Ran five times in a row without a failure.
+- Playwright E2E: 34 pass (17 scenarios × mobile 390x844 and desktop) against
+  the production web build, the real API and PostgreSQL: protected route,
+  registration with onboarding, validation, duplicate email, wrong password,
+  reload, new tab, guest-only redirect, sign-out, account switch without stale
+  data, cross-tab sign-out, expired session, API-rejected token.
+- Migrations applied to an empty database and checked against the Prisma schema
+  (`prisma migrate diff --exit-code`): no drift.
+- Browser bundle built with a canary service-role key present: neither the
+  value nor the names of privileged variables appear in `.next/static`.
+- Game Core purity: unchanged and passing.
+- Self-review found and fixed two defects before commit: the 503
+  `AUTH_UNAVAILABLE` response lost its player-facing message in the exception
+  filter, and framework parse errors quoted part of the request body back to the
+  client. Both have regression tests.
+
+Not in this phase, by design: combat UI, gameplay persistence (experience,
+gold, stage progression), level-up, rate limiting, password reset and email
+change screens, account deletion, display-name uniqueness. The API hosting
+decision (ADR-012) remains open and needs the owner.
 
 ---
 

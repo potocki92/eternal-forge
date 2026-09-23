@@ -1,8 +1,8 @@
 // Eternal Forge — Prisma schema
 //
 // PostgreSQL is the persistent source of truth (docs/DATABASE.md). Tables are
-// introduced by the phase that needs them; Phase 0 deliberately declares no
-// models so the repository carries no speculative schema.
+// introduced by the phase that needs them. Phase 2 adds identity-linked player
+// data only: `profiles` and `characters` (ADR-017).
 //
 // Domain entities are NOT Prisma models. Prisma models are persistence models,
 // mapped to domain entities by repository implementations (CLAUDE.md —
@@ -19,4 +19,47 @@ generator client {
 // `src/prisma/prisma-client.ts`.
 datasource db {
   provider = "postgresql"
+}
+
+// A player's application profile, linked one-to-one to a Supabase Auth user.
+//
+// `id` is our own identifier and the one every other table references. The
+// Supabase Auth UUID appears in this table only, so authentication identity
+// stays replaceable and is never spread across the domain (ADR-017).
+//
+// Constraints that Prisma cannot express (CHECKs, Row Level Security) live in
+// the migration SQL.
+model Profile {
+  id          String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// `auth.users.id` of the owning Supabase user. Unique: one profile per identity.
+  authUserId  String      @unique(map: "profiles_auth_user_id_key") @map("auth_user_id") @db.Uuid
+  displayName String      @map("display_name") @db.VarChar(24)
+  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+  characters  Character[]
+
+  @@map("profiles")
+}
+
+// A playable character owned by a profile.
+//
+// Only the *source* of state is stored. Combat stats are derived from `level`
+// by the versioned Game Core rules and are never persisted (ADR-017).
+//
+// `slot` makes "the main character" a data property instead of a schema
+// limit: Phase 2 provisions slot 1, and more slots need no migration.
+model Character {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  profileId String   @map("profile_id") @db.Uuid
+  slot      Int      @db.SmallInt
+  name      String   @db.VarChar(24)
+  level     Int      @default(1)
+  /// Stages are effectively unlimited (docs/GAME_DESIGN.md), hence bigint.
+  stage     BigInt   @default(1)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, slot], map: "characters_profile_id_slot_key")
+  @@map("characters")
 }

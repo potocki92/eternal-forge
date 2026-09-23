@@ -49,6 +49,7 @@ catalog:
   'fast-check': '^4.10.2'
   'helmet': '^8.3.0'
   'ioredis': '^6.0.0'
+  'jose': '^6.2.12'
   'jsdom': '^28.0.1'
   'next': '^16.3.5'
   'pg': '^8.23.0'

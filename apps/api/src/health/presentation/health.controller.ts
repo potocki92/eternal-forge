@@ -1,6 +1,7 @@
 import { Controller, Get, HttpStatus, Res } from '@nestjs/common';
 import type { LivenessResponse, ReadinessResponse } from '@eternal-forge/contracts';
 import type { Response } from 'express';
+import { Public } from '../../auth/presentation/public.decorator.js';
 import { LivenessService } from '../application/liveness.service.js';
 import { ReadinessService } from '../application/readiness.service.js';
 
@@ -10,6 +11,7 @@ import { ReadinessService } from '../application/readiness.service.js';
  * Contains no rules: it calls an application service and translates the result
  * into an HTTP status (CLAUDE.md — "Controllers").
  */
+@Public()
 @Controller('health')
 export class HealthController {
   constructor(

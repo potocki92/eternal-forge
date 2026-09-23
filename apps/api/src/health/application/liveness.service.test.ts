@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { LivenessService } from './liveness.service.js';
-import type { Clock } from './ports/clock.port.js';
+import type { Clock } from '../../common/clock/clock.port.js';
 
 describe('LivenessService', () => {
   it('reports uptime measured from process start', () => {

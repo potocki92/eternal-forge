@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "license": "UNLICENSED",
-  "description": "Eternal Forge web client \u2014 mobile-first Next.js application.",
+  "description": "Eternal Forge web client — mobile-first Next.js application.",
   "scripts": {
     "build": "next build",
     "dev": "next dev --port 3000",
@@ -13,12 +13,14 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "clean": "rm -rf .next .turbo dist coverage playwright-report test-results *.tsbuildinfo"
+    "clean": "rm -rf .next .turbo dist coverage playwright-report test-results *.tsbuildinfo",
+    "auth:stub": "tsx e2e/support/fake-supabase-auth.ts"
   },
   "dependencies": {
     "@eternal-forge/config": "workspace:*",
     "@eternal-forge/contracts": "workspace:*",
     "@eternal-forge/ui": "workspace:*",
+    "@supabase/supabase-js": "catalog:",
     "@tanstack/react-query": "catalog:",
     "next": "catalog:",
     "react": "catalog:",
@@ -38,8 +40,10 @@
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "catalog:",
     "eslint": "catalog:",
+    "jose": "catalog:",
     "jsdom": "catalog:",
     "tailwindcss": "catalog:",
+    "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

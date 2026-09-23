@@ -5,10 +5,11 @@ theorycrafting, competitive rankings and effectively unlimited growth.
 
 > The repository is named `external-forge`; the product is **Eternal Forge**.
 
-**Current phase: Phase 1 — Game Core Foundation** (complete, awaiting
-approval). The deterministic, headless simulation exists: `HugeNumber`, a seeded
-RNG, versioned rules, combat, stages and rewards. It has no UI, no persistence
-and no player accounts yet. See [`docs/ROADMAP.md`](docs/ROADMAP.md).
+**Current phase: Phase 2 — Authentication & Player** (implemented, awaiting
+CI and approval). Players can register, sign in and out, name a hero and see
+their persisted profile and character through an authenticated API. The
+deterministic Game Core from Phase 1 exists but is not yet wired to a combat
+screen. See [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ---
 
@@ -26,14 +27,22 @@ pnpm install
 
 cp .env.example .env
 docker compose up -d          # PostgreSQL + Redis
+pnpm run db:deploy            # apply database migrations
 
 pnpm run build
+pnpm --filter @eternal-forge/web run auth:stub   # Supabase Auth test double :54329
 pnpm dev                      # web :3000, api :3001, worker
 ```
 
+The auth stub stands in for a Supabase project during local development and in
+the end-to-end suite. To use a real project instead, set `SUPABASE_URL`,
+`NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` (see
+[`.env.example`](.env.example)) and skip the stub.
+
 Then open:
 
-- http://localhost:3000 — start page
+- http://localhost:3000 — start page, sign-in and registration
+- http://localhost:3000/play — the player shell (requires sign-in)
 - http://localhost:3000/status — live readiness of the API and its dependencies
 - http://localhost:3001/health — API liveness
 - http://localhost:3001/health/ready — API readiness
@@ -47,18 +56,22 @@ Then open:
 | `pnpm run lint`                                 | ESLint across the workspace                           |
 | `pnpm run typecheck`                            | `tsc --noEmit` across the workspace                   |
 | `pnpm run test`                                 | Vitest unit and integration suites                    |
-| `pnpm run test:e2e`                             | Playwright end-to-end suite                           |
+| `pnpm run test:integration`                     | API integration tests against PostgreSQL (`DATABASE_URL`) |
+| `pnpm run test:e2e`                             | Playwright end-to-end suite (needs PostgreSQL, migrated) |
 | `pnpm run format`                               | Prettier write                                        |
 | `pnpm run verify`                               | format check → lint → typecheck → test → build        |
 | `pnpm run db:generate`                          | Regenerates the Prisma client                         |
 | `pnpm run db:migrate`                           | Creates and applies a development migration           |
+| `pnpm run db:deploy`                            | Applies committed migrations                          |
+| `pnpm --filter @eternal-forge/web run auth:stub` | Supabase Auth test double for local development and E2E |
 | `pnpm --filter @eternal-forge/worker run smoke` | Enqueues a job and waits for the worker to process it |
 | `pnpm --filter @eternal-forge/game-core run simulate -- --level 1 --seed demo` | Headless stage run: `Stage 1 — WIN` … `Stage N — LOSS` |
 | `pnpm --filter @eternal-forge/game-core run bench` | HugeNumber and combat benchmarks (not part of `test` or CI) |
 
-`pnpm run verify` is the same gate CI enforces, minus the end-to-end suite,
-which needs browsers installed (`pnpm --filter @eternal-forge/web exec playwright
-install chromium`). Run `verify` before pushing.
+`pnpm run verify` is the same gate CI's quality job enforces. CI additionally
+runs `test:integration` and `test:e2e`, which need a migrated PostgreSQL (and,
+for E2E, browsers: `pnpm --filter @eternal-forge/web exec playwright install
+chromium`). Run `verify` before pushing.
 
 The API and worker load `.env` from the repository root at startup in
 development. Variables already present in the environment always win, and the
@@ -104,6 +117,11 @@ docs/adr/     Architecture Decision Records
   ([ADR-004](docs/adr/ADR-004-postgresql.md), [ADR-006](docs/adr/ADR-006-redis.md)).
 - **Contracts are shared.** `packages/contracts` is the single definition of
   every request and response shape.
+- **Identity comes from verified tokens only.** Supabase Auth owns credentials;
+  the API verifies access tokens locally and never trusts an id sent by the
+  client. Every route is authenticated unless explicitly public
+  ([ADR-016](docs/adr/ADR-016-authentication-and-identity.md),
+  [ADR-017](docs/adr/ADR-017-player-identity-persistence.md)).
 
 Start with [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), then
 [`docs/adr/`](docs/adr/README.md).
@@ -114,8 +132,9 @@ Every variable is listed in [`.env.example`](.env.example) and validated at
 process start by `@eternal-forge/config`. An invalid value fails the boot with a
 list of offending variable names — never their values.
 
-Never commit `.env`. The Supabase service-role key bypasses Row Level Security
-and must exist only in server-side environments
+Never commit `.env`. The Supabase service-role key bypasses Row Level Security;
+no current process needs it, and it must only ever exist in server-side
+environments
 ([`docs/SECURITY.md`](docs/SECURITY.md)).
 
 ## Contributing

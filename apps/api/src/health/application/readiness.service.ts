@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { DependencyStatus, ReadinessResponse } from '@eternal-forge/contracts';
 import { SERVICE_NAME } from '../../app-info.js';
 import { SERVICE_VERSION } from '../../config/api-config.module.js';
-import { CLOCK, type Clock } from './ports/clock.port.js';
+import { CLOCK, type Clock } from '../../common/clock/clock.port.js';
 import { DEPENDENCY_PROBES, type DependencyProbe } from './ports/dependency-probe.port.js';
 
 /** A probe that has not answered within this budget counts as down. */
