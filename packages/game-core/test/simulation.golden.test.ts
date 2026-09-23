@@ -6,6 +6,7 @@ import {
   StageNumber,
   createCharacter,
   getGameRules,
+  resolveStageAttempt,
   simulateCombat,
   simulateStages,
 } from '../src/index.js';
@@ -122,6 +123,44 @@ describe(`golden simulations — rules v${GAME_RULES_VERSION}`, () => {
     expect(result.highestStageCleared?.toString()).toBe(golden.highest);
     expect(result.totalRewards.gold.toString()).toBe(golden.gold);
     expect(result.totalRewards.experience.toString()).toBe(golden.experience);
+    expect(fingerprint(result)).toBe(golden.fingerprint);
+  });
+
+  // Recorded in Phase 3 (ADR-019), when stage attempts were first persisted.
+  // These pin the progression rules of RULES_V1: level-up, defeat fallback and
+  // the whole attempt, not only the combat inside it.
+  it.each([
+    {
+      name: 'a first-stage win',
+      progress: { level: 1, experience: '8', gold: '0', stage: 1n },
+      seed: 'golden-attempt-win',
+      after: { level: 2, experience: '1e0', gold: '5e0', stage: '2' },
+      fingerprint: '788f9a7b25a617c1eac433e3f5f973913c4bb3a8e9de9e2b6a8e80202d838d1e',
+    },
+    {
+      name: 'a boss-wall defeat',
+      progress: { level: 4, experience: '3', gold: '41', stage: 10n },
+      seed: 'golden-attempt-boss',
+      after: { level: 4, experience: '3e0', gold: '4.1e1', stage: '9' },
+      fingerprint: '30f80f2594308e0acf25943e5cdb8f5866d9d543fe8d98d868fa26b0c6826c43',
+    },
+  ])('stage attempt: $name', (golden) => {
+    const result = resolveStageAttempt({
+      progress: {
+        level: golden.progress.level,
+        experience: HugeNumber.fromDecimal(golden.progress.experience),
+        gold: HugeNumber.fromDecimal(golden.progress.gold),
+        stage: StageNumber.of(golden.progress.stage),
+      },
+      seed: golden.seed,
+      rulesVersion: GAME_RULES_VERSION,
+    });
+    expect({
+      level: result.after.level,
+      experience: result.after.experience.toString(),
+      gold: result.after.gold.toString(),
+      stage: result.after.stage.toString(),
+    }).toEqual(golden.after);
     expect(fingerprint(result)).toBe(golden.fingerprint);
   });
 });

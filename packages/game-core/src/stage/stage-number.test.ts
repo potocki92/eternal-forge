@@ -104,6 +104,34 @@ describe('StageNumber — arithmetic and order', () => {
 
   it.each([-1, 1.5, Number.NaN])('rejects the offset %s', (offset) => {
     expectCode(() => StageNumber.FIRST.plus(offset), 'INVALID_ARGUMENT');
+    expectCode(() => StageNumber.FIRST.stepBack(offset), 'INVALID_ARGUMENT');
+  });
+
+  it('steps back exactly and saturates at the first stage', () => {
+    expect(StageNumber.of(10).stepBack(1).toString()).toBe('9');
+    expect(StageNumber.of(10).stepBack(0).toString()).toBe('10');
+    expect(StageNumber.of(3).stepBack(2)).toBe(StageNumber.FIRST);
+    expect(StageNumber.of(3).stepBack(1_000)).toBe(StageNumber.FIRST);
+    expect(StageNumber.FIRST.stepBack(1)).toBe(StageNumber.FIRST);
+    expect(StageNumber.of(STAGE_NUMBER_MAX).stepBack(1).toString()).toBe('9223372036854775806');
+    expect(
+      StageNumber.of(2n ** 53n + 1n)
+        .stepBack(1)
+        .toString(),
+    ).toBe('9007199254740992');
+  });
+
+  it('stepping back undoes stepping forward away from the first stage', () => {
+    fc.assert(
+      fc.property(
+        fc.bigInt({ min: 1n, max: STAGE_NUMBER_MAX - 1_000n }),
+        fc.integer({ min: 0, max: 1_000 }),
+        (value, offset) => {
+          const stage = StageNumber.of(value);
+          expect(stage.plus(offset).stepBack(offset).equals(stage)).toBe(true);
+        },
+      ),
+    );
   });
 
   it('counts the stages before it', () => {

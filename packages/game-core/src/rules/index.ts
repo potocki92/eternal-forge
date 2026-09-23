@@ -3,6 +3,7 @@ export type {
   CombatRules,
   EnemyArchetype,
   GameRules,
+  ProgressionRules,
   RewardRules,
   StageRules,
 } from './game-rules.js';

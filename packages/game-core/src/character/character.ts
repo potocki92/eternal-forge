@@ -14,13 +14,27 @@ export interface Character {
   readonly stats: CombatStats;
 }
 
-export function createCharacter(level: number, rules: GameRules): Character {
-  if (!Number.isSafeInteger(level) || level < 1) {
+/**
+ * Highest character level: the PostgreSQL `integer` maximum, `2^31 − 1`, so
+ * every level fits its column exactly. Under `RULES_V1` the experience needed
+ * to get anywhere near it is itself far beyond any reachable reward, so the
+ * cap exists to make the bound explicit rather than to shape play.
+ */
+export const CHARACTER_LEVEL_MAX = 2_147_483_647;
+
+/** @throws {GameCoreError} `INVALID_ARGUMENT` unless `level` is an integer from 1 to the maximum. */
+export function validateLevel(level: number): number {
+  if (!Number.isSafeInteger(level) || level < 1 || level > CHARACTER_LEVEL_MAX) {
     throw new GameCoreError(
       'INVALID_ARGUMENT',
-      'Character level must be a safe integer of at least 1.',
+      `Character level must be an integer from 1 to ${CHARACTER_LEVEL_MAX}.`,
     );
   }
+  return level;
+}
+
+export function createCharacter(level: number, rules: GameRules): Character {
+  validateLevel(level);
   const { baseStats, healthGrowthPerLevel, damageGrowthPerLevel } = rules.character;
   return {
     level,

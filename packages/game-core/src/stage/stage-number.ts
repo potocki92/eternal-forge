@@ -116,6 +116,20 @@ export class StageNumber {
     return this.plus(1);
   }
 
+  /**
+   * The stage `offset` stages earlier, but never before {@link StageNumber.FIRST}:
+   * the ladder has no stage 0. Used for the fallback after a defeat (ADR-019).
+   *
+   * @throws {GameCoreError} `INVALID_ARGUMENT` for a negative or non-integer offset.
+   */
+  public stepBack(offset: number): StageNumber {
+    if (!Number.isSafeInteger(offset) || offset < 0) {
+      throw new GameCoreError('INVALID_ARGUMENT', 'Stage offset must be a non-negative integer.');
+    }
+    const target = this.value - BigInt(offset);
+    return target <= 1n ? StageNumber.FIRST : new StageNumber(target);
+  }
+
   /** Stages before this one (`stage − 1`): the exponent of per-stage scaling. */
   public stagesBefore(): bigint {
     return this.value - 1n;

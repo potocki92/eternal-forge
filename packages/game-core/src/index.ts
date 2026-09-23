@@ -29,6 +29,7 @@ export type {
   CombatRules,
   EnemyArchetype,
   GameRules,
+  ProgressionRules,
   RewardRules,
   StageRules,
 } from './rules/index.js';
@@ -36,7 +37,7 @@ export type {
 export { BASIS_POINTS, applyCombatCaps, validateCombatStats } from './stats/combat-stats.js';
 export type { CombatStats } from './stats/combat-stats.js';
 
-export { createCharacter } from './character/character.js';
+export { CHARACTER_LEVEL_MAX, createCharacter, validateLevel } from './character/character.js';
 export type { Character } from './character/character.js';
 
 export { createEnemyForStage } from './enemy/enemy.js';
@@ -73,3 +74,20 @@ export type {
   StageRunResult,
   StageRunStopReason,
 } from './simulation/simulate-stages.js';
+
+export {
+  MAX_LEVELS_PER_GAIN,
+  applyExperience,
+  describeProgress,
+  experienceToNextLevel,
+  resolveStageAttempt,
+  stageAfterCombat,
+} from './progression/index.js';
+export type {
+  CharacterProgress,
+  ExperienceGainResult,
+  LevelProgress,
+  ProgressDescription,
+  StageAttemptInput,
+  StageAttemptResult,
+} from './progression/index.js';
