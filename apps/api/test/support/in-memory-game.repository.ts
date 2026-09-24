@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { ITEM_CATALOG, ItemInstanceId, createItemInstance } from '@eternal-forge/game-core';
 import type {
   CombatRepository,
   CombatTarget,
@@ -165,7 +166,21 @@ export class InMemoryGameRepository
       nextCombatAt: command.nextCombatAt,
     };
     stored.version += 1n;
-    const run: CombatRun = { ...command.run, id: randomUUID() };
+    const run: CombatRun = {
+      ...command.run,
+      id: randomUUID(),
+      awardedItem:
+        command.itemDrop === null
+          ? null
+          : createItemInstance(
+              {
+                id: ItemInstanceId.parse(randomUUID()),
+                definitionId: command.itemDrop.definitionId,
+                rarity: command.itemDrop.rarity,
+              },
+              ITEM_CATALOG,
+            ),
+    };
     this.combatRuns.push(run);
     return { kind: 'committed', run };
   }

@@ -24,7 +24,7 @@ const response = {
       { timeMs: 1000, attacker: 'PLAYER', critical: false, damage: '1e1', targetHealth: '3e1' },
       { timeMs: 1250, attacker: 'ENEMY', critical: true, damage: '6e0', targetHealth: '9.4e1' },
     ],
-    rewards: { gold: '5e0', experience: '3e0' },
+    rewards: { gold: '5e0', experience: '3e0', item: null },
     levelsGained: 0,
     resolvedAt: '2026-09-23T10:00:00.000Z',
   },
@@ -68,12 +68,28 @@ describe('combatResponseSchema', () => {
     expect(combatResponseSchema.parse(response)).toEqual(response);
   });
 
+  it('accepts authoritative metadata for a newly persisted item reward', () => {
+    const item = {
+      id: '2d9f1a52-3c4b-4e8d-9a1f-2b3c4d5e6f71',
+      definitionId: 'ashsteel_cuirass',
+      rarity: 'RARE' as const,
+      nameKey: 'item.ashsteel_cuirass.name',
+      slot: 'CHEST' as const,
+      createdAt: '2026-09-23T10:00:00.000Z',
+    };
+    const withItem = {
+      ...response,
+      combat: { ...response.combat, rewards: { ...response.combat.rewards, item } },
+    };
+    expect(combatResponseSchema.parse(withItem).combat.rewards.item).toEqual(item);
+  });
+
   it.each([
     ['an unknown outcome', { outcome: 'DRAW' }],
     ['a negative duration', { durationMs: -1 }],
     ['a fractional duration', { durationMs: 1.5 }],
-    ['a numeric reward', { rewards: { gold: 5, experience: '3e0' } }],
-    ['a negative reward', { rewards: { gold: '-5e0', experience: '3e0' } }],
+    ['a numeric reward', { rewards: { gold: 5, experience: '3e0', item: null } }],
+    ['a negative reward', { rewards: { gold: '-5e0', experience: '3e0', item: null } }],
     ['a numeric stage', { stage: { number: 1, kind: 'REGULAR' } }],
   ])('rejects %s', (_label, change) => {
     const result = combatResponseSchema.safeParse({

@@ -17,7 +17,7 @@ describe('game rules registry', () => {
     }
   });
 
-  it.each([0, 2, -1, 1.5, Number.NaN])('rejects unsupported version %s', (version) => {
+  it.each([0, 3, -1, 1.5, Number.NaN])('rejects unsupported version %s', (version) => {
     expect(() => getGameRules(version)).toThrow(GameCoreError);
   });
 

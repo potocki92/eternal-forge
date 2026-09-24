@@ -24,6 +24,7 @@ export type { Rng, RngState } from './rng/index.js';
 export { GAME_RULES_VERSION } from './rules-version.js';
 export type { GameRulesVersion } from './rules-version.js';
 export { getGameRules, supportedRulesVersions } from './rules/index.js';
+export { ITEM_DROP_RULES_V2 } from './rules/index.js';
 export type {
   CharacterRules,
   CombatRules,
@@ -33,6 +34,8 @@ export type {
   ProgressionRules,
   RewardRules,
   StageRules,
+  ItemDropRules,
+  ItemRarityWeight,
 } from './rules/index.js';
 
 export { BASIS_POINTS, applyCombatCaps, validateCombatStats } from './stats/combat-stats.js';
@@ -114,11 +117,14 @@ export {
   ITEM_DEFINITION_ID_MAX_LENGTH,
   ITEM_RARITIES,
   ItemCatalog,
+  ITEM_DROP_SEED_LABEL,
   ItemDefinitionId,
   ItemInstanceId,
   compareItemRarity,
   createItemDefinition,
   createItemInstance,
+  resolveItemDrop,
+  selectItemRarity,
   itemDefinitionFor,
   itemRarityRank,
   parseEquipmentSlot,
@@ -132,6 +138,8 @@ export type {
   ItemDefinition,
   ItemDefinitionInput,
   ItemInstance,
+  ItemDrop,
+  ResolveItemDropInput,
   ItemRarity,
   SerializedItemInstance,
 } from './items/index.js';

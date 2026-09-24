@@ -5,6 +5,7 @@ import type {
   StageAttemptResult,
   StageMode,
   StageRewards,
+  ItemInstance,
 } from '@eternal-forge/game-core';
 
 /**
@@ -36,6 +37,7 @@ export interface CombatRunRecord {
 
 export interface CombatRun extends CombatRunRecord {
   readonly id: string;
+  readonly awardedItem: ItemInstance | null;
 }
 
 /** The record of `attempt`, exactly as Game Core produced it. */

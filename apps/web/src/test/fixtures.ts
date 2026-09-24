@@ -72,7 +72,7 @@ export function combatResponseFixture(): CombatResponse {
         { timeMs: 3750, attacker: 'ENEMY', critical: false, damage: '4e0', targetHealth: '8.8e1' },
         { timeMs: 4000, attacker: 'PLAYER', critical: false, damage: '1e1', targetHealth: '0' },
       ],
-      rewards: { gold: '5e0', experience: '3e0' },
+      rewards: { gold: '5e0', experience: '3e0', item: null },
       levelsGained: 0,
       resolvedAt: '2026-09-22T10:00:10.000Z',
     },

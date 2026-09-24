@@ -11,6 +11,8 @@ export { ITEM_DEFINITION_ID_MAX_LENGTH, ItemDefinitionId, ItemInstanceId } from 
 export { createItemDefinition } from './item-definition.js';
 export type { ItemDefinition, ItemDefinitionInput } from './item-definition.js';
 export { ITEM_CATALOG, ItemCatalog } from './item-catalog.js';
+export { ITEM_DROP_SEED_LABEL, resolveItemDrop, selectItemRarity } from './item-drop.js';
+export type { ItemDrop, ResolveItemDropInput } from './item-drop.js';
 export {
   createItemInstance,
   itemDefinitionFor,

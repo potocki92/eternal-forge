@@ -1,5 +1,10 @@
 import { isUniqueConstraintViolation } from '@eternal-forge/database';
-import { HugeNumber, type StageMode } from '@eternal-forge/game-core';
+import {
+  HugeNumber,
+  ITEM_CATALOG,
+  parseItemInstance,
+  type StageMode,
+} from '@eternal-forge/game-core';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import { toCharacter } from '../../player/infrastructure/prisma-player.repository.js';
@@ -40,6 +45,11 @@ interface CombatRunRow {
   readonly rewardExperienceCoef: bigint;
   readonly rewardExperienceExp: number;
   readonly createdAt: Date;
+  readonly awardedItem?: {
+    readonly id: string;
+    readonly definitionId: string;
+    readonly rarity: string;
+  } | null;
 }
 
 /** Thrown inside the transaction to roll it back when the version moved on. */
@@ -65,7 +75,7 @@ export class PrismaCombatRepository implements CombatRepository {
   ): Promise<CombatTarget | null> {
     const row = await this.prisma.client.character.findFirst({
       where: { id: characterId, profile: { authUserId } },
-      include: { combatRuns: { where: { idempotencyKey } } },
+      include: { combatRuns: { where: { idempotencyKey }, include: { awardedItem: true } } },
     });
     if (row === null) {
       return null;
@@ -137,9 +147,28 @@ export class PrismaCombatRepository implements CombatRepository {
             rewardExperienceExp: rewardExperience.exponent,
             createdAt: run.resolvedAt,
           },
+          include: { awardedItem: true },
         });
 
-        return { kind: 'committed', run: toCombatRun(row) } as const;
+        if (command.itemDrop !== null) {
+          ITEM_CATALOG.require(command.itemDrop.definitionId);
+          await tx.itemInstance.create({
+            data: {
+              characterId: command.characterId,
+              combatRunId: row.id,
+              definitionId: command.itemDrop.definitionId.toString(),
+              rarity: command.itemDrop.rarity,
+              createdAt: run.resolvedAt,
+            },
+          });
+        }
+
+        const committed = await tx.combatRun.findUniqueOrThrow({
+          where: { id: row.id },
+          include: { awardedItem: true },
+        });
+
+        return { kind: 'committed', run: toCombatRun(committed) } as const;
       });
     } catch (error) {
       // Both mean another request committed first; nothing of ours was written.
@@ -177,5 +206,16 @@ function toCombatRun(row: CombatRunRow): CombatRun {
       experience: HugeNumber.fromParts(row.rewardExperienceCoef, row.rewardExperienceExp),
     },
     resolvedAt: row.createdAt,
+    awardedItem:
+      row.awardedItem == null
+        ? null
+        : parseItemInstance(
+            {
+              id: row.awardedItem.id,
+              definitionId: row.awardedItem.definitionId,
+              rarity: row.awardedItem.rarity,
+            },
+            ITEM_CATALOG,
+          ),
   };
 }

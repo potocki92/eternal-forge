@@ -3,6 +3,7 @@ import {
   experienceToNextLevel,
   getGameRules,
   resolveStageAttempt,
+  resolveItemDrop,
   type CharacterProgress,
   type HugeNumber,
   type StageAttemptResult,
@@ -145,6 +146,12 @@ export class RunCombatUseCase {
       rulesVersion: GAME_RULES_VERSION,
     });
     const nextCombatAt = new Date(now.getTime() + attempt.combat.durationMs);
+    const itemDrop = resolveItemDrop({
+      combatSeed: attempt.seed,
+      rulesVersion: attempt.rulesVersion,
+      stage: attempt.stage.number,
+      outcome: attempt.combat.outcome,
+    });
 
     const committed = await this.combats.commit({
       authUserId: identity.authUserId,
@@ -158,10 +165,32 @@ export class RunCombatUseCase {
         stageMode: target.character.stageMode,
         resolvedAt: now,
       }),
+      itemDrop,
     });
 
     if (committed.kind === 'conflict') {
       return this.afterConflict(identity, command);
+    }
+
+    if (committed.run.awardedItem === null) {
+      this.logger.debug({
+        msg: 'Combat resolved without an item drop',
+        event: 'item.drop_none',
+        characterId: target.character.id,
+        combatId: committed.run.id,
+        stage: attempt.stage.number.toString(),
+      });
+    } else {
+      this.logger.log({
+        msg: 'Combat item drop awarded',
+        event: 'item.drop_awarded',
+        characterId: target.character.id,
+        combatId: committed.run.id,
+        itemInstanceId: committed.run.awardedItem.id.toString(),
+        definitionId: committed.run.awardedItem.definitionId.toString(),
+        rarity: committed.run.awardedItem.rarity,
+        stage: attempt.stage.number.toString(),
+      });
     }
 
     return {
@@ -233,6 +262,31 @@ export class RunCombatUseCase {
     });
     if (!replayMatches(run, attempt)) {
       throw new CombatReplayMismatchError(run.id);
+    }
+    const replayedDrop = resolveItemDrop({
+      combatSeed: run.seed,
+      rulesVersion: run.rulesVersion,
+      stage: run.before.stages.current,
+      outcome: run.outcome,
+    });
+    const persistedDrop = run.awardedItem;
+    if (
+      (replayedDrop === null) !== (persistedDrop === null) ||
+      (replayedDrop !== null &&
+        persistedDrop !== null &&
+        (!replayedDrop.definitionId.equals(persistedDrop.definitionId) ||
+          replayedDrop.rarity !== persistedDrop.rarity))
+    ) {
+      throw new CombatReplayMismatchError(run.id);
+    }
+    if (persistedDrop !== null) {
+      this.logger.log({
+        msg: 'Combat item drop replayed',
+        event: 'item.drop_replay',
+        characterId: character.id,
+        combatId: run.id,
+        itemInstanceId: persistedDrop.id.toString(),
+      });
     }
     const nextCombatAt = new Date(run.resolvedAt.getTime() + run.durationMs);
 

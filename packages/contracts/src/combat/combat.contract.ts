@@ -10,6 +10,7 @@ import {
 } from '../game/progression.contract.js';
 import { hugeAmountSchema } from '../huge-number/huge-number.contract.js';
 import { characterSchema } from '../player/player.contract.js';
+import { itemInstanceSchema } from '../items/inventory.contract.js';
 
 /**
  * `POST /player/characters/:characterId/combats` — resolve the character's
@@ -51,7 +52,11 @@ export const rewardsSchema = z.object({
   gold: hugeAmountSchema,
   experience: hugeAmountSchema,
 });
-export type RewardsDto = z.infer<typeof rewardsSchema>;
+export const combatRewardsSchema = rewardsSchema.extend({
+  /** The same persistent instance returned by inventory; null when no drop occurred. */
+  item: itemInstanceSchema.nullable(),
+});
+export type RewardsDto = z.infer<typeof combatRewardsSchema>;
 
 /** Progression at one instant: before or after the combat. */
 export const progressSnapshotSchema = z
@@ -78,7 +83,7 @@ export const combatSchema = z.object({
   /** Bounded by the rule set's time limit and attack-speed cap. */
   events: z.array(combatEventSchema).max(1_000),
   /** Zero for a loss. */
-  rewards: rewardsSchema,
+  rewards: combatRewardsSchema,
   levelsGained: z.number().int().min(0),
   resolvedAt: z.iso.datetime(),
 });

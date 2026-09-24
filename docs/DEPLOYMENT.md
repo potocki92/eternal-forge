@@ -212,3 +212,7 @@ character read without it.
 ## Phase 5 PR 5.2 migration ordering
 
 **AFTER MERGE: RUN "Deploy Supabase DEV" BEFORE VALIDATING THE NEW ITEM API AGAINST DEV.** Wait for migration `20260924120000_inventory_equipment_persistence` and drift verification to succeed before deploying/restarting the API. The migration is additive, but new item endpoints require both new tables.
+
+## Phase 5 PR 5.3 migration ordering
+
+**AFTER MERGE: RUN "Deploy Supabase DEV" BEFORE VALIDATING THE NEW APPLICATION CODE AGAINST DEV.** Wait for migration `20260924180000_combat_item_drops` and schema-drift verification to succeed before deploying/restarting the API. The migration is additive and portable to plain PostgreSQL 16; it adds one nullable reward association, unique index and foreign key.

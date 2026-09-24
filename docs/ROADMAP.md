@@ -1,6 +1,6 @@
 # Eternal Forge — Development Roadmap
 
-Last updated: 2026-09-23
+Last updated: 2026-09-24
 
 # Current Phase
 
@@ -8,7 +8,7 @@ PHASE 5 — ITEMS & EQUIPMENT
 
 Status:
 
-IN PROGRESS — PR 5.1 "Item Domain Foundation" is COMPLETE / APPROVED (ADR-024). PR 5.2 "Inventory & Equipment Persistence" is IN PROGRESS (ADR-025).
+IN PROGRESS — PR 5.1 and PR 5.2 are COMPLETE / APPROVED (ADR-024, ADR-025). PR 5.3 "Item Drops & Combat Reward Integration" is IN PROGRESS (ADR-026).
 
 Phase 4 is COMPLETE / APPROVED. PRs 4.1–4.4 are merged and the return
 experience was manually verified. Phase 5 is now the current phase.
@@ -824,11 +824,11 @@ Implement:
 
 # Phase 5 — Items & Equipment
 
-Status: IN PROGRESS — PR 5.1 "Item Domain Foundation"
+Status: IN PROGRESS — PR 5.3 "Item Drops & Combat Reward Integration"
 
 ## PR 5.1 — Item Domain Foundation
 
-Status: IN PROGRESS. Decision: ADR-024 (proposed).
+Status: COMPLETE / APPROVED. Decision: ADR-024.
 
 Scope: pure, immutable item identities, definitions, instances, slot and
 rarity values, and a seven-entry static catalog in Game Core. No persistence,
@@ -862,6 +862,19 @@ Equip
 Unequip
 Drops
 Persistence
+
+
+## PR 5.2 — Inventory & Equipment Persistence
+
+Status: COMPLETE / APPROVED. Decision: ADR-025.
+
+## PR 5.3 — Item Drops & Combat Reward Integration
+
+Status: IN PROGRESS. Decision: ADR-026 (proposed). Deterministic online victory drops, atomic persistence and exactly-once replay are implemented for review. Offline item rewards are explicitly deferred pending a bounded aggregate design.
+
+## PR 5.4 — Inventory & Equipment UI
+
+Status: NOT STARTED.
 
 ---
 
