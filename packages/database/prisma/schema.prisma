@@ -120,7 +120,7 @@ model CharacterEquipment {
   slot          String       @db.VarChar(16)
   itemInstanceId String      @unique(map: "character_equipment_item_instance_id_key") @map("item_instance_id") @db.Uuid
   character     Character    @relation(fields: [characterId], references: [id], onDelete: Cascade)
-  itemInstance  ItemInstance @relation(fields: [itemInstanceId, characterId], references: [id, characterId], onDelete: Cascade)
+  itemInstance  ItemInstance @relation(fields: [itemInstanceId, characterId], references: [id, characterId], onDelete: Cascade, map: "character_equipment_item_owner_fkey")
 
   @@id([characterId, slot])
   @@unique([itemInstanceId, characterId], map: "character_equipment_item_character_key")
