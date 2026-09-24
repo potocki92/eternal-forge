@@ -1,4 +1,5 @@
 import type { CombatResponse, ProgressSnapshotDto } from '@eternal-forge/contracts';
+import { ITEM_CATALOG } from '@eternal-forge/game-core';
 import {
   toCharacterDto,
   toEncounterDto,
@@ -37,6 +38,20 @@ export function toCombatResponse(combat: ResolvedCombat, serverTime: Date): Comb
       rewards: {
         gold: attempt.rewards.gold.toString(),
         experience: attempt.rewards.experience.toString(),
+        item:
+          run.awardedItem === null
+            ? null
+            : (() => {
+                const definition = ITEM_CATALOG.require(run.awardedItem.definitionId);
+                return {
+                  id: run.awardedItem.id.toString(),
+                  definitionId: run.awardedItem.definitionId.toString(),
+                  rarity: run.awardedItem.rarity,
+                  nameKey: definition.nameKey,
+                  slot: definition.slot,
+                  createdAt: run.resolvedAt.toISOString(),
+                };
+              })(),
       },
       levelsGained: attempt.levelsGained,
       resolvedAt: run.resolvedAt.toISOString(),

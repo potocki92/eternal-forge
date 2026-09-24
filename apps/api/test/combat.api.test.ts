@@ -171,7 +171,7 @@ describe('combat — input validation', () => {
     const body = combatResponseSchema.parse(response.body);
 
     expect(body.combat.stage.number).toBe('1');
-    expect(body.combat.rewards).toEqual({ gold: '5e0', experience: '3e0' });
+    expect(body.combat.rewards).toEqual({ gold: '5e0', experience: '3e0', item: null });
     expect(repository.runsOf(characterId)[0]?.seed).toBe('http-1');
   });
 });
@@ -283,7 +283,7 @@ describe('combat — the loop over HTTP', () => {
     expect(body.combat.stage).toEqual({ number: '10', kind: 'BOSS' });
     expect(body.combat.enemy.archetypeId).toBe('warden');
     expect(body.combat.outcome).toBe('LOSS');
-    expect(body.combat.rewards).toEqual({ gold: '0', experience: '0' });
+    expect(body.combat.rewards).toEqual({ gold: '0', experience: '0', item: null });
     expect(body.after).toMatchObject({
       currentStage: '9',
       highestStageReached: '10',

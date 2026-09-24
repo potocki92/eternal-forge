@@ -14,7 +14,7 @@ function defeat(afterStage: string): CombatResponse {
       stage: { number: '10', kind: 'BOSS' },
       outcome: 'LOSS',
       endReason: 'PLAYER_DEFEATED',
-      rewards: { gold: '0', experience: '0' },
+      rewards: { gold: '0', experience: '0', item: null },
     },
     after: {
       ...response.after,

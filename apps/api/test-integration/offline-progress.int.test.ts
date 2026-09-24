@@ -207,6 +207,11 @@ describe('offline progress — a claim against PostgreSQL', () => {
     });
 
     expect(body.offline.fights).toBe(expected.fights);
+    // ADR-026: offline claims remain aggregate gold/XP only until a bounded
+    // persistent item-batch design is approved.
+    expect(
+      await prisma.client.itemInstance.count({ where: { characterId: who.characterId } }),
+    ).toBe(0);
     expect(after.level).toBe(expected.after.level);
     expect(HugeNumber.fromParts(after.goldCoef, after.goldExp).eq(expected.after.gold)).toBe(true);
     expect(after.nextCombatAt.toISOString()).toBe(body.offline.processedUntil);

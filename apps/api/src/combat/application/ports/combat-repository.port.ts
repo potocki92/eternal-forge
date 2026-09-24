@@ -1,4 +1,4 @@
-import type { CharacterProgress } from '@eternal-forge/game-core';
+import type { CharacterProgress, ItemDrop } from '@eternal-forge/game-core';
 import type { Character } from '../../../player/domain/player.js';
 import type { CombatRun, CombatRunRecord } from '../../domain/combat-run.js';
 
@@ -20,6 +20,8 @@ export interface CommitCombat {
   readonly progress: CharacterProgress;
   readonly nextCombatAt: Date;
   readonly run: CombatRunRecord;
+  /** Generation data only. Infrastructure creates the persistent UUID in this transaction. */
+  readonly itemDrop: ItemDrop | null;
 }
 
 export type CommitCombatResult =

@@ -789,6 +789,10 @@ survival build.
 
 Build diversity is a core product requirement.
 
-## Inventory and equipment persistence — IN PROGRESS (Phase 5 PR 5.2)
+## Inventory and equipment persistence — COMPLETE / APPROVED (Phase 5 PR 5.2)
 
 Inventory means all item instances owned by the character, including equipped items. Equipment is a seven-slot mapping; equipping replaces the prior item atomically and unequipping leaves ownership unchanged. Empty unequip and repeated equip are successful no-ops. Items have no stats or combat effect until Phase 6.
+
+## Item drops — IN PROGRESS (Phase 5 PR 5.3, ADR-026)
+
+Every eligible online victory, in either PROGRESS or FARM mode, has a rules-v2 10% item chance. The seven initial catalog definitions are selected uniformly. Rarity is COMMON 70%, MAGIC 20%, RARE 7%, EPIC 2%, LEGENDARY 0.9%, and MYTHIC 0.1%. Bosses and stage depth have no modifier. Losses never drop items. Drops enter inventory unequipped and still have no combat effect. Offline item drops are deliberately deferred pending a bounded aggregate reward design.

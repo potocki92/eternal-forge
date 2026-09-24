@@ -16,6 +16,8 @@ import {
 import request from 'supertest';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { PrismaCombatRepository } from '../src/combat/infrastructure/prisma-combat.repository.js';
+import type { CombatSeedSource } from '../src/combat/application/ports/combat-seed-source.port.js';
+import { PrismaInventoryRepository } from '../src/inventory/infrastructure/prisma-inventory.repository.js';
 import type { PrismaService } from '../src/infrastructure/prisma/prisma.service.js';
 import { PrismaPlayerRepository } from '../src/player/infrastructure/prisma-player.repository.js';
 import { PrismaStageSelectionRepository } from '../src/player/infrastructure/prisma-stage-selection.repository.js';
@@ -61,15 +63,20 @@ afterEach(async () => {
 });
 
 /** One more API process sharing the database, as a second replica would. */
-async function newApiInstance(): Promise<INestApplication> {
+async function newApiInstance(seeds?: CombatSeedSource): Promise<INestApplication> {
   return createTestApp({
     issuer,
     players: new PrismaPlayerRepository(prisma),
     combats: new PrismaCombatRepository(prisma),
     selections: new PrismaStageSelectionRepository(prisma),
-    seeds: sequentialSeeds(`int-${randomUUID().slice(0, 8)}`),
+    seeds: seeds ?? sequentialSeeds(`int-${randomUUID().slice(0, 8)}`),
     clock,
   });
+}
+
+async function useFixedSeed(seed: string): Promise<void> {
+  await app.close();
+  app = await newApiInstance({ next: () => seed });
 }
 
 async function provisionedPlayer(instance: INestApplication = app) {
@@ -144,7 +151,7 @@ describe('combat against PostgreSQL — the loop', () => {
     expect(runs).toHaveLength(1);
     expect(runs[0]).toMatchObject({
       id: body.combat.id,
-      rulesVersion: 1,
+      rulesVersion: 2,
       stage: 1n,
       highestStageReachedBefore: 1n,
       highestStageClearedBefore: null,
@@ -177,7 +184,7 @@ describe('combat against PostgreSQL — the loop', () => {
 
   it('plays a long session: every reward lands once and the ledger reconciles', async () => {
     const { token, characterId } = await provisionedPlayer();
-    const rules = getGameRules(1);
+    const rules = getGameRules(2);
     let expectedStage = StageNumber.FIRST;
     let reached = 1n;
     let cleared = 0n;
@@ -291,6 +298,96 @@ describe('combat against PostgreSQL — the loop', () => {
   });
 });
 
+describe('combat against PostgreSQL — item rewards', () => {
+  it('atomically awards a deterministic item that is immediately visible in inventory', async () => {
+    await useFixedSeed('loot-25');
+    const { token, characterId } = await provisionedPlayer();
+
+    const body = combatResponseSchema.parse((await fight(token, characterId).expect(201)).body);
+    expect(body.combat.rewards.item).toMatchObject({
+      definitionId: 'ashsteel_cuirass',
+      rarity: 'COMMON',
+      slot: 'CHEST',
+      nameKey: 'item.ashsteel_cuirass.name',
+    });
+    const item = await prisma.client.itemInstance.findFirstOrThrow({ where: { characterId } });
+    expect(item.id).toBe(body.combat.rewards.item?.id);
+    expect(item.combatRunId).toBe(body.combat.id);
+    expect(await prisma.client.characterEquipment.count({ where: { characterId } })).toBe(0);
+
+    const profile = await prisma.client.character.findUniqueOrThrow({
+      where: { id: characterId },
+      include: { profile: true },
+    });
+    const inventory = await new PrismaInventoryRepository(prisma).loadOwned(
+      profile.profile.authUserId,
+      characterId,
+    );
+    expect(inventory?.items[0]?.item.id.toString()).toBe(item.id);
+  });
+
+  it('persists normal progression and no item for a deterministic no-drop victory', async () => {
+    await useFixedSeed('loot-0');
+    const { token, characterId } = await provisionedPlayer();
+    const body = combatResponseSchema.parse((await fight(token, characterId).expect(201)).body);
+    expect(body.combat.outcome).toBe('WIN');
+    expect(body.combat.rewards.item).toBeNull();
+    expect(await prisma.client.itemInstance.count({ where: { characterId } })).toBe(0);
+    expect(stagesOf(await characterRow(characterId))).toBe('2 / 2 / 1');
+  });
+
+  it('allows different combats to award separate instances with the same definition and rarity', async () => {
+    const seeds = ['loot-25', 'two-6'];
+    await app.close();
+    app = await newApiInstance({ next: () => seeds.shift() ?? 'unexpected' });
+    const { token, characterId } = await provisionedPlayer();
+    const first = combatResponseSchema.parse((await fight(token, characterId).expect(201)).body);
+    clock.advance(first.combat.durationMs);
+    const second = combatResponseSchema.parse((await fight(token, characterId).expect(201)).body);
+
+    expect(first.combat.rewards.item).toMatchObject({
+      definitionId: 'ashsteel_cuirass',
+      rarity: 'COMMON',
+    });
+    expect(second.combat.rewards.item).toMatchObject({
+      definitionId: 'ashsteel_cuirass',
+      rarity: 'COMMON',
+    });
+    expect(second.combat.rewards.item?.id).not.toBe(first.combat.rewards.item?.id);
+    expect(await prisma.client.itemInstance.count({ where: { characterId } })).toBe(2);
+  });
+
+  it('rolls progression and the combat record back when item persistence fails, then retries safely', async () => {
+    await useFixedSeed('loot-25');
+    const { token, characterId } = await provisionedPlayer();
+    const key = randomUUID();
+    const before = await characterRow(characterId);
+    await prisma.client.$executeRawUnsafe(`
+      CREATE FUNCTION reject_test_item_drop() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN RAISE EXCEPTION 'forced item failure'; END; $$;
+      CREATE TRIGGER reject_test_item_drop BEFORE INSERT ON item_instances
+      FOR EACH ROW EXECUTE FUNCTION reject_test_item_drop();
+    `);
+    try {
+      await fight(token, characterId, key).expect(500);
+      expect(await characterRow(characterId)).toEqual(before);
+      expect(await prisma.client.combatRun.count({ where: { characterId } })).toBe(0);
+      expect(await prisma.client.itemInstance.count({ where: { characterId } })).toBe(0);
+    } finally {
+      await prisma.client.$executeRawUnsafe(`
+        DROP TRIGGER IF EXISTS reject_test_item_drop ON item_instances;
+        DROP FUNCTION IF EXISTS reject_test_item_drop();
+      `);
+    }
+    const retry = combatResponseSchema.parse(
+      (await fight(token, characterId, key).expect(201)).body,
+    );
+    expect(retry.combat.rewards.item).not.toBeNull();
+    expect(await prisma.client.combatRun.count({ where: { characterId } })).toBe(1);
+    expect(await prisma.client.itemInstance.count({ where: { characterId } })).toBe(1);
+  });
+});
+
 describe('combat against PostgreSQL — concurrency', () => {
   const BURST = 25;
 
@@ -319,6 +416,7 @@ describe('combat against PostgreSQL — concurrency', () => {
   });
 
   it(`${BURST} simultaneous retries of one request: one combat, every retry gets it`, async () => {
+    await useFixedSeed('loot-25');
     const { token, characterId } = await provisionedPlayer();
     const key = randomUUID();
 
@@ -333,6 +431,13 @@ describe('combat against PostgreSQL — concurrency', () => {
     );
     expect(ids.size).toBe(1);
     expect(await prisma.client.combatRun.count({ where: { characterId } })).toBe(1);
+    expect(await prisma.client.itemInstance.count({ where: { characterId } })).toBe(1);
+    const awardedIds = new Set(
+      responses.map(
+        (response) => combatResponseSchema.parse(response.body).combat.rewards.item?.id,
+      ),
+    );
+    expect(awardedIds.size).toBe(1);
     // The records moved exactly once.
     expect(stagesOf(await characterRow(characterId))).toBe('2 / 2 / 1');
   });
@@ -403,6 +508,7 @@ describe('PrismaCombatRepository — conditional commit', () => {
         },
       },
       nextCombatAt: new Date(),
+      itemDrop: null,
       run: {
         characterId,
         idempotencyKey: randomUUID(),
@@ -449,6 +555,7 @@ describe('PrismaCombatRepository — conditional commit', () => {
         },
       },
       nextCombatAt: new Date(),
+      itemDrop: null,
       run: {
         characterId,
         idempotencyKey: randomUUID(),

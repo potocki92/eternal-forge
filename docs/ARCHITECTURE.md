@@ -1062,6 +1062,10 @@ outer-boundary instance ID and validated rarity. Phase 6 may add rolled source
 state to `ItemInstance` additively after defining its own typed model; no
 untyped placeholder is present.
 
-## Inventory and equipment persistence — IN PROGRESS (Phase 5 PR 5.2)
+## Inventory and equipment persistence — COMPLETE / APPROVED (Phase 5 PR 5.2)
 
 ADR-025 adds an authenticated API/application/repository path for character-owned item instances. PostgreSQL stores normalized ownership and one equipment row per character/slot; the API derives slots through the Game Core catalog and serializes mutations with all other character writes through `characters.version`. Equipment has no combat effect in this phase.
+
+# Phase 5 PR 5.3 implementation status — combat item drops
+
+Online combat resolves optional loot in pure Game Core under rules v2 from an independent seed derived as `deriveSeed(combatSeed, "item-drop", rulesVersion, stage)`. Combat RNG and rules-v1 fingerprints are unchanged. The combat repository atomically updates progression, inserts `combat_runs`, and inserts the optional `item_instances` row. A unique nullable reward FK ties zero or one instance to the combat idempotency identity. Retry loads and returns that same row. Auto Battle inherits this path; offline item drops are explicitly deferred because offline claims are aggregated. See ADR-026.

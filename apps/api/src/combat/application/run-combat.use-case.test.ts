@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import {
   HugeNumber,
+  GAME_RULES_VERSION,
   INITIAL_STAGE_PROGRESS,
   STAGE_NUMBER_MAX,
   StageNumber,
@@ -21,7 +22,7 @@ import {
   type RunCombatResult,
 } from './run-combat.use-case.js';
 
-const rules = getGameRules(1);
+const rules = getGameRules(GAME_RULES_VERSION);
 
 let repository: InMemoryGameRepository;
 let clock: ManualClock;
@@ -100,7 +101,7 @@ describe('RunCombatUseCase — victory', () => {
     expect(result.combat.character).toEqual({ ...after, updatedAt: character.updatedAt });
 
     expect(repository.runsOf(character.id)).toEqual([run]);
-    expect(run).toMatchObject({ outcome: 'WIN', rulesVersion: 1, seed: 'unit-1' });
+    expect(run).toMatchObject({ outcome: 'WIN', rulesVersion: 2, seed: 'unit-1' });
     expect(stagesOf(run.before)).toBe('1 / 1 / null');
   });
 
@@ -336,7 +337,7 @@ describe('RunCombatUseCase — ownership and authority', () => {
       },
       mode: 'PROGRESS',
       seed: 'unit-1',
-      rulesVersion: 1,
+      rulesVersion: GAME_RULES_VERSION,
     });
 
     expect(result.combat.attempt).toEqual(expected);
@@ -373,10 +374,11 @@ describe('RunCombatUseCase — observability', () => {
     vi.restoreAllMocks();
   });
 
-  it('logs nothing for a plain new combat', async () => {
+  it('logs a no-drop resolution for a plain new combat', async () => {
     const events = captureEvents();
     resolved(await fight());
-    expect(events).toEqual([]);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ level: 'debug', event: 'item.drop_none' });
   });
 
   it('logs a refusal for timing at debug level, with the wait and no request data', async () => {

@@ -89,6 +89,7 @@ export {
   combatEventSchema,
   combatOutcomeSchema,
   combatResponseSchema,
+  combatRewardsSchema,
   combatSchema,
   idempotencyKeySchema,
   progressSnapshotSchema,

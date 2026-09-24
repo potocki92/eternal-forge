@@ -687,6 +687,10 @@ Can the client fake it? Can it be replayed? Can it be called concurrently? Can
 rewards be duplicated? Can another player's resource be targeted? Can invalid
 numeric values enter the system? Can the operation leave partial state?
 
-## Inventory/equipment authority — IN PROGRESS (Phase 5 PR 5.2)
+## Inventory/equipment authority — COMPLETE / APPROVED (Phase 5 PR 5.2)
 
 The browser can read owned state and request equip by opaque item ID or unequip by canonical slot. It cannot submit ownership, definition, rarity, or equip slot and has no item-creation endpoint. Reads and writes are scoped by verified `auth_user_id`; foreign and absent resources share `NOT_FOUND`. Composite foreign keys enforce same-character equipment. RLS is enabled with no browser policies and `anon`/`authenticated` table privileges are revoked; only the privileged API accesses these tables.
+
+## Combat item reward authority — IN PROGRESS (Phase 5 PR 5.3)
+
+The client submits no definition, rarity, item ID, chance or seed. Authenticated online combat derives loot under rules v2 and persists it in the combat transaction. A unique reward FK and combat idempotency identity make retries and concurrent replicas converge on one persistent item. Failed, stale, unauthorized and losing commands create none. Existing item RLS and revoked browser privileges apply; no public item-mint route exists. Offline drops are explicitly disabled rather than implemented through an unbounded per-fight insert loop.

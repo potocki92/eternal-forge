@@ -107,10 +107,14 @@ model ItemInstance {
   definitionId String               @map("definition_id") @db.VarChar(64)
   rarity       String               @db.VarChar(16)
   createdAt    DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// The authoritative online combat reward that minted this item, if any.
+  combatRunId  String?              @unique(map: "item_instances_combat_run_id_key") @map("combat_run_id") @db.Uuid
   character    Character            @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  combatRun    CombatRun?           @relation(fields: [combatRunId, characterId], references: [id, characterId], onDelete: Cascade, map: "item_instances_combat_reward_owner_fkey")
   equippedAs   CharacterEquipment?
 
   @@unique([id, characterId], map: "item_instances_id_character_id_key")
+  @@unique([combatRunId, characterId], map: "item_instances_combat_run_character_key")
   @@index([characterId, createdAt, id], map: "item_instances_inventory_order_idx")
   @@map("item_instances")
 }
@@ -192,8 +196,10 @@ model CombatRun {
   /// Server time the combat was resolved and committed.
   createdAt                 DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
   character                 Character       @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  awardedItem               ItemInstance?
 
   @@unique([characterId, idempotencyKey], map: "combat_runs_character_id_idempotency_key_key")
+  @@unique([id, characterId], map: "combat_runs_id_character_id_key")
   @@map("combat_runs")
 }
 

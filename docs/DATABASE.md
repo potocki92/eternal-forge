@@ -591,6 +591,10 @@ Individual offline fights are not stored — neither here nor in
 Core regenerates every fight from the replay inputs (`verifyOfflineRun`).
 The row is the ledger entry for the claim's gold and experience.
 
-# Inventory and equipment — IN PROGRESS (Phase 5 PR 5.2, ADR-025)
+# Inventory and equipment — COMPLETE / APPROVED (Phase 5 PR 5.2, ADR-025)
 
 `item_instances` persists UUID identity, direct character ownership, canonical definition ID and rarity, and creation time. Inventory is this relation, ordered by `(created_at, id)`. `character_equipment` uses primary key `(character_id, slot)`, unique `item_instance_id`, and a composite owner FK to enforce that equipped items belong to the same character. Canonical rarity/slot values are constrained text. Character deletion cascades; trusted item deletion cascades its equipment row and no player deletion endpoint exists.
+
+# Combat item rewards — IN PROGRESS (Phase 5 PR 5.3, ADR-026)
+
+Migration `20260924180000_combat_item_drops` adds nullable `item_instances.combat_run_id`, a unique index of the same name, and a cascading composite FK `(combat_run_id, character_id)` to `combat_runs(id, character_id)`. Null preserves trusted non-combat creation; non-null identifies the one authoritative combat that minted the instance and proves matching character ownership. The combat row, optional item and character progression are inserted in one transaction. The existing `(character_id, idempotency_key)` combat uniqueness plus the new one-item-per-combat uniqueness enforce exactly-once materialization.

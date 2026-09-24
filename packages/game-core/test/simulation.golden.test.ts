@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
-  GAME_RULES_VERSION,
   HugeNumber,
   StageNumber,
   createCharacter,
@@ -18,7 +17,7 @@ import {
  * serialise canonically, so it covers every event, every roll and every value
  * in the result. A mismatch means a change altered the outcome of an existing
  * simulation. That is either a bug, or a rules change that needs a new rule set
- * and a GAME_RULES_VERSION bump (ADR-005). Never update a fingerprint without
+ * and a GOLDEN_RULES_VERSION bump (ADR-005). Never update a fingerprint without
  * that decision.
  *
  * Stage numbers are hashed as JSON numbers, the form they had when these
@@ -27,7 +26,8 @@ import {
  * stage here is far below 2^53, so the projection is exact.
  */
 
-const rules = getGameRules(GAME_RULES_VERSION);
+const GOLDEN_RULES_VERSION = 1;
+const rules = getGameRules(GOLDEN_RULES_VERSION);
 
 function fingerprint(value: unknown): string {
   const json = JSON.stringify(value, function (this: Record<string, unknown>, key, field) {
@@ -37,12 +37,12 @@ function fingerprint(value: unknown): string {
   return createHash('sha256').update(json).digest('hex');
 }
 
-describe(`golden simulations — rules v${GAME_RULES_VERSION}`, () => {
+describe(`golden simulations — rules v${GOLDEN_RULES_VERSION}`, () => {
   it('headless demonstration: Stage 1 — WIN … Stage N — LOSS', () => {
     const result = simulateStages({
       character: createCharacter(1, rules),
       seed: 'demo',
-      rulesVersion: GAME_RULES_VERSION,
+      rulesVersion: GOLDEN_RULES_VERSION,
       maxStages: 1_000,
     });
 
@@ -82,7 +82,7 @@ describe(`golden simulations — rules v${GAME_RULES_VERSION}`, () => {
         },
       },
       seed: 'golden-combat',
-      rulesVersion: GAME_RULES_VERSION,
+      rulesVersion: GOLDEN_RULES_VERSION,
     });
 
     expect(result.outcome).toBe('LOSS');
@@ -117,7 +117,7 @@ describe(`golden simulations — rules v${GAME_RULES_VERSION}`, () => {
     const result = simulateStages({
       character: createCharacter(golden.level, rules),
       seed: golden.seed,
-      rulesVersion: GAME_RULES_VERSION,
+      rulesVersion: GOLDEN_RULES_VERSION,
       maxStages: 10_000,
     });
     expect(result.highestStageCleared?.toString()).toBe(golden.highest);
@@ -171,7 +171,7 @@ describe(`golden simulations — rules v${GAME_RULES_VERSION}`, () => {
       // fingerprints are unchanged, which proves PROGRESS behaves as before.
       mode: 'PROGRESS',
       seed: golden.seed,
-      rulesVersion: GAME_RULES_VERSION,
+      rulesVersion: GOLDEN_RULES_VERSION,
     });
     const { stages } = result.after;
     expect({
@@ -189,7 +189,7 @@ describe(`golden simulations — rules v${GAME_RULES_VERSION}`, () => {
 // Recorded with ADR-021, when FARM mode was introduced. Farming stage 9 below
 // the unbeaten stage-10 boss: the combat and rewards are those of any stage-9
 // win, and the hero stays on stage 9 with its records unchanged.
-describe(`golden farming — rules v${GAME_RULES_VERSION}`, () => {
+describe(`golden farming — rules v${GOLDEN_RULES_VERSION}`, () => {
   it('stage attempt: a farm win below the boss wall', () => {
     const result = resolveStageAttempt({
       progress: {
@@ -204,7 +204,7 @@ describe(`golden farming — rules v${GAME_RULES_VERSION}`, () => {
       },
       mode: 'FARM',
       seed: 'golden-attempt-farm',
-      rulesVersion: GAME_RULES_VERSION,
+      rulesVersion: GOLDEN_RULES_VERSION,
     });
     const { stages } = result.after;
     const climbing = resolveStageAttempt({ ...input(result), mode: 'PROGRESS' });
