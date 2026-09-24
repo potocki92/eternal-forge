@@ -300,7 +300,7 @@ Build adaptation should matter.
 
 ---
 
-# Equipment slots
+# Equipment slots — FOUNDATION IMPLEMENTED (Phase 5 PR 5.1, ADR-024)
 
 Initial target:
 
@@ -312,11 +312,13 @@ Boots
 Ring
 Amulet
 
-Future slots may be introduced through data/configuration.
+The canonical domain/wire values are `WEAPON`, `HELMET`, `CHEST`, `GLOVES`,
+`BOOTS`, `RING` and `AMULET`. A definition owns its slot; an instance does not
+duplicate it. Future slots may be introduced through data/configuration.
 
 ---
 
-# Item rarity
+# Item rarity — FOUNDATION IMPLEMENTED (Phase 5 PR 5.1, ADR-024)
 
 Initial rarity model:
 
@@ -327,9 +329,13 @@ Epic
 Legendary
 Mythic
 
-Future tiers may exist.
+The canonical domain/wire values are `COMMON`, `MAGIC`, `RARE`, `EPIC`,
+`LEGENDARY` and `MYTHIC`, with one explicit rank table in that order. Rarity
+is instance source state, so two instances of one definition may have different
+rarities. It has classification and ordering meaning in PR 5.1 only. Future
+tiers may exist through a deliberate compatibility decision.
 
-Rarity influences:
+In future phases, rarity may influence:
 
 - affix count,
 - affix quality,
@@ -340,15 +346,20 @@ Rarity influences:
 
 # ItemDefinition vs ItemInstance
 
-Important distinction.
+Important distinction, implemented in the pure Game Core foundation.
 
-ItemDefinition describes a type of item.
+`ItemDefinition` describes a type of item: a stable definition ID, a stable
+localization/content name key and one equipment slot. IDs are lowercase
+human-reviewable keys and are never derived from catalog order.
 
 Example:
 
 Demonfang Sword
 
-ItemInstance represents a specific player's item.
+`ItemInstance` represents a specific player's item. It contains a canonical
+UUID supplied by the server boundary, its definition ID and its rarity. It
+does not contain a display name, slot, stats, level, ownership or persistence
+state. Those concerns are derived or belong to later phases.
 
 Example:
 
@@ -358,7 +369,9 @@ Level 483
 +245% Crit Damage
 +34% Attack Speed
 
-Two instances of the same definition can be different.
+Two instances of the same definition can be different, including having
+different rarity. PR 5.1 deliberately adds no affixes, stats, item power,
+inventory, equipment state, drops, persistence, API or UI.
 
 ---
 

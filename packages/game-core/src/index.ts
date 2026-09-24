@@ -107,3 +107,31 @@ export type {
   OfflineProgressInput,
   OfflineProgressResult,
 } from './offline/index.js';
+
+export {
+  EQUIPMENT_SLOTS,
+  ITEM_CATALOG,
+  ITEM_DEFINITION_ID_MAX_LENGTH,
+  ITEM_RARITIES,
+  ItemCatalog,
+  ItemDefinitionId,
+  ItemInstanceId,
+  compareItemRarity,
+  createItemDefinition,
+  createItemInstance,
+  itemDefinitionFor,
+  itemRarityRank,
+  parseEquipmentSlot,
+  parseItemInstance,
+  parseItemRarity,
+  serializeItemInstance,
+} from './items/index.js';
+export type {
+  CreateItemInstanceInput,
+  EquipmentSlot,
+  ItemDefinition,
+  ItemDefinitionInput,
+  ItemInstance,
+  ItemRarity,
+  SerializedItemInstance,
+} from './items/index.js';

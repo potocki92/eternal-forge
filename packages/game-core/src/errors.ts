@@ -17,6 +17,10 @@ export type GameCoreErrorCode =
   | 'STAGE_LOCKED'
   /** A bounded computation would exceed its hard work limit (ADR-023). */
   | 'LIMIT_EXCEEDED'
+  /** A catalog has no definition for a supplied stable item identity. */
+  | 'UNKNOWN_ITEM_DEFINITION'
+  /** Static item content attempted to reuse an existing stable identity. */
+  | 'DUPLICATE_ITEM_DEFINITION'
   | 'UNSUPPORTED_RULES_VERSION';
 
 export class GameCoreError extends Error {

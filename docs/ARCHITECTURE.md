@@ -1,6 +1,6 @@
 # Eternal Forge — Software Architecture
 
-Status: PARTIALLY IMPLEMENTED (Phases 0–3, Phase 4 PRs 4.1–4.3) / EVOLVING
+Status: PARTIALLY IMPLEMENTED (Phases 0–4, Phase 5 PR 5.1) / EVOLVING
 
 The architectural style, boundaries and package layout described here are
 IMPLEMENTED as of Phase 0. The headless Game Core simulation (HugeNumber, RNG,
@@ -11,9 +11,11 @@ combat, progression persistence, the game screen and the PixiJS combat scene —
 is IMPLEMENTED in Phase 3 (ADR-019 and ADR-020). Stage selection and farming
 are IMPLEMENTED in Phase 4 PR 4.1 (ADR-021). Online auto-battle, a client
 loop over the same combat request, is IMPLEMENTED in Phase 4 PR 4.2
-(ADR-022, proposed). Server-authoritative offline progression, a lazy
-catch-up claimed on return, is IMPLEMENTED in Phase 4 PR 4.3 (ADR-023,
-proposed). Domain events, CQRS infrastructure and leaderboards are PLANNED.
+(ADR-022). Server-authoritative offline progression, a lazy
+catch-up claimed on return, is IMPLEMENTED in Phase 4 PR 4.3 (ADR-023), and
+PR 4.4 supplies its return presentation. The pure item-domain foundation is
+IMPLEMENTED in Phase 5 PR 5.1 (ADR-024). Domain events, CQRS infrastructure
+and leaderboards are PLANNED.
 
 See the "Phase N implementation status" sections at the end of this document
 for exactly what exists today, and `docs/adr/` for the decisions behind it.
@@ -1028,7 +1030,34 @@ for an absent player.
 
 ## NOT IMPLEMENTED
 
-The polished "welcome back" presentation (PR 4.4), offline climbing, an
-offline efficiency factor (owner decision), general request rate limiting,
+Offline climbing, an offline efficiency factor (owner decision), general request rate limiting,
 the generic idempotency table, and chunked or worker-side resolution of very
 large claims.
+
+---
+
+# Phase 5 PR 5.1 implementation status — item domain foundation
+
+Status: IMPLEMENTED. Decision: ADR-024 (proposed).
+
+`packages/game-core/src/items` owns a pure item model. Stable
+`ItemDefinitionId` values identify immutable static definitions; canonical
+UUID `ItemInstanceId` values identify individual owned items but are supplied
+by an outer boundary. An `ItemInstance` stores only its identity, definition
+identity and instance rarity. Its slot and content name key are resolved from
+the catalog, preventing duplicated or contradictory source state.
+
+The catalog validates and freezes seven representative definitions, preserves
+declaration order for deterministic auditing, rejects duplicate IDs, and keeps
+its private `Map` behind constant-time lookup methods. Slot and rarity use
+uppercase canonical strings. Rarity rank is one explicit table rather than
+lexical or enum ordering.
+
+This foundation does not modify `RULES_V1` or `GAME_RULES_VERSION`; it is not
+an input to combat and changes no historical simulation. It has no database,
+contract, API or web dependency. Future persistence maps canonical strings at
+the infrastructure boundary. Future inventory/equipment code must resolve the
+definition to determine the legal slot, and future drop code must supply an
+outer-boundary instance ID and validated rarity. Phase 6 may add rolled source
+state to `ItemInstance` additively after defining its own typed model; no
+untyped placeholder is present.
