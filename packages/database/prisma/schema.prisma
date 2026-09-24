@@ -94,9 +94,37 @@ model Character {
   profile             Profile      @relation(fields: [profileId], references: [id], onDelete: Cascade)
   combatRuns          CombatRun[]
   offlineRuns         OfflineRun[]
+  itemInstances       ItemInstance[]
+  equipment           CharacterEquipment[]
 
   @@unique([profileId, slot], map: "characters_profile_id_slot_key")
   @@map("characters")
+}
+
+model ItemInstance {
+  id           String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  characterId  String               @map("character_id") @db.Uuid
+  definitionId String               @map("definition_id") @db.VarChar(64)
+  rarity       String               @db.VarChar(16)
+  createdAt    DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  character    Character            @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  equippedAs   CharacterEquipment?
+
+  @@unique([id, characterId], map: "item_instances_id_character_id_key")
+  @@index([characterId, createdAt, id], map: "item_instances_inventory_order_idx")
+  @@map("item_instances")
+}
+
+model CharacterEquipment {
+  characterId   String       @map("character_id") @db.Uuid
+  slot          String       @db.VarChar(16)
+  itemInstanceId String      @unique(map: "character_equipment_item_instance_id_key") @map("item_instance_id") @db.Uuid
+  character     Character    @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  itemInstance  ItemInstance @relation(fields: [itemInstanceId, characterId], references: [id, characterId], onDelete: Cascade)
+
+  @@id([characterId, slot])
+  @@unique([itemInstanceId, characterId], map: "character_equipment_item_character_key")
+  @@map("character_equipment")
 }
 
 // What a victory does to the current stage (ADR-021). PROGRESS climbs on to

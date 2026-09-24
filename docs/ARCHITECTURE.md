@@ -1061,3 +1061,7 @@ definition to determine the legal slot, and future drop code must supply an
 outer-boundary instance ID and validated rarity. Phase 6 may add rolled source
 state to `ItemInstance` additively after defining its own typed model; no
 untyped placeholder is present.
+
+## Inventory and equipment persistence — IN PROGRESS (Phase 5 PR 5.2)
+
+ADR-025 adds an authenticated API/application/repository path for character-owned item instances. PostgreSQL stores normalized ownership and one equipment row per character/slot; the API derives slots through the Game Core catalog and serializes mutations with all other character writes through `characters.version`. Equipment has no combat effect in this phase.

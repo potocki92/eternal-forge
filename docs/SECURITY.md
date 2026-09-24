@@ -686,3 +686,7 @@ considered finished:
 Can the client fake it? Can it be replayed? Can it be called concurrently? Can
 rewards be duplicated? Can another player's resource be targeted? Can invalid
 numeric values enter the system? Can the operation leave partial state?
+
+## Inventory/equipment authority — IN PROGRESS (Phase 5 PR 5.2)
+
+The browser can read owned state and request equip by opaque item ID or unequip by canonical slot. It cannot submit ownership, definition, rarity, or equip slot and has no item-creation endpoint. Reads and writes are scoped by verified `auth_user_id`; foreign and absent resources share `NOT_FOUND`. Composite foreign keys enforce same-character equipment. RLS is enabled with no browser policies and `anon`/`authenticated` table privileges are revoked; only the privileged API accesses these tables.
