@@ -1,5 +1,6 @@
 import type { HugeNumberDto, StageKind, StageNumberDto } from '@eternal-forge/contracts';
 import { Button, ProgressBar, cn } from '@eternal-forge/ui';
+import Link from 'next/link';
 import { formatStage } from '@/player/format-stage';
 import { formatHuge, hugeRatio } from '../format/format-huge';
 
@@ -49,15 +50,23 @@ export function GameHud({ displayName, heroName, values, signingOut, onSignOut }
             {heroName}
           </h2>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={signingOut}
-          onClick={onSignOut}
-          className="-mr-2 shrink-0"
-        >
-          {signingOut ? 'Signing out…' : 'Sign out'}
-        </Button>
+        <div className="flex shrink-0 items-center gap-1">
+          <Link
+            href="/play/gear"
+            className="rounded-(--radius-control) px-3 py-2 text-sm text-text-secondary hover:bg-surface-elevated hover:text-text-primary focus-visible:outline-2 focus-visible:outline-primary"
+          >
+            Gear
+          </Link>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={signingOut}
+            onClick={onSignOut}
+            className="-mr-2 shrink-0"
+          >
+            {signingOut ? 'Signing out…' : 'Sign out'}
+          </Button>
+        </div>
       </div>
 
       <dl className="grid grid-cols-[auto_1fr_auto] items-center gap-x-3 gap-y-1.5">

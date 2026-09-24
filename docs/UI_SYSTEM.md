@@ -1,5 +1,15 @@
 # Eternal Forge — UI & UX System
 
+## Gear experience — IN PROGRESS (Phase 5 PR 5.4)
+
+The authenticated `/play/gear` route presents the seven-slot loadout beside the
+owned, unequipped inventory. On phones these become a vertical Equipment →
+Inventory flow with two-column tappable cards and a bottom-anchored native
+dialog; desktop uses a 40/60-style split. Rarity always has a text label in
+addition to its restrained token color. Equipment mutations wait for the
+authoritative API response, update both views together, and refresh on errors.
+Combat drops appear as a non-blocking reward card linking to Gear.
+
 Status: EARLY DESIGN — foundations IMPLEMENTED (Phase 0)
 
 IMPLEMENTED: design tokens (colour, typography, radius, elevation, motion,
