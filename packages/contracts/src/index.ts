@@ -114,3 +114,24 @@ export type {
   OfflineProgressDto,
   OfflineProgressResponse,
 } from './game/offline-progress.contract.js';
+
+export {
+  equipmentResponseSchema,
+  equipmentSchema,
+  equipmentSlotSchema,
+  equipItemRequestSchema,
+  inventoryResponseSchema,
+  itemDefinitionIdSchema,
+  itemInstanceSchema,
+  itemRaritySchema,
+  unequipItemRequestSchema,
+} from './items/inventory.contract.js';
+export type {
+  EquipmentResponse,
+  EquipmentSlotDto,
+  EquipItemRequest,
+  InventoryResponse,
+  ItemInstanceDto,
+  ItemRarityDto,
+  UnequipItemRequest,
+} from './items/inventory.contract.js';
