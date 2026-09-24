@@ -8,7 +8,7 @@ PHASE 5 — ITEMS & EQUIPMENT
 
 Status:
 
-IN PROGRESS — PR 5.1 and PR 5.2 are COMPLETE / APPROVED (ADR-024, ADR-025). PR 5.3 "Item Drops & Combat Reward Integration" is IN PROGRESS (ADR-026).
+IN PROGRESS — PRs 5.1–5.3 are COMPLETE / APPROVED (ADR-024–ADR-026). PR 5.4 "Inventory & Equipment UI" is IN PROGRESS.
 
 Phase 4 is COMPLETE / APPROVED. PRs 4.1–4.4 are merged and the return
 experience was manually verified. Phase 5 is now the current phase.
@@ -824,7 +824,7 @@ Implement:
 
 # Phase 5 — Items & Equipment
 
-Status: IN PROGRESS — PR 5.3 "Item Drops & Combat Reward Integration"
+Status: IN PROGRESS — PR 5.4 "Inventory & Equipment UI"
 
 ## PR 5.1 — Item Domain Foundation
 
@@ -870,11 +870,18 @@ Status: COMPLETE / APPROVED. Decision: ADR-025.
 
 ## PR 5.3 — Item Drops & Combat Reward Integration
 
-Status: IN PROGRESS. Decision: ADR-026 (proposed). Deterministic online victory drops, atomic persistence and exactly-once replay are implemented for review. Offline item rewards are explicitly deferred pending a bounded aggregate design.
+Status: COMPLETE / APPROVED. Decision: ADR-026. Deterministic online victory drops, atomic persistence and exactly-once replay are implemented. Offline item rewards are explicitly deferred pending a bounded aggregate design.
 
 ## PR 5.4 — Inventory & Equipment UI
 
-Status: NOT STARTED.
+Status: IN PROGRESS — review pending.
+
+- [x] authenticated `/play/gear` route with responsive loadout and inventory
+- [x] authoritative Equip, replacement and Unequip flows through the existing API
+- [x] centralized accessible rarity presentation and deterministic inventory derivation
+- [x] combat item-found presentation with inventory cache synchronization
+- [x] loading, empty, retryable error and mutation-pending states
+- [x] unit and Playwright coverage for persistence, replacement, empty state and mobile project
 
 ---
 

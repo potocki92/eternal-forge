@@ -1,11 +1,12 @@
 'use client';
 
-import type { CombatResponse } from '@eternal-forge/contracts';
+import type { CombatResponse, InventoryResponse } from '@eternal-forge/contracts';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useReducer, useRef } from 'react';
 import { useAuth } from '@/auth/auth-provider';
 import type { PlayerStateResult } from '@/player/player-api';
 import { playerStateKey } from '@/player/use-player';
+import { inventoryKey } from '@/gear/use-gear';
 import { startCombat } from './combat-api';
 import {
   INITIAL_SESSION,
@@ -69,8 +70,20 @@ export function useCombatSession(userId: string, characterId: string): CombatSes
             }
           : previous,
       );
+      const dropped = response.combat.rewards.item;
+      if (dropped !== null) {
+        const key = inventoryKey(userId, characterId);
+        queryClient.setQueryData<InventoryResponse>(key, (previous) =>
+          previous === undefined
+            ? previous
+            : previous.ownedItems.some((item) => item.id === dropped.id)
+              ? previous
+              : { ownedItems: [...previous.ownedItems, dropped] },
+        );
+        void queryClient.invalidateQueries({ queryKey: key });
+      }
     },
-    [queryClient, stateKey],
+    [characterId, queryClient, stateKey, userId],
   );
 
   const fight = useCallback(() => {

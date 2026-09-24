@@ -1069,3 +1069,14 @@ ADR-025 adds an authenticated API/application/repository path for character-owne
 # Phase 5 PR 5.3 implementation status — combat item drops
 
 Online combat resolves optional loot in pure Game Core under rules v2 from an independent seed derived as `deriveSeed(combatSeed, "item-drop", rulesVersion, stage)`. Combat RNG and rules-v1 fingerprints are unchanged. The combat repository atomically updates progression, inserts `combat_runs`, and inserts the optional `item_instances` row. A unique nullable reward FK ties zero or one instance to the combat idempotency identity. Retry loads and returns that same row. Auto Battle inherits this path; offline item drops are explicitly deferred because offline claims are aggregated. See ADR-026.
+
+## Phase 5 PR 5.4 implementation status — web gear presentation
+
+`apps/web/src/gear` is the presentation integration for the existing inventory
+and equipment contracts. TanStack Query owns separate user/character-scoped
+inventory and equipment keys. Inventory remains the server's full owned set;
+the view subtracts equipped IDs, deduplicates by instance ID and sorts by the
+canonical rarity rank. Mutations send only item instance ID or slot, apply the
+authoritative equipment response, then refresh owned state. Combat rewards
+deduplicate by instance ID and invalidate inventory. No browser gameplay rule
+or direct Supabase data mutation is introduced.

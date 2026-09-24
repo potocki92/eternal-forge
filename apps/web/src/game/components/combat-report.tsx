@@ -1,6 +1,8 @@
 import type { CombatResponse, EncounterDto } from '@eternal-forge/contracts';
 import { Alert, cn } from '@eternal-forge/ui';
 import type { ReactNode } from 'react';
+import Link from 'next/link';
+import { itemName, slotLabel } from '@/gear/gear-model';
 import { formatStage } from '@/player/format-stage';
 import type { CombatFailure } from '../combat-session';
 import { enemyName } from '../enemy-names';
@@ -111,6 +113,23 @@ function Rewards({
             <Chip tone="level" testId="level-up">
               Level up! {after.level}
             </Chip>
+          ) : null}
+          {combat.rewards.item !== null ? (
+            <Link
+              href="/play/gear"
+              className="rounded-(--radius-control) border border-border bg-surface-elevated px-3 py-2 text-left motion-safe:animate-[ef-pop_var(--duration-slow)_var(--ease-emphasis)]"
+              data-testid="item-drop"
+            >
+              <span className="block text-[0.625rem] font-bold tracking-[0.14em] text-primary uppercase">
+                Item found
+              </span>
+              <strong className="block text-xs text-text-primary">
+                {itemName(combat.rewards.item)}
+              </strong>
+              <span className="block text-[0.625rem] text-text-secondary">
+                {combat.rewards.item.rarity} · {slotLabel(combat.rewards.item.slot)} · View gear
+              </span>
+            </Link>
           ) : null}
         </>
       ) : (

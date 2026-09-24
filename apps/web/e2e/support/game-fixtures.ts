@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 
 /**
@@ -10,6 +11,37 @@ import pg from 'pg';
  */
 const databaseUrl =
   process.env['DATABASE_URL'] ?? 'postgresql://forge:forge@127.0.0.1:5432/eternal_forge';
+
+/** Creates trusted test setup directly; player behavior still uses the real API. */
+export async function grantItem(
+  heroName: string,
+  definitionId: string,
+  rarity: string,
+  equipped = false,
+): Promise<string> {
+  const client = new pg.Client({ connectionString: databaseUrl });
+  await client.connect();
+  const id = randomUUID();
+  try {
+    const result = await client.query(
+      `INSERT INTO item_instances (id, character_id, definition_id, rarity)
+       SELECT $1, id, $2, $3 FROM characters WHERE name = $4 RETURNING id`,
+      [id, definitionId, rarity, heroName],
+    );
+    if (result.rowCount !== 1) throw new Error(`Expected hero named ${heroName}`);
+    if (equipped) {
+      const slot = definitionId === 'forged_iron_sword' ? 'WEAPON' : 'RING';
+      await client.query(
+        `INSERT INTO character_equipment (character_id, slot, item_instance_id)
+         SELECT character_id, $2, id FROM item_instances WHERE id = $1`,
+        [id, slot],
+      );
+    }
+    return id;
+  } finally {
+    await client.end();
+  }
+}
 
 /**
  * Moves the hero named `heroName` (unique per test account) to `stage` as a

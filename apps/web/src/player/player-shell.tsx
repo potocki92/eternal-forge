@@ -4,6 +4,7 @@ import { Alert, Button, Panel, Skeleton } from '@eternal-forge/ui';
 import { useState } from 'react';
 import { useAuth } from '@/auth/auth-provider';
 import { GameScreen } from '@/game/components/game-screen';
+import { GearScreen } from '@/gear/gear-screen';
 import { ApiError } from '@/lib/api-client';
 import { CreatePlayerForm } from './create-player-form';
 import { usePlayerState } from './use-player';
@@ -12,7 +13,7 @@ import { usePlayerState } from './use-player';
  * The signed-in player's screen: the game once a hero exists, the first-run
  * "Name your hero" form before, and loading and error states around both.
  */
-export function PlayerShell() {
+export function PlayerShell({ view = 'combat' }: { readonly view?: 'combat' | 'gear' }) {
   const { state: auth, signOut } = useAuth();
   const player = usePlayerState();
   const [signingOut, setSigningOut] = useState(false);
@@ -24,12 +25,21 @@ export function PlayerShell() {
 
   if (player.data?.kind === 'provisioned' && auth.status === 'authenticated') {
     // Keyed by user: a different account always starts from a fresh screen.
-    return (
+    return view === 'combat' ? (
       <GameScreen
         key={auth.userId}
         userId={auth.userId}
         player={player.data.state}
         receivedAt={player.dataUpdatedAt}
+        signingOut={signingOut}
+        onSignOut={startSignOut}
+      />
+    ) : (
+      <GearScreen
+        key={auth.userId}
+        userId={auth.userId}
+        characterId={player.data.state.character.id}
+        heroName={player.data.state.character.name}
         signingOut={signingOut}
         onSignOut={startSignOut}
       />

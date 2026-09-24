@@ -796,3 +796,10 @@ Inventory means all item instances owned by the character, including equipped it
 ## Item drops — IN PROGRESS (Phase 5 PR 5.3, ADR-026)
 
 Every eligible online victory, in either PROGRESS or FARM mode, has a rules-v2 10% item chance. The seven initial catalog definitions are selected uniformly. Rarity is COMMON 70%, MAGIC 20%, RARE 7%, EPIC 2%, LEGENDARY 0.9%, and MYTHIC 0.1%. Bosses and stage depth have no modifier. Losses never drop items. Drops enter inventory unequipped and still have no combat effect. Offline item drops are deliberately deferred pending a bounded aggregate reward design.
+
+## Player gear experience — IN PROGRESS (Phase 5 PR 5.4)
+
+Players can inspect the seven equipment slots and an inventory derived as all
+owned items minus equipped instance IDs. Equip replaces the slot in one server
+operation; Unequip returns the instance to the derived inventory. Cards show
+only canonical name, rarity and slot. No statistics or affixes are implied.
