@@ -5,6 +5,7 @@ import { CombatModule } from './combat/combat.module.js';
 import { ApiConfigModule } from './config/api-config.module.js';
 import { RequestIdMiddleware } from './common/http/request-id.middleware.js';
 import { HealthModule } from './health/health.module.js';
+import { InventoryModule } from './inventory/inventory.module.js';
 import { OfflineModule } from './offline/offline.module.js';
 import { PlayerModule } from './player/player.module.js';
 
@@ -17,6 +18,7 @@ import { PlayerModule } from './player/player.module.js';
     PlayerModule,
     CombatModule,
     OfflineModule,
+    InventoryModule,
   ],
 })
 export class AppModule implements NestModule {

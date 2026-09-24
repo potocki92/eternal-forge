@@ -8,7 +8,7 @@ PHASE 5 — ITEMS & EQUIPMENT
 
 Status:
 
-IN PROGRESS — PR 5.1 "Item Domain Foundation" is in progress (ADR-024).
+IN PROGRESS — PR 5.1 "Item Domain Foundation" is COMPLETE / APPROVED (ADR-024). PR 5.2 "Inventory & Equipment Persistence" is IN PROGRESS (ADR-025).
 
 Phase 4 is COMPLETE / APPROVED. PRs 4.1–4.4 are merged and the return
 experience was manually verified. Phase 5 is now the current phase.

@@ -788,3 +788,7 @@ speed build,
 survival build.
 
 Build diversity is a core product requirement.
+
+## Inventory and equipment persistence — IN PROGRESS (Phase 5 PR 5.2)
+
+Inventory means all item instances owned by the character, including equipped items. Equipment is a seven-slot mapping; equipping replaces the prior item atomically and unequipping leaves ownership unchanged. Empty unequip and repeated equip are successful no-ops. Items have no stats or combat effect until Phase 6.

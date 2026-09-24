@@ -208,3 +208,7 @@ Phase 4 PR 4.3 adds `20260923180000_offline_progression`
 an offline seed, nothing else changes, and the previous API version keeps
 working against the migrated schema. The new API version fails on every
 character read without it.
+
+## Phase 5 PR 5.2 migration ordering
+
+**AFTER MERGE: RUN "Deploy Supabase DEV" BEFORE VALIDATING THE NEW ITEM API AGAINST DEV.** Wait for migration `20260924120000_inventory_equipment_persistence` and drift verification to succeed before deploying/restarting the API. The migration is additive, but new item endpoints require both new tables.
