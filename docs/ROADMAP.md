@@ -4,15 +4,14 @@ Last updated: 2026-09-23
 
 # Current Phase
 
-PHASE 4 — OFFLINE PROGRESSION (delivered as several PRs)
+PHASE 5 — ITEMS & EQUIPMENT
 
 Status:
 
-IN PROGRESS — PR 4.1 "Stage Selection & Farming" MERGED (PR #9, ADR-021
-accepted). PR 4.2 "Online Auto Battle" MERGED (PR #10, ADR-022 accepted).
-PR 4.3 "Server-Authoritative Offline Progression" implemented and awaiting
-review (ADR-023, proposed). PR 4.4 (the polished return experience) must not
-start without the user's approval of PR 4.3. See "Phase 4" below.
+IN PROGRESS — PR 5.1 "Item Domain Foundation" is in progress (ADR-024).
+
+Phase 4 is COMPLETE / APPROVED. PRs 4.1–4.4 are merged and the return
+experience was manually verified. Phase 5 is now the current phase.
 
 Phase 3 was merged to `main` as PR #6 (followed by the Supabase deployment
 PRs #7 and #8). The user started Phase 4 on 2026-09-23 with the PR 4.1 task.
@@ -577,7 +576,7 @@ the generic idempotency table, and hosting the API (ADR-012).
 
 # Phase 4 — Offline Progression
 
-Status: IN PROGRESS — PRs 4.1 and 4.2 merged; PR 4.3 implemented, awaiting review
+Status: COMPLETE / APPROVED — PRs 4.1–4.4 merged and manually verified
 
 Phase 4 is delivered as a sequence of PRs, one at a time. Each waits for the
 user's approval before the next begins.
@@ -716,7 +715,7 @@ server time, cap, rewards, claim, the generic idempotency table, summary UI.
 
 ## PR 4.3 — Server-Authoritative Offline Progression
 
-Status: IMPLEMENTED — awaiting review and CI. Decision: ADR-023 (proposed).
+Status: MERGED / APPROVED. Decision: ADR-023 (accepted).
 
 **AFTER MERGE: run the GitHub Action "Deploy Supabase DEV"** before deploying
 the API: migration `20260923180000_offline_progression` must reach the
@@ -791,7 +790,7 @@ Validation (2026-09-23, local, PostgreSQL 16 and Redis 7):
 
 ## PR 4.4 — Return experience
 
-Status: IMPLEMENTED — welcome-back presentation over the unchanged PR 4.3 claim.
+Status: MERGED / APPROVED — welcome-back presentation over the unchanged PR 4.3 claim.
 
 - [x] Meaningful claims open a mobile-first reward dialog with time away,
       precision-safe Gold and XP, battles, victories, farmed stage, level
@@ -825,7 +824,15 @@ Implement:
 
 # Phase 5 — Items & Equipment
 
-Status: NOT STARTED
+Status: IN PROGRESS — PR 5.1 "Item Domain Foundation"
+
+## PR 5.1 — Item Domain Foundation
+
+Status: IN PROGRESS. Decision: ADR-024 (proposed).
+
+Scope: pure, immutable item identities, definitions, instances, slot and
+rarity values, and a seven-entry static catalog in Game Core. No persistence,
+inventory, equipment state, drops, API, contracts or UI.
 
 Implement slots:
 
