@@ -26,5 +26,22 @@ CREATE TABLE "character_equipment" (
 
 ALTER TABLE "item_instances" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "character_equipment" ENABLE ROW LEVEL SECURITY;
-REVOKE ALL ON TABLE "item_instances" FROM anon, authenticated;
-REVOKE ALL ON TABLE "character_equipment" FROM anon, authenticated;
+
+-- Supabase defines these browser-facing roles, while plain PostgreSQL used by
+-- local development and CI does not. Keep the migration portable without
+-- weakening Supabase: revoke each fixed role only when PostgreSQL reports that
+-- it exists. `%I` quotes the identifier rather than interpolating SQL text.
+DO $$
+DECLARE
+    api_role text;
+BEGIN
+    FOREACH api_role IN ARRAY ARRAY['anon', 'authenticated'] LOOP
+        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = api_role) THEN
+            EXECUTE format(
+                'REVOKE ALL ON TABLE "item_instances", "character_equipment" FROM %I',
+                api_role
+            );
+        END IF;
+    END LOOP;
+END
+$$;
