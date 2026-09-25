@@ -1,6 +1,12 @@
 import type { EquipmentResponse, ItemInstanceDto } from '@eternal-forge/contracts';
 import { describe, expect, it } from 'vitest';
-import { EQUIPMENT_SLOTS, equippedIds, rarityPresentation, unequippedItems } from './gear-model';
+import {
+  EQUIPMENT_SLOTS,
+  affixLabel,
+  equippedIds,
+  rarityPresentation,
+  unequippedItems,
+} from './gear-model';
 
 const item = (
   id: string,
@@ -11,6 +17,8 @@ const item = (
   id,
   definitionId: 'forged_iron_sword',
   rarity,
+  generationVersion: 0,
+  affixes: [],
   nameKey,
   slot,
   createdAt: '2026-09-24T00:00:00.000Z',
@@ -66,4 +74,26 @@ describe('gear presentation model', () => {
       });
     },
   );
+  it('formats HugeNumber and basis-point affixes for players', () => {
+    expect(
+      affixLabel({
+        id: '11111111-1111-4111-8111-111111111112',
+        definitionId: 'damage_flat',
+        stat: 'DAMAGE',
+        operation: 'FLAT',
+        value: '1.8e1',
+        position: 0,
+      }),
+    ).toBe('+18 Damage');
+    expect(
+      affixLabel({
+        id: '11111111-1111-4111-8111-111111111113',
+        definitionId: 'critical_damage_percent',
+        stat: 'CRITICAL_DAMAGE',
+        operation: 'ADDITIVE_PERCENT',
+        value: '742',
+        position: 1,
+      }),
+    ).toBe('+7.42% Critical Damage');
+  });
 });

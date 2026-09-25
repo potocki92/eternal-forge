@@ -828,3 +828,7 @@ state is resolved on demand.
 This PR does not make items stronger and does not alter combat. Item power and
 affix generation are deferred to PR 6.2, equipment-to-combat integration to PR
 6.3, and the player-facing stat/breakdown UI to PR 6.4.
+
+## Item affixes (Phase 6 PR 6.2 — IN PROGRESS)
+
+New items use item-generation V1. COMMON has 0 affixes; MAGIC 1; RARE 2; EPIC 3; LEGENDARY 4; MYTHIC 5. Rarity primarily adds breadth rather than stronger ranges. Initial affixes cover only Max Health, Damage, Attack Speed, Critical Chance and Critical Damage, with slot-specific data-driven eligibility. Every roll is immutable and displayed in stable order. Item definitions have no intrinsic power in this first pass, so COMMON is an intentional zero-modifier baseline. Existing Phase 5 items are legacy V0 with zero affixes. Equipment still has no combat effect until PR 6.3.

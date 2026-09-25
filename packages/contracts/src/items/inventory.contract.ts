@@ -14,10 +14,20 @@ export const itemDefinitionIdSchema = z
   .string()
   .regex(/^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/)
   .max(64);
+export const itemAffixSchema = z.strictObject({
+  id: z.uuid(),
+  definitionId: itemDefinitionIdSchema,
+  stat: z.enum(['MAX_HEALTH', 'DAMAGE', 'ATTACK_SPEED', 'CRITICAL_CHANCE', 'CRITICAL_DAMAGE']),
+  operation: z.enum(['FLAT', 'ADDITIVE_PERCENT']),
+  value: z.string().min(1).max(64),
+  position: z.number().int().nonnegative(),
+});
 export const itemInstanceSchema = z.strictObject({
   id: z.uuid(),
   definitionId: itemDefinitionIdSchema,
   rarity: itemRaritySchema,
+  generationVersion: z.number().int().nonnegative().default(0),
+  affixes: z.array(itemAffixSchema).default([]),
   nameKey: z.string().min(1),
   slot: equipmentSlotSchema,
   createdAt: z.iso.datetime(),

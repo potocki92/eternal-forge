@@ -1,8 +1,11 @@
 import { isUniqueConstraintViolation } from '@eternal-forge/database';
 import {
   HugeNumber,
+  ITEM_GENERATION_VERSION,
+  generateItemAffixes,
   ITEM_CATALOG,
   parseItemInstance,
+  parseRolledAffix,
   type StageMode,
 } from '@eternal-forge/game-core';
 import { Injectable } from '@nestjs/common';
@@ -49,6 +52,15 @@ interface CombatRunRow {
     readonly id: string;
     readonly definitionId: string;
     readonly rarity: string;
+    readonly generationVersion: number;
+    readonly affixes: readonly {
+      readonly id: string;
+      readonly affixDefinitionId: string;
+      readonly stat: string;
+      readonly operation: string;
+      readonly value: string;
+      readonly position: number;
+    }[];
   } | null;
 }
 
@@ -75,7 +87,12 @@ export class PrismaCombatRepository implements CombatRepository {
   ): Promise<CombatTarget | null> {
     const row = await this.prisma.client.character.findFirst({
       where: { id: characterId, profile: { authUserId } },
-      include: { combatRuns: { where: { idempotencyKey }, include: { awardedItem: true } } },
+      include: {
+        combatRuns: {
+          where: { idempotencyKey },
+          include: { awardedItem: { include: { affixes: { orderBy: { position: 'asc' } } } } },
+        },
+      },
     });
     if (row === null) {
       return null;
@@ -147,25 +164,42 @@ export class PrismaCombatRepository implements CombatRepository {
             rewardExperienceExp: rewardExperience.exponent,
             createdAt: run.resolvedAt,
           },
-          include: { awardedItem: true },
+          include: { awardedItem: { include: { affixes: { orderBy: { position: 'asc' } } } } },
         });
 
         if (command.itemDrop !== null) {
           ITEM_CATALOG.require(command.itemDrop.definitionId);
+          const definition = ITEM_CATALOG.require(command.itemDrop.definitionId);
+          const affixes = generateItemAffixes({
+            sourceSeed: run.seed,
+            definition,
+            rarity: command.itemDrop.rarity,
+          });
           await tx.itemInstance.create({
             data: {
               characterId: command.characterId,
               combatRunId: row.id,
               definitionId: command.itemDrop.definitionId.toString(),
               rarity: command.itemDrop.rarity,
+              generationVersion: ITEM_GENERATION_VERSION,
               createdAt: run.resolvedAt,
+              affixes: {
+                create: affixes.map((roll) => ({
+                  affixDefinitionId: roll.definitionId,
+                  stat: roll.stat,
+                  operation: roll.operation,
+                  value: roll.value,
+                  generationVersion: ITEM_GENERATION_VERSION,
+                  position: roll.position,
+                })),
+              },
             },
           });
         }
 
         const committed = await tx.combatRun.findUniqueOrThrow({
           where: { id: row.id },
-          include: { awardedItem: true },
+          include: { awardedItem: { include: { affixes: { orderBy: { position: 'asc' } } } } },
         });
 
         return { kind: 'committed', run: toCombatRun(committed) } as const;
@@ -214,6 +248,17 @@ function toCombatRun(row: CombatRunRow): CombatRun {
               id: row.awardedItem.id,
               definitionId: row.awardedItem.definitionId,
               rarity: row.awardedItem.rarity,
+              generationVersion: row.awardedItem.generationVersion,
+              affixes: row.awardedItem.affixes.map((roll) =>
+                parseRolledAffix({
+                  id: roll.id,
+                  definitionId: roll.affixDefinitionId,
+                  stat: roll.stat,
+                  operation: roll.operation,
+                  value: roll.value,
+                  position: roll.position,
+                }),
+              ),
             },
             ITEM_CATALOG,
           ),

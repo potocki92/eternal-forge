@@ -24,3 +24,21 @@ export type {
   ItemInstance,
   SerializedItemInstance,
 } from './item-instance.js';
+
+export {
+  AFFIX_CATALOG,
+  ITEM_AFFIX_SEED_LABEL,
+  ITEM_GENERATION_VERSION,
+  LEGACY_ITEM_GENERATION_VERSION,
+  RARITY_AFFIX_BUDGET,
+  generateItemAffixes,
+  getItemStatModifiers,
+  parseRolledAffix,
+  validateRolledAffix,
+} from './item-affixes.js';
+export type {
+  AffixDefinition,
+  AffixValueKind,
+  GeneratedAffix,
+  RolledAffix,
+} from './item-affixes.js';

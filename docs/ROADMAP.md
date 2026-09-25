@@ -9,7 +9,7 @@ PHASE 6 — ITEM POWER & CHARACTER STATS
 Status:
 
 IN PROGRESS — Phase 5 is COMPLETE. PR 6.1 "Character Stats & Modifier
-Foundation" is IN PROGRESS (ADR-027); PRs 6.2–6.4 are NOT STARTED.
+Foundation" is COMPLETE / APPROVED (ADR-027); PR 6.2 is IN PROGRESS (ADR-028); PRs 6.3–6.4 are NOT STARTED.
 
 Phase 4 is COMPLETE / APPROVED. PRs 4.1–4.4 are merged and the return
 experience was manually verified. Phase 5 is complete through merged PR 5.4;

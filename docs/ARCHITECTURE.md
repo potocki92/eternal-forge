@@ -1111,3 +1111,7 @@ modifiers yet, Combat still receives its existing level-derived `CombatStats`,
 and `GAME_RULES_VERSION` remains 2. PR 6.2 will define item power/affix source
 state; PR 6.3 will snapshot resolved equipment stats into combat; PR 6.4 will
 present the breakdown. See ADR-027.
+
+## Item power snapshots (Phase 6 PR 6.2 — IN PROGRESS)
+
+Static `ItemDefinition` and `AffixDefinition` catalogs live in pure Game Core. An owned `ItemInstance` records its item-generation version and normalized, ordered rolled-affix snapshots; APIs eagerly load those rows and never reroll on read. Generation uses a dedicated seed derived after loot identity/rarity selection, and instance plus rolls commit inside the combat reward transaction. Rolled items convert to the canonical ADR-027 `StatModifier[]`, but production combat deliberately does not consume those modifiers until PR 6.3. See ADR-028.

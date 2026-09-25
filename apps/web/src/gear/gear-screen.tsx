@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ApiError } from '@/lib/api-client';
 import {
   EQUIPMENT_SLOTS,
+  affixLabel,
   itemName,
   rarityPresentation,
   slotLabel,
@@ -282,7 +283,16 @@ function ItemDetail({
       <p>
         {slotLabel(item.slot)} · {equippedSlot === undefined ? 'In inventory' : 'Equipped'}
       </p>
-      <div className="item-detail__note">This item has no combat effects yet.</div>
+      {item.affixes.length === 0 ? (
+        <div className="item-detail__note">Baseline item · No rolled affixes</div>
+      ) : (
+        <ul className="item-detail__affixes" aria-label="Rolled affixes">
+          {item.affixes.map((affix) => (
+            <li key={affix.id}>{affixLabel(affix)}</li>
+          ))}
+        </ul>
+      )}
+      <div className="item-detail__note">Equipment power is not applied to combat yet.</div>
       <Button
         fullWidth
         disabled={pending}

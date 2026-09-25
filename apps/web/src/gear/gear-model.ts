@@ -4,6 +4,7 @@ import type {
   ItemInstanceDto,
   ItemRarityDto,
 } from '@eternal-forge/contracts';
+import { formatHuge } from '../game/format/format-huge';
 
 export const EQUIPMENT_SLOTS: readonly EquipmentSlotDto[] = [
   'HELMET',
@@ -64,4 +65,21 @@ export function unequippedItems(
         itemName(left).localeCompare(itemName(right)) ||
         left.id.localeCompare(right.id),
     );
+}
+
+const STAT_LABEL: Readonly<Record<ItemInstanceDto['affixes'][number]['stat'], string>> = {
+  MAX_HEALTH: 'Max Health',
+  DAMAGE: 'Damage',
+  ATTACK_SPEED: 'Attack Speed',
+  CRITICAL_CHANCE: 'Critical Chance',
+  CRITICAL_DAMAGE: 'Critical Damage',
+};
+export function affixLabel(affix: ItemInstanceDto['affixes'][number]): string {
+  const percentage =
+    affix.operation === 'ADDITIVE_PERCENT' ||
+    affix.stat === 'ATTACK_SPEED' ||
+    affix.stat === 'CRITICAL_CHANCE' ||
+    affix.stat === 'CRITICAL_DAMAGE';
+  const value = percentage ? `${(Number(affix.value) / 100).toFixed(2)}%` : formatHuge(affix.value);
+  return `+${value} ${STAT_LABEL[affix.stat]}`;
 }
