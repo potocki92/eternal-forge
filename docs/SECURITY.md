@@ -694,3 +694,7 @@ The browser can read owned state and request equip by opaque item ID or unequip 
 ## Combat item reward authority — IN PROGRESS (Phase 5 PR 5.3)
 
 The client submits no definition, rarity, item ID, chance or seed. Authenticated online combat derives loot under rules v2 and persists it in the combat transaction. A unique reward FK and combat idempotency identity make retries and concurrent replicas converge on one persistent item. Failed, stale, unauthorized and losing commands create none. Existing item RLS and revoked browser privileges apply; no public item-mint route exists. Offline drops are explicitly disabled rather than implemented through an unbounded per-fight insert loop.
+
+## Item affix authority — IN PROGRESS (Phase 6 PR 6.2)
+
+The browser cannot submit rarity, affix identity/value, seed, generation version or item power. Affixes are generated in Game Core from a server-held combat seed and persisted with the reward in one transaction. PostgreSQL uniqueness prevents duplicate definitions/positions, RLS is enabled, browser table privileges are revoked, and no mint/reroll endpoint exists. Retries read the single persisted snapshot rather than generating again. Legacy items are deterministically version 0 with no rolls.

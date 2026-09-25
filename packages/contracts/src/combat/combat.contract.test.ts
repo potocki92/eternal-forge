@@ -73,6 +73,8 @@ describe('combatResponseSchema', () => {
       id: '2d9f1a52-3c4b-4e8d-9a1f-2b3c4d5e6f71',
       definitionId: 'ashsteel_cuirass',
       rarity: 'RARE' as const,
+      generationVersion: 1,
+      affixes: [],
       nameKey: 'item.ashsteel_cuirass.name',
       slot: 'CHEST' as const,
       createdAt: '2026-09-23T10:00:00.000Z',

@@ -154,6 +154,15 @@ export {
   parseItemInstance,
   parseItemRarity,
   serializeItemInstance,
+  AFFIX_CATALOG,
+  ITEM_AFFIX_SEED_LABEL,
+  ITEM_GENERATION_VERSION,
+  LEGACY_ITEM_GENERATION_VERSION,
+  RARITY_AFFIX_BUDGET,
+  generateItemAffixes,
+  getItemStatModifiers,
+  parseRolledAffix,
+  validateRolledAffix,
 } from './items/index.js';
 export type {
   CreateItemInstanceInput,
@@ -165,4 +174,8 @@ export type {
   ResolveItemDropInput,
   ItemRarity,
   SerializedItemInstance,
+  AffixDefinition,
+  AffixValueKind,
+  GeneratedAffix,
+  RolledAffix,
 } from './items/index.js';

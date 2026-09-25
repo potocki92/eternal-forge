@@ -106,17 +106,36 @@ model ItemInstance {
   characterId  String               @map("character_id") @db.Uuid
   definitionId String               @map("definition_id") @db.VarChar(64)
   rarity       String               @db.VarChar(16)
+  generationVersion Int             @default(0) @map("generation_version")
   createdAt    DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
   /// The authoritative online combat reward that minted this item, if any.
   combatRunId  String?              @unique(map: "item_instances_combat_run_id_key") @map("combat_run_id") @db.Uuid
   character    Character            @relation(fields: [characterId], references: [id], onDelete: Cascade)
   combatRun    CombatRun?           @relation(fields: [combatRunId, characterId], references: [id, characterId], onDelete: Cascade, map: "item_instances_combat_reward_owner_fkey")
   equippedAs   CharacterEquipment?
+  affixes      ItemAffixRoll[]
 
   @@unique([id, characterId], map: "item_instances_id_character_id_key")
   @@unique([combatRunId, characterId], map: "item_instances_combat_run_character_key")
   @@index([characterId, createdAt, id], map: "item_instances_inventory_order_idx")
   @@map("item_instances")
+}
+
+model ItemAffixRoll {
+  id                String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  itemInstanceId    String       @map("item_instance_id") @db.Uuid
+  affixDefinitionId String       @map("affix_definition_id") @db.VarChar(64)
+  stat              String       @db.VarChar(32)
+  operation         String       @db.VarChar(24)
+  value             String       @db.VarChar(64)
+  generationVersion Int          @map("generation_version")
+  position          Int          @db.SmallInt
+  itemInstance      ItemInstance @relation(fields: [itemInstanceId], references: [id], onDelete: Cascade)
+
+  @@unique([itemInstanceId, position], map: "item_affix_rolls_item_position_key")
+  @@unique([itemInstanceId, affixDefinitionId], map: "item_affix_rolls_item_definition_key")
+  @@index([itemInstanceId, position], map: "item_affix_rolls_order_idx")
+  @@map("item_affix_rolls")
 }
 
 model CharacterEquipment {

@@ -187,6 +187,8 @@ describe('item instances', () => {
       id: FIRST_INSTANCE,
       definitionId: 'forged_iron_sword',
       rarity: 'MYTHIC',
+      generationVersion: 0,
+      affixes: [],
     };
     const instance = parseItemInstance(serialized, ITEM_CATALOG);
     expect(serializeItemInstance(instance)).toEqual(serialized);

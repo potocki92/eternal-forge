@@ -3,6 +3,7 @@ import {
   EQUIPMENT_SLOTS,
   ITEM_CATALOG,
   parseItemInstance,
+  parseRolledAffix,
   type EquipmentSlot,
 } from '@eternal-forge/game-core';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
@@ -22,8 +23,13 @@ export class PrismaInventoryRepository implements InventoryRepository {
       where: { id: characterId, profile: { authUserId } },
       select: {
         version: true,
-        itemInstances: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
-        equipment: { include: { itemInstance: true } },
+        itemInstances: {
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          include: { affixes: { orderBy: { position: 'asc' } } },
+        },
+        equipment: {
+          include: { itemInstance: { include: { affixes: { orderBy: { position: 'asc' } } } } },
+        },
       },
     });
     if (character === null) return null;
@@ -86,10 +92,34 @@ function toOwnedItem(row: {
   definitionId: string;
   rarity: string;
   createdAt: Date;
+  generationVersion: number;
+  affixes: readonly {
+    id: string;
+    affixDefinitionId: string;
+    stat: string;
+    operation: string;
+    value: string;
+    position: number;
+  }[];
 }): OwnedItem {
   return {
     item: parseItemInstance(
-      { id: row.id, definitionId: row.definitionId, rarity: row.rarity },
+      {
+        id: row.id,
+        definitionId: row.definitionId,
+        rarity: row.rarity,
+        generationVersion: row.generationVersion,
+        affixes: row.affixes.map((roll) =>
+          parseRolledAffix({
+            id: roll.id,
+            definitionId: roll.affixDefinitionId,
+            stat: roll.stat,
+            operation: roll.operation,
+            value: roll.value,
+            position: roll.position,
+          }),
+        ),
+      },
       ITEM_CATALOG,
     ),
     createdAt: row.createdAt,

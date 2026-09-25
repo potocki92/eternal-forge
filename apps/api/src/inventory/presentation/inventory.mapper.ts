@@ -12,6 +12,8 @@ export function toItemDto(owned: OwnedItem): ItemInstanceDto {
     id: owned.item.id.toString(),
     definitionId: owned.item.definitionId.toString(),
     rarity: owned.item.rarity,
+    generationVersion: owned.item.generationVersion,
+    affixes: [...owned.item.affixes],
     nameKey: definition.nameKey,
     slot: definition.slot,
     createdAt: owned.createdAt.toISOString(),

@@ -47,6 +47,8 @@ export function toCombatResponse(combat: ResolvedCombat, serverTime: Date): Comb
                   id: run.awardedItem.id.toString(),
                   definitionId: run.awardedItem.definitionId.toString(),
                   rarity: run.awardedItem.rarity,
+                  generationVersion: run.awardedItem.generationVersion,
+                  affixes: [...run.awardedItem.affixes],
                   nameKey: definition.nameKey,
                   slot: definition.slot,
                   createdAt: run.resolvedAt.toISOString(),
