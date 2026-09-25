@@ -44,6 +44,29 @@ export type { CombatStats } from './stats/combat-stats.js';
 export { CHARACTER_LEVEL_MAX, createCharacter, validateLevel } from './character/character.js';
 export type { Character } from './character/character.js';
 
+export {
+  CHARACTER_CRITICAL_CHANCE_MAX_BP,
+  CHARACTER_STAT_IDS,
+  CHARACTER_STAT_MINIMUMS,
+  STAT_MODIFIER_OPERATIONS,
+  STAT_MODIFIER_SOURCE_TYPES,
+  deriveBaseCharacterStats,
+  resolveCharacterStats,
+} from './character-stats/index.js';
+export type {
+  AdditivePercentStatModifier,
+  BaseCharacterStats,
+  CharacterStatId,
+  CharacterStats,
+  HugeFlatStatModifier,
+  RateFlatStatModifier,
+  ResolvedCharacterStats,
+  StatModifier,
+  StatModifierOperation,
+  StatModifierSource,
+  StatModifierSourceType,
+} from './character-stats/index.js';
+
 export { createEnemyForStage } from './enemy/enemy.js';
 export type { Enemy } from './enemy/enemy.js';
 

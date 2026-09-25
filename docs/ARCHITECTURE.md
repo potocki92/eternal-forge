@@ -1,6 +1,6 @@
 # Eternal Forge — Software Architecture
 
-Status: PARTIALLY IMPLEMENTED (Phases 0–4, Phase 5 PR 5.1) / EVOLVING
+Status: PARTIALLY IMPLEMENTED (Phases 0–5, Phase 6 PR 6.1) / EVOLVING
 
 The architectural style, boundaries and package layout described here are
 IMPLEMENTED as of Phase 0. The headless Game Core simulation (HugeNumber, RNG,
@@ -1080,3 +1080,34 @@ canonical rarity rank. Mutations send only item instance ID or slot, apply the
 authoritative equipment response, then refresh owned state. Combat rewards
 deduplicate by instance ID and invalidate inventory. No browser gameplay rule
 or direct Supabase data mutation is introduced.
+
+## Phase 6 PR 6.1 implementation status — character stats foundation
+
+`packages/game-core/src/character-stats` owns the pure pipeline from
+authoritative progression inputs to base stats and from base stats plus a
+modifier multiset to resolved character stats. The initial identifiers are
+`MAX_HEALTH`, `DAMAGE`, `ATTACK_SPEED`, `CRITICAL_CHANCE` and
+`CRITICAL_DAMAGE`: exactly the values current player combat consumes. Armor is
+not introduced because the current engine has no mitigation mechanic.
+
+Health and damage use `HugeNumber`. Rates use safe-integer basis points
+(10,000 = 100%; for attack speed, 10,000 = one attack per second). Modifier
+resolution is `BASE -> FLAT -> ADDITIVE_PERCENT -> CLAMP`. Modifier input is
+canonically sorted by stat, operation, source type, source ID and value, rather
+than trusting query or insertion order. Percentage terms are summed exactly as
+`bigint`; integer rate division and `HugeNumber` both use half-to-even
+rounding. Final minima are one health, zero damage, one attack-speed point,
+zero critical chance and 100% critical damage; critical chance is capped at
+100%. Combat's existing versioned attack-speed cap remains a combat rule.
+
+`deriveBaseCharacterStats(level, rules)` makes the applicable immutable rules
+version explicit and has no ambient dependency. Modifiers retain source type
+and ID for diagnostics and future breakdowns, but resolution never branches on
+their origin. This lets affixes, equipment, skills, buffs, debuffs and passives
+produce the same `StatModifier[]` without coupling Combat to those systems.
+
+PR 6.1 creates no persistence or transport contract. Equipment produces no
+modifiers yet, Combat still receives its existing level-derived `CombatStats`,
+and `GAME_RULES_VERSION` remains 2. PR 6.2 will define item power/affix source
+state; PR 6.3 will snapshot resolved equipment stats into combat; PR 6.4 will
+present the breakdown. See ADR-027.

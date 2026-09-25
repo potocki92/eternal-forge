@@ -803,3 +803,28 @@ Players can inspect the seven equipment slots and an inventory derived as all
 owned items minus equipped instance IDs. Equip replaces the slot in one server
 operation; Unequip returns the instance to the derived inventory. Cards show
 only canonical name, rarity and slot. No statistics or affixes are implied.
+
+## Character stats and modifiers — IN PROGRESS (Phase 6 PR 6.1, ADR-027)
+
+The canonical initial character stats are Max Health, Damage, Attack Speed,
+Critical Chance and Critical Damage because those are the values the current
+combat engine already consumes. Max Health and Damage use `HugeNumber`;
+Attack Speed, Critical Chance and Critical Damage use integer basis points.
+Armor and effect mechanics are deliberately absent until their gameplay rules
+exist.
+
+Level and the selected immutable Game Rules derive base stats. One shared
+modifier pipeline then applies all flat contributions, one additive percentage
+pool, and domain clamps. Integer divisions round half to even. Modifiers carry
+a stable source type and source ID so later UI can explain a result, but source
+categories never change the mathematics.
+
+Legal resolved values are Max Health >= 1, Damage >= 0, Attack Speed >= one
+basis-point unit, Critical Chance from 0% through 100%, and Critical Damage >=
+100%. Combat may additionally apply its rules-version attack-speed cap. No
+stats are persisted: authoritative progression plus future modifier source
+state is resolved on demand.
+
+This PR does not make items stronger and does not alter combat. Item power and
+affix generation are deferred to PR 6.2, equipment-to-combat integration to PR
+6.3, and the player-facing stat/breakdown UI to PR 6.4.
