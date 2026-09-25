@@ -4,14 +4,16 @@ Last updated: 2026-09-24
 
 # Current Phase
 
-PHASE 5 — ITEMS & EQUIPMENT
+PHASE 6 — ITEM POWER & CHARACTER STATS
 
 Status:
 
-IN PROGRESS — PRs 5.1–5.3 are COMPLETE / APPROVED (ADR-024–ADR-026). PR 5.4 "Inventory & Equipment UI" is IN PROGRESS.
+IN PROGRESS — Phase 5 is COMPLETE. PR 6.1 "Character Stats & Modifier
+Foundation" is IN PROGRESS (ADR-027); PRs 6.2–6.4 are NOT STARTED.
 
 Phase 4 is COMPLETE / APPROVED. PRs 4.1–4.4 are merged and the return
-experience was manually verified. Phase 5 is now the current phase.
+experience was manually verified. Phase 5 is complete through merged PR 5.4;
+Phase 6 is now the current phase.
 
 Phase 3 was merged to `main` as PR #6 (followed by the Supabase deployment
 PRs #7 and #8). The user started Phase 4 on 2026-09-23 with the PR 4.1 task.
@@ -824,7 +826,7 @@ Implement:
 
 # Phase 5 — Items & Equipment
 
-Status: IN PROGRESS — PR 5.4 "Inventory & Equipment UI"
+Status: COMPLETE
 
 ## PR 5.1 — Item Domain Foundation
 
@@ -874,7 +876,7 @@ Status: COMPLETE / APPROVED. Decision: ADR-026. Deterministic online victory dro
 
 ## PR 5.4 — Inventory & Equipment UI
 
-Status: IN PROGRESS — review pending.
+Status: COMPLETE.
 
 - [x] authenticated `/play/gear` route with responsive loadout and inventory
 - [x] authoritative Equip, replacement and Unequip flows through the existing API
@@ -885,23 +887,36 @@ Status: IN PROGRESS — review pending.
 
 ---
 
-# Phase 6 — Affixes & Effects
+# Phase 6 — Item Power & Character Stats
+
+Status: IN PROGRESS
+
+## PR 6.1 — Character Stats & Modifier Foundation
+
+Status: IN PROGRESS — review pending. Decision: ADR-027.
+
+- [x] canonical current-combat character stat taxonomy
+- [x] pure, rules-aware base derivation
+- [x] generic flat and additive-percent modifiers with traceable sources
+- [x] deterministic resolution, half-to-even rounding and invariant clamps
+- [x] large-number, ordering, validation and immutability tests
+- [x] architecture/game-design documentation
+- [ ] review and approval
+
+## PR 6.2 — Item Power & Affixes
 
 Status: NOT STARTED
 
-Implement generalized modifier/effect system.
+## PR 6.3 — Equipment Stats & Combat Integration
 
-Initial mechanics:
+Status: NOT STARTED
 
-Damage
-Attack Speed
-Crit Chance
-Crit Damage
-Bleed
-Poison
-Fire Damage
+## PR 6.4 — Character Stats UI
 
-Content must remain data-driven.
+Status: NOT STARTED
+
+Later effect mechanics such as bleed, poison and fire damage are not character
+stats in PR 6.1 and remain deferred. Content must remain data-driven.
 
 ---
 
