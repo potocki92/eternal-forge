@@ -48,6 +48,15 @@ describe('equipped character stat resolution', () => {
     ).toEqual(base);
   });
 
+  it('ignores even a Mythic inventory item when it is not in equippedItems', () => {
+    const inventoryOnly = item(IDS[0], [
+      roll('inventory-affix', 'damage_flat', 'DAMAGE', 'FLAT', '2.5e1'),
+    ]);
+    const inventory = [inventoryOnly];
+    expect(inventory).toHaveLength(1);
+    expect(resolveEquippedCharacterStats({ baseStats: base, equippedItems: [] })).toEqual(base);
+  });
+
   it('aggregates persisted flat, percentage and rate rolls from every equipped item', () => {
     const sword = item(IDS[0], [
       roll('affix-a', 'damage_flat', 'DAMAGE', 'FLAT', '2e1'),
@@ -102,5 +111,17 @@ describe('equipped character stat resolution', () => {
     expect(combat.attackSpeedBp).toBe(10_000);
     expect(combat.critChanceBp).toBe(500);
     expect(combat.critDamageBp).toBe(15_000);
+  });
+
+  it('preserves canonical clamps and combat-cap boundary semantics', () => {
+    const capped = item(IDS[0], [
+      roll('crit-cap', 'critical_chance_flat', 'CRITICAL_CHANCE', 'FLAT', '20000'),
+      roll('speed-cap', 'attack_speed_percent', 'ATTACK_SPEED', 'ADDITIVE_PERCENT', '90000', 1),
+    ]);
+    const combat = toCombatStats(
+      resolveEquippedCharacterStats({ baseStats: base, equippedItems: [capped] }),
+    );
+    expect(combat.critChanceBp).toBe(10_000);
+    expect(combat.attackSpeedBp).toBe(100_000);
   });
 });

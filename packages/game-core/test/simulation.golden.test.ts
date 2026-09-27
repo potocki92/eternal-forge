@@ -7,6 +7,11 @@ import {
   createEnemyForStage,
   deriveBaseCharacterStats,
   getGameRules,
+  ITEM_CATALOG,
+  ItemDefinitionId,
+  ItemInstanceId,
+  createItemInstance,
+  resolveEquippedCharacterStats,
   resolveStageAttempt,
   simulateCombat,
   simulateStages,
@@ -244,47 +249,116 @@ describe('golden combat snapshots — rules v3', () => {
   const v3 = getGameRules(3);
   const base = deriveBaseCharacterStats(1, v3);
   const enemy = createEnemyForStage(StageNumber.of(5), v3);
+  const item = (
+    instance: number,
+    affixes: Parameters<typeof createItemInstance>[0]['affixes'] = [],
+    definitionId = 'forged_iron_sword',
+  ) =>
+    createItemInstance(
+      {
+        id: ItemInstanceId.parse(`00000000-0000-4000-8000-${String(instance).padStart(12, '0')}`),
+        definitionId: ItemDefinitionId.parse(definitionId),
+        rarity: 'MYTHIC',
+        generationVersion: 1,
+        affixes,
+      },
+      ITEM_CATALOG,
+    );
+  const affix = (
+    id: string,
+    definitionId: string,
+    stat: 'MAX_HEALTH' | 'DAMAGE' | 'ATTACK_SPEED' | 'CRITICAL_CHANCE' | 'CRITICAL_DAMAGE',
+    operation: 'FLAT' | 'ADDITIVE_PERCENT',
+    value: string,
+  ) => ({ id, definitionId, stat, operation, value, position: 0 });
   it.each([
-    ['none', {}, '70d5b81d53656c324aa6f1b67397e25f4bf4ce7e6ee15e02f70e330bd1bc3cf1'],
+    ['none', [], '70d5b81d53656c324aa6f1b67397e25f4bf4ce7e6ee15e02f70e330bd1bc3cf1'],
     [
       'damage',
-      { damage: HugeNumber.fromNumber(25) },
-      'cefe3ec9564a83d78690af7efb158edc0e17a888c6e7dbbdfe88ad8a73fed427',
+      [item(1, [affix('golden-damage', 'damage_flat', 'DAMAGE', 'FLAT', '2e1')])],
+      '762c39f1f32e8ebf487ecb3da0871185675eefb01cf3ac9006cad347eb8d0b60',
     ],
     [
       'health',
-      { maxHealth: HugeNumber.fromNumber(180) },
+      [item(2, [affix('golden-health', 'max_health_flat', 'MAX_HEALTH', 'FLAT', '8e1')])],
       'ffe26a314f686c7e49398b6b2fdf9f2489c9901034da939df8ab5b77c4d50638',
     ],
     [
       'speed',
-      { attackSpeedBp: 15_000 },
-      '2e9583892876dc6e08784b442ae668ba65998ef0364466b63ea57996ee23a56b',
+      [
+        item(3, [
+          affix('golden-speed', 'attack_speed_percent', 'ATTACK_SPEED', 'ADDITIVE_PERCENT', '750'),
+        ]),
+      ],
+      '567821a3bf981b41fcd2cbfb63f4ec7b9058b39fec1ce976fe7bf94460e508a8',
     ],
     [
       'chance',
-      { criticalChanceBp: 5_000 },
-      '6273492dc379e135e18a39181cb1a56c89116b8de74366e2b8ffbbe40b385af9',
+      [item(4, [affix('golden-chance', 'critical_chance_flat', 'CRITICAL_CHANCE', 'FLAT', '500')])],
+      '4af1cb8d0e0b69e1bf469315d6dafa2e9694b8b3c5d8c03b815a49d714415020',
     ],
     [
       'crit',
-      { criticalDamageBp: 22_000 },
-      '41dcac614fa3016cf9046b6c8fc7ff235baa88ec1a0949893d72e9c2ba598cc8',
+      [
+        item(5, [
+          affix(
+            'golden-crit',
+            'critical_damage_percent',
+            'CRITICAL_DAMAGE',
+            'ADDITIVE_PERCENT',
+            '1000',
+          ),
+        ]),
+      ],
+      '92890c712b90224edda3ae186aefd7fe386ef1b95456527b6f496b04248734ef',
     ],
     [
       'multiple',
-      {
-        damage: HugeNumber.fromNumber(30),
-        maxHealth: HugeNumber.fromNumber(200),
-        attackSpeedBp: 18_000,
-        criticalChanceBp: 4_000,
-        criticalDamageBp: 20_000,
-      },
-      'd83ec8f61ca9a9d6303bacdf69e30e3bbff8642ba1f9013d5a8030648a7c544c',
+      [
+        item(6, [affix('golden-multi-damage', 'damage_flat', 'DAMAGE', 'FLAT', '2e1')]),
+        item(
+          7,
+          [affix('golden-multi-health', 'max_health_flat', 'MAX_HEALTH', 'FLAT', '8e1')],
+          'emberguard_helm',
+        ),
+        item(
+          8,
+          [
+            affix(
+              'golden-multi-speed',
+              'attack_speed_percent',
+              'ATTACK_SPEED',
+              'ADDITIVE_PERCENT',
+              '750',
+            ),
+          ],
+          'ashsteel_cuirass',
+        ),
+        item(
+          9,
+          [affix('golden-multi-chance', 'critical_chance_flat', 'CRITICAL_CHANCE', 'FLAT', '500')],
+          'cinderwalk_boots',
+        ),
+        item(
+          10,
+          [
+            affix(
+              'golden-multi-crit',
+              'critical_damage_percent',
+              'CRITICAL_DAMAGE',
+              'ADDITIVE_PERCENT',
+              '1000',
+            ),
+          ],
+          'runed_iron_ring',
+        ),
+      ],
+      '50f3a638563ae7dae0ed0f4e937bcdbcbd78dec11bd5d3fc059a45a08c7906df',
     ],
-  ] as const)('%s equipment snapshot', (name, overrides, expected) => {
+  ] as const)('%s equipment snapshot', (name, equippedItems, expected) => {
+    const stats = resolveEquippedCharacterStats({ baseStats: base, equippedItems });
     const result = simulateCombat({
-      player: { stats: toCombatStats({ ...base, ...overrides }) },
+      player: { stats: toCombatStats(stats) },
       enemy,
       seed: `v3-${name}`,
       rulesVersion: 3,

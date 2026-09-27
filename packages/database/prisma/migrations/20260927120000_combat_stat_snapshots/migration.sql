@@ -21,7 +21,13 @@ ALTER TABLE "combat_runs" ADD CONSTRAINT "combat_runs_player_stats_snapshot_chec
     "player_damage_coef" IS NOT NULL AND "player_damage_exp" IS NOT NULL AND
     "player_attack_speed_bp" IS NOT NULL AND "player_crit_chance_bp" IS NOT NULL AND
     "player_crit_damage_bp" IS NOT NULL AND
-    "player_max_health_coef" > 0 AND "player_damage_coef" >= 0 AND
+    "player_max_health_coef" BETWEEN 100000000000000000 AND 999999999999999999 AND
+    "player_max_health_exp" > -2147483648 AND
+    (
+      ("player_damage_coef" = 0 AND "player_damage_exp" = -2147483648) OR
+      ("player_damage_coef" BETWEEN 100000000000000000 AND 999999999999999999 AND
+       "player_damage_exp" > -2147483648)
+    ) AND
     "player_attack_speed_bp" >= 1 AND
     "player_crit_chance_bp" BETWEEN 0 AND 10000 AND
     "player_crit_damage_bp" >= 10000
