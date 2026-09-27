@@ -3,6 +3,7 @@ import { simulateCombat, type CombatResult } from '../combat/index.js';
 import { createEnemyForStage, type Enemy } from '../enemy/enemy.js';
 import { GameCoreError } from '../errors.js';
 import type { HugeNumber } from '../huge-number/index.js';
+import type { CombatStats } from '../stats/combat-stats.js';
 import { calculateStageRewards, NO_REWARDS, type StageRewards } from '../rewards/rewards.js';
 import { getGameRules, type GameRules } from '../rules/index.js';
 import type { Stage, StageNumber } from '../stage/index.js';
@@ -39,6 +40,8 @@ export interface StageAttemptInput {
   /** Server-chosen, never client-supplied (ADR-005, ADR-019). */
   readonly seed: string;
   readonly rulesVersion: number;
+  /** Immutable resolved player stats; absent means the versioned level-only baseline. */
+  readonly playerStats?: CombatStats;
 }
 
 export interface StageAttemptResult {
@@ -99,7 +102,11 @@ function validateProgress(progress: CharacterProgress): CharacterProgress {
 export function resolveStageAttempt(input: StageAttemptInput): StageAttemptResult {
   const rules = getGameRules(input.rulesVersion);
   const before = validateProgress(input.progress);
-  const character = createCharacter(before.level, rules);
+  const baseCharacter = createCharacter(before.level, rules);
+  const character: Character =
+    input.playerStats === undefined
+      ? baseCharacter
+      : { level: before.level, stats: input.playerStats };
   const enemy = createEnemyForStage(before.stages.current, rules);
   const combat = simulateCombat({
     player: character,

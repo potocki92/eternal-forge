@@ -11,6 +11,7 @@ export type {
   ResolvedCharacterStats,
 } from './character-stats.js';
 export { resolveCharacterStats } from './resolve-character-stats.js';
+export { resolveEquippedCharacterStats, toCombatStats } from './equipment-stats.js';
 export { STAT_MODIFIER_OPERATIONS, STAT_MODIFIER_SOURCE_TYPES } from './stat-modifier.js';
 export type {
   AdditivePercentStatModifier,

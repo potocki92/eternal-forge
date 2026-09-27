@@ -22,7 +22,7 @@ export interface ResolveItemDropInput {
 
 function rulesFor(version: number): ItemDropRules | null {
   getGameRules(version);
-  return version === 2 ? ITEM_DROP_RULES_V2 : null;
+  return version === 2 || version === 3 ? ITEM_DROP_RULES_V2 : null;
 }
 
 /** Selects from explicit cumulative weights. Exported for threshold tests. */

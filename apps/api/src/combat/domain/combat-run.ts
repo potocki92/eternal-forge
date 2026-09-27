@@ -6,6 +6,7 @@ import type {
   StageMode,
   StageRewards,
   ItemInstance,
+  CombatStats,
 } from '@eternal-forge/game-core';
 
 /**
@@ -31,6 +32,8 @@ export interface CombatRunRecord {
   readonly endReason: CombatEndReason;
   readonly durationMs: number;
   readonly rewards: StageRewards;
+  /** Immutable power used by simulation. Null exists only on historical V1/V2 rows. */
+  readonly playerStatsSnapshot: CombatStats | null;
   /** Server time the combat was resolved. */
   readonly resolvedAt: Date;
 }
@@ -48,6 +51,7 @@ export function recordAttempt(
     readonly idempotencyKey: string;
     readonly stageMode: StageMode;
     readonly resolvedAt: Date;
+    readonly playerStatsSnapshot: CombatStats;
   },
 ): CombatRunRecord {
   return {
@@ -55,6 +59,7 @@ export function recordAttempt(
     rulesVersion: attempt.rulesVersion,
     seed: attempt.seed,
     before: attempt.before,
+    playerStatsSnapshot: context.playerStatsSnapshot,
     outcome: attempt.combat.outcome,
     endReason: attempt.combat.endReason,
     durationMs: attempt.combat.durationMs,

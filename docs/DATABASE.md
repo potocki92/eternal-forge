@@ -598,3 +598,7 @@ The row is the ledger entry for the claim's gold and experience.
 # Combat item rewards — IN PROGRESS (Phase 5 PR 5.3, ADR-026)
 
 Migration `20260924180000_combat_item_drops` adds nullable `item_instances.combat_run_id`, a unique index of the same name, and a cascading composite FK `(combat_run_id, character_id)` to `combat_runs(id, character_id)`. Null preserves trusted non-combat creation; non-null identifies the one authoritative combat that minted the instance and proves matching character ownership. The combat row, optional item and character progression are inserted in one transaction. The existing `(character_id, idempotency_key)` combat uniqueness plus the new one-item-per-combat uniqueness enforce exactly-once materialization.
+
+## IN PROGRESS — Combat stat snapshots (Phase 6.3)
+
+Migration `20260927120000_combat_stat_snapshots` adds the immutable player power used by a combat: HugeNumber coefficient/exponent pairs for max health and damage, and integer basis-point columns for attack speed, critical chance, and critical damage. Historical V1/V2 rows keep the complete group null and replay by their legacy level-only contract; V3 rows require every field. Equipment plus affixes is eager-loaded at the character-version read boundary. See ADR-029.

@@ -4,10 +4,13 @@ import {
   HugeNumber,
   StageNumber,
   createCharacter,
+  createEnemyForStage,
+  deriveBaseCharacterStats,
   getGameRules,
   resolveStageAttempt,
   simulateCombat,
   simulateStages,
+  toCombatStats,
 } from '../src/index.js';
 
 /**
@@ -234,6 +237,59 @@ describe(`golden farming — rules v${GOLDEN_RULES_VERSION}`, () => {
     expect(fingerprint(result)).toBe(
       'f03dd0c8e71c218a401ecd0035b5707c7a0192a412bbc5c081f91ec8b3f91ac3',
     );
+  });
+});
+
+describe('golden combat snapshots — rules v3', () => {
+  const v3 = getGameRules(3);
+  const base = deriveBaseCharacterStats(1, v3);
+  const enemy = createEnemyForStage(StageNumber.of(5), v3);
+  it.each([
+    ['none', {}, '70d5b81d53656c324aa6f1b67397e25f4bf4ce7e6ee15e02f70e330bd1bc3cf1'],
+    [
+      'damage',
+      { damage: HugeNumber.fromNumber(25) },
+      'cefe3ec9564a83d78690af7efb158edc0e17a888c6e7dbbdfe88ad8a73fed427',
+    ],
+    [
+      'health',
+      { maxHealth: HugeNumber.fromNumber(180) },
+      'ffe26a314f686c7e49398b6b2fdf9f2489c9901034da939df8ab5b77c4d50638',
+    ],
+    [
+      'speed',
+      { attackSpeedBp: 15_000 },
+      '2e9583892876dc6e08784b442ae668ba65998ef0364466b63ea57996ee23a56b',
+    ],
+    [
+      'chance',
+      { criticalChanceBp: 5_000 },
+      '6273492dc379e135e18a39181cb1a56c89116b8de74366e2b8ffbbe40b385af9',
+    ],
+    [
+      'crit',
+      { criticalDamageBp: 22_000 },
+      '41dcac614fa3016cf9046b6c8fc7ff235baa88ec1a0949893d72e9c2ba598cc8',
+    ],
+    [
+      'multiple',
+      {
+        damage: HugeNumber.fromNumber(30),
+        maxHealth: HugeNumber.fromNumber(200),
+        attackSpeedBp: 18_000,
+        criticalChanceBp: 4_000,
+        criticalDamageBp: 20_000,
+      },
+      'd83ec8f61ca9a9d6303bacdf69e30e3bbff8642ba1f9013d5a8030648a7c544c',
+    ],
+  ] as const)('%s equipment snapshot', (name, overrides, expected) => {
+    const result = simulateCombat({
+      player: { stats: toCombatStats({ ...base, ...overrides }) },
+      enemy,
+      seed: `v3-${name}`,
+      rulesVersion: 3,
+    });
+    expect(fingerprint(result)).toBe(expected);
   });
 });
 

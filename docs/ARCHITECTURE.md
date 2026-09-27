@@ -1115,3 +1115,7 @@ present the breakdown. See ADR-027.
 ## Item power snapshots (Phase 6 PR 6.2 — IN PROGRESS)
 
 Static `ItemDefinition` and `AffixDefinition` catalogs live in pure Game Core. An owned `ItemInstance` records its item-generation version and normalized, ordered rolled-affix snapshots; APIs eagerly load those rows and never reroll on read. Generation uses a dedicated seed derived after loot identity/rarity selection, and instance plus rolls commit inside the combat reward transaction. Rolled items convert to the canonical ADR-027 `StatModifier[]`, but production combat deliberately does not consume those modifiers until PR 6.3. See ADR-028.
+
+## IN PROGRESS — equipment-powered online combat (Phase 6.3)
+
+The authoritative online path is `level → deriveBaseCharacterStats → equipped ItemInstances with persisted rolls → getItemStatModifiers → resolveCharacterStats → toCombatStats → immutable CombatRun snapshot → simulateCombat`. The combat engine sees only source-agnostic stats. Character-version optimistic concurrency makes equipment changes and combat commits coherent; replay uses the stored snapshot, never current gear. See ADR-029.

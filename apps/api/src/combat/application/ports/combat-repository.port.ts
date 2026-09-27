@@ -1,4 +1,4 @@
-import type { CharacterProgress, ItemDrop } from '@eternal-forge/game-core';
+import type { CharacterProgress, ItemDrop, ItemInstance } from '@eternal-forge/game-core';
 import type { Character } from '../../../player/domain/player.js';
 import type { CombatRun, CombatRunRecord } from '../../domain/combat-run.js';
 
@@ -9,6 +9,8 @@ export interface CombatTarget {
   readonly version: bigint;
   /** The combat this character already resolved under the request's key, if any. */
   readonly existingRun: CombatRun | null;
+  /** Authoritative equipped instances and their persisted rolls, loaded with this version. */
+  readonly equippedItems: readonly ItemInstance[];
 }
 
 export interface CommitCombat {

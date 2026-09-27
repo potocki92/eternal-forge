@@ -51,7 +51,9 @@ export {
   STAT_MODIFIER_OPERATIONS,
   STAT_MODIFIER_SOURCE_TYPES,
   deriveBaseCharacterStats,
+  resolveEquippedCharacterStats,
   resolveCharacterStats,
+  toCombatStats,
 } from './character-stats/index.js';
 export type {
   AdditivePercentStatModifier,

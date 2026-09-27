@@ -17,7 +17,9 @@
  * - 1 — Phase 1. First combat, stage scaling and reward rules (`RULES_V1`).
  * - 2 — Phase 5.3. Deterministic item drops (`RULES_V2`). Combat balance is
  *   unchanged; the new independent reward stream is additive.
+ * - 3 — Phase 6.3. New combats consume immutable resolved equipment snapshots.
+ *   V1/V2 simulation remains unchanged.
  */
-export const GAME_RULES_VERSION = 2 as const;
+export const GAME_RULES_VERSION = 3 as const;
 
 export type GameRulesVersion = typeof GAME_RULES_VERSION;

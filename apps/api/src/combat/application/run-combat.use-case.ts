@@ -4,6 +4,9 @@ import {
   getGameRules,
   resolveStageAttempt,
   resolveItemDrop,
+  deriveBaseCharacterStats,
+  resolveEquippedCharacterStats,
+  toCombatStats,
   type CharacterProgress,
   type HugeNumber,
   type StageAttemptResult,
@@ -137,6 +140,15 @@ export class RunCombatUseCase {
       return { kind: 'stage-not-playable' };
     }
 
+    const playerStatsSnapshot = toCombatStats(
+      resolveEquippedCharacterStats({
+        baseStats: deriveBaseCharacterStats(
+          target.character.level,
+          getGameRules(GAME_RULES_VERSION),
+        ),
+        equippedItems: target.equippedItems,
+      }),
+    );
     const attempt = resolveStageAttempt({
       progress: progressOf(target.character),
       // The persisted choice, never a request value: the client cannot pick
@@ -144,6 +156,7 @@ export class RunCombatUseCase {
       mode: target.character.stageMode,
       seed: this.seeds.next(),
       rulesVersion: GAME_RULES_VERSION,
+      playerStats: playerStatsSnapshot,
     });
     const nextCombatAt = new Date(now.getTime() + attempt.combat.durationMs);
     const itemDrop = resolveItemDrop({
@@ -164,6 +177,7 @@ export class RunCombatUseCase {
         idempotencyKey: command.idempotencyKey,
         stageMode: target.character.stageMode,
         resolvedAt: now,
+        playerStatsSnapshot,
       }),
       itemDrop,
     });
@@ -259,6 +273,7 @@ export class RunCombatUseCase {
       mode: run.stageMode,
       seed: run.seed,
       rulesVersion: run.rulesVersion,
+      ...(run.playerStatsSnapshot === null ? {} : { playerStats: run.playerStatsSnapshot }),
     });
     if (!replayMatches(run, attempt)) {
       throw new CombatReplayMismatchError(run.id);

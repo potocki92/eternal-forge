@@ -212,6 +212,14 @@ model CombatRun {
   rewardGoldExp             Int             @map("reward_gold_exp")
   rewardExperienceCoef      BigInt          @map("reward_experience_coef")
   rewardExperienceExp       Int             @map("reward_experience_exp")
+  // Immutable player power used for V3+ combat. Nullable only for historical V1/V2 rows.
+  playerMaxHealthCoef       BigInt?         @map("player_max_health_coef")
+  playerMaxHealthExp        Int?            @map("player_max_health_exp")
+  playerDamageCoef          BigInt?         @map("player_damage_coef")
+  playerDamageExp           Int?            @map("player_damage_exp")
+  playerAttackSpeedBp       Int?            @map("player_attack_speed_bp")
+  playerCritChanceBp        Int?            @map("player_crit_chance_bp")
+  playerCritDamageBp        Int?            @map("player_crit_damage_bp")
   /// Server time the combat was resolved and committed.
   createdAt                 DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
   character                 Character       @relation(fields: [characterId], references: [id], onDelete: Cascade)
