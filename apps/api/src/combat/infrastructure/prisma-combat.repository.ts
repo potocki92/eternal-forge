@@ -48,6 +48,13 @@ interface CombatRunRow {
   readonly rewardExperienceCoef: bigint;
   readonly rewardExperienceExp: number;
   readonly createdAt: Date;
+  readonly playerMaxHealthCoef: bigint | null;
+  readonly playerMaxHealthExp: number | null;
+  readonly playerDamageCoef: bigint | null;
+  readonly playerDamageExp: number | null;
+  readonly playerAttackSpeedBp: number | null;
+  readonly playerCritChanceBp: number | null;
+  readonly playerCritDamageBp: number | null;
   readonly awardedItem?: {
     readonly id: string;
     readonly definitionId: string;
@@ -88,6 +95,9 @@ export class PrismaCombatRepository implements CombatRepository {
     const row = await this.prisma.client.character.findFirst({
       where: { id: characterId, profile: { authUserId } },
       include: {
+        equipment: {
+          include: { itemInstance: { include: { affixes: { orderBy: { position: 'asc' } } } } },
+        },
         combatRuns: {
           where: { idempotencyKey },
           include: { awardedItem: { include: { affixes: { orderBy: { position: 'asc' } } } } },
@@ -103,6 +113,7 @@ export class PrismaCombatRepository implements CombatRepository {
       character: toCharacter(row),
       version: row.version,
       existingRun: existing === undefined ? null : toCombatRun(existing),
+      equippedItems: row.equipment.map((entry) => toItemInstance(entry.itemInstance)),
     };
   }
 
@@ -114,6 +125,9 @@ export class PrismaCombatRepository implements CombatRepository {
     const goldBefore = run.before.gold.toParts();
     const rewardGold = run.rewards.gold.toParts();
     const rewardExperience = run.rewards.experience.toParts();
+    const playerStats = run.playerStatsSnapshot;
+    const playerMaxHealth = playerStats?.maxHealth.toParts();
+    const playerDamage = playerStats?.damage.toParts();
 
     try {
       return await this.prisma.client.$transaction(async (tx) => {
@@ -162,6 +176,17 @@ export class PrismaCombatRepository implements CombatRepository {
             rewardGoldExp: rewardGold.exponent,
             rewardExperienceCoef: rewardExperience.coefficient,
             rewardExperienceExp: rewardExperience.exponent,
+            ...(playerStats === null || playerMaxHealth === undefined || playerDamage === undefined
+              ? {}
+              : {
+                  playerMaxHealthCoef: playerMaxHealth.coefficient,
+                  playerMaxHealthExp: playerMaxHealth.exponent,
+                  playerDamageCoef: playerDamage.coefficient,
+                  playerDamageExp: playerDamage.exponent,
+                  playerAttackSpeedBp: playerStats.attackSpeedBp,
+                  playerCritChanceBp: playerStats.critChanceBp,
+                  playerCritDamageBp: playerStats.critDamageBp,
+                }),
             createdAt: run.resolvedAt,
           },
           include: { awardedItem: { include: { affixes: { orderBy: { position: 'asc' } } } } },
@@ -239,6 +264,7 @@ function toCombatRun(row: CombatRunRow): CombatRun {
       gold: HugeNumber.fromParts(row.rewardGoldCoef, row.rewardGoldExp),
       experience: HugeNumber.fromParts(row.rewardExperienceCoef, row.rewardExperienceExp),
     },
+    playerStatsSnapshot: snapshotFromRow(row),
     resolvedAt: row.createdAt,
     awardedItem:
       row.awardedItem == null
@@ -263,4 +289,78 @@ function toCombatRun(row: CombatRunRow): CombatRun {
             ITEM_CATALOG,
           ),
   };
+}
+
+function snapshotFromRow(row: CombatRunRow) {
+  const {
+    playerMaxHealthCoef,
+    playerMaxHealthExp,
+    playerDamageCoef,
+    playerDamageExp,
+    playerAttackSpeedBp,
+    playerCritChanceBp,
+    playerCritDamageBp,
+  } = row;
+  const values = [
+    playerMaxHealthCoef,
+    playerMaxHealthExp,
+    playerDamageCoef,
+    playerDamageExp,
+    playerAttackSpeedBp,
+    playerCritChanceBp,
+    playerCritDamageBp,
+  ];
+  if (values.every((value) => value === null)) return null;
+  if (
+    playerMaxHealthCoef === null ||
+    playerMaxHealthExp === null ||
+    playerDamageCoef === null ||
+    playerDamageExp === null ||
+    playerAttackSpeedBp === null ||
+    playerCritChanceBp === null ||
+    playerCritDamageBp === null
+  )
+    throw new Error('Incomplete combat stat snapshot.');
+  return {
+    maxHealth: HugeNumber.fromParts(playerMaxHealthCoef, playerMaxHealthExp),
+    damage: HugeNumber.fromParts(playerDamageCoef, playerDamageExp),
+    attackSpeedBp: playerAttackSpeedBp,
+    critChanceBp: playerCritChanceBp,
+    critDamageBp: playerCritDamageBp,
+  };
+}
+
+function toItemInstance(row: {
+  id: string;
+  definitionId: string;
+  rarity: string;
+  generationVersion: number;
+  affixes: readonly {
+    id: string;
+    affixDefinitionId: string;
+    stat: string;
+    operation: string;
+    value: string;
+    position: number;
+  }[];
+}) {
+  return parseItemInstance(
+    {
+      id: row.id,
+      definitionId: row.definitionId,
+      rarity: row.rarity,
+      generationVersion: row.generationVersion,
+      affixes: row.affixes.map((roll) =>
+        parseRolledAffix({
+          id: roll.id,
+          definitionId: roll.affixDefinitionId,
+          stat: roll.stat,
+          operation: roll.operation,
+          value: roll.value,
+          position: roll.position,
+        }),
+      ),
+    },
+    ITEM_CATALOG,
+  );
 }

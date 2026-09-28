@@ -32,6 +32,17 @@ import {
   type OfflineSeedSource,
 } from '../../src/offline/application/ports/offline-seed-source.port.js';
 import { OfflineProgressController } from '../../src/offline/presentation/offline-progress.controller.js';
+import {
+  EquipItemUseCase,
+  GetEquipmentUseCase,
+  GetInventoryUseCase,
+  UnequipItemUseCase,
+} from '../../src/inventory/application/inventory.use-cases.js';
+import {
+  INVENTORY_REPOSITORY,
+  type InventoryRepository,
+} from '../../src/inventory/application/ports/inventory-repository.port.js';
+import { InventoryController } from '../../src/inventory/presentation/inventory.controller.js';
 import { GetOwnedCharacterUseCase } from '../../src/player/application/get-owned-character.use-case.js';
 import { GetPlayerStateUseCase } from '../../src/player/application/get-player-state.use-case.js';
 import {
@@ -55,6 +66,8 @@ export interface TestAppOptions {
   readonly selections: StageSelectionRepository;
   /** Offline progression (ADR-023). The routes exist only when it is given. */
   readonly offline?: OfflineProgressRepository;
+  /** Inventory/equipment routes. The production controller exists only when supplied. */
+  readonly inventory?: InventoryRepository;
   /** Defaults to {@link sequentialSeeds}, so combats are reproducible. */
   readonly seeds?: CombatSeedSource;
   /** Defaults to {@link sequentialSeeds} with an `offline` prefix. */
@@ -110,12 +123,26 @@ export async function createTestApp(options: TestAppOptions): Promise<INestAppli
             ClaimOfflineProgressUseCase,
           ],
         };
+  const inventory =
+    options.inventory === undefined
+      ? { controllers: [], providers: [] }
+      : {
+          controllers: [InventoryController],
+          providers: [
+            { provide: INVENTORY_REPOSITORY, useValue: options.inventory },
+            GetInventoryUseCase,
+            GetEquipmentUseCase,
+            EquipItemUseCase,
+            UnequipItemUseCase,
+          ],
+        };
   const moduleRef = await Test.createTestingModule({
     controllers: [
       PlayerController,
       CombatController,
       StageSelectionController,
       ...offline.controllers,
+      ...inventory.controllers,
     ],
     providers: [
       { provide: CLOCK, useValue: clock },
@@ -141,6 +168,7 @@ export async function createTestApp(options: TestAppOptions): Promise<INestAppli
       RunCombatUseCase,
       SelectStageUseCase,
       ...offline.providers,
+      ...inventory.providers,
     ],
   }).compile();
 

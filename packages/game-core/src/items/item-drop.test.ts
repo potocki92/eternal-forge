@@ -44,6 +44,20 @@ describe('resolveItemDrop — rules v2 golden vectors', () => {
     ).toBeNull();
   });
 
+  it.each([
+    ['loot-0', null, null],
+    ['loot-25', 'ashsteel_cuirass', 'COMMON'],
+  ] as const)(
+    'rules v2 and v3 share the unchanged drop-rules-v2 stream for %s',
+    (combatSeed, definitionId, rarity) => {
+      const v2 = resolveItemDrop({ combatSeed, rulesVersion: 2, stage, outcome: 'WIN' });
+      const v3 = resolveItemDrop({ combatSeed, rulesVersion: 3, stage, outcome: 'WIN' });
+      expect(v3).toEqual(v2);
+      expect(v3?.definitionId.toString() ?? null).toBe(definitionId);
+      expect(v3?.rarity ?? null).toBe(rarity);
+    },
+  );
+
   it('rejects an unsupported rules version', () => {
     expect(() =>
       resolveItemDrop({ combatSeed: 'loot-25', rulesVersion: 999, stage, outcome: 'WIN' }),

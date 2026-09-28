@@ -4,10 +4,18 @@ import {
   HugeNumber,
   StageNumber,
   createCharacter,
+  createEnemyForStage,
+  deriveBaseCharacterStats,
   getGameRules,
+  ITEM_CATALOG,
+  ItemDefinitionId,
+  ItemInstanceId,
+  createItemInstance,
+  resolveEquippedCharacterStats,
   resolveStageAttempt,
   simulateCombat,
   simulateStages,
+  toCombatStats,
 } from '../src/index.js';
 
 /**
@@ -234,6 +242,128 @@ describe(`golden farming — rules v${GOLDEN_RULES_VERSION}`, () => {
     expect(fingerprint(result)).toBe(
       'f03dd0c8e71c218a401ecd0035b5707c7a0192a412bbc5c081f91ec8b3f91ac3',
     );
+  });
+});
+
+describe('golden combat snapshots — rules v3', () => {
+  const v3 = getGameRules(3);
+  const base = deriveBaseCharacterStats(1, v3);
+  const enemy = createEnemyForStage(StageNumber.of(5), v3);
+  const item = (
+    instance: number,
+    affixes: Parameters<typeof createItemInstance>[0]['affixes'] = [],
+    definitionId = 'forged_iron_sword',
+  ) =>
+    createItemInstance(
+      {
+        id: ItemInstanceId.parse(`00000000-0000-4000-8000-${String(instance).padStart(12, '0')}`),
+        definitionId: ItemDefinitionId.parse(definitionId),
+        rarity: 'MYTHIC',
+        generationVersion: 1,
+        affixes,
+      },
+      ITEM_CATALOG,
+    );
+  const affix = (
+    id: string,
+    definitionId: string,
+    stat: 'MAX_HEALTH' | 'DAMAGE' | 'ATTACK_SPEED' | 'CRITICAL_CHANCE' | 'CRITICAL_DAMAGE',
+    operation: 'FLAT' | 'ADDITIVE_PERCENT',
+    value: string,
+  ) => ({ id, definitionId, stat, operation, value, position: 0 });
+  it.each([
+    ['none', [], '70d5b81d53656c324aa6f1b67397e25f4bf4ce7e6ee15e02f70e330bd1bc3cf1'],
+    [
+      'damage',
+      [item(1, [affix('golden-damage', 'damage_flat', 'DAMAGE', 'FLAT', '2e1')])],
+      '762c39f1f32e8ebf487ecb3da0871185675eefb01cf3ac9006cad347eb8d0b60',
+    ],
+    [
+      'health',
+      [item(2, [affix('golden-health', 'max_health_flat', 'MAX_HEALTH', 'FLAT', '8e1')])],
+      'ffe26a314f686c7e49398b6b2fdf9f2489c9901034da939df8ab5b77c4d50638',
+    ],
+    [
+      'speed',
+      [
+        item(3, [
+          affix('golden-speed', 'attack_speed_percent', 'ATTACK_SPEED', 'ADDITIVE_PERCENT', '750'),
+        ]),
+      ],
+      '567821a3bf981b41fcd2cbfb63f4ec7b9058b39fec1ce976fe7bf94460e508a8',
+    ],
+    [
+      'chance',
+      [item(4, [affix('golden-chance', 'critical_chance_flat', 'CRITICAL_CHANCE', 'FLAT', '500')])],
+      '4af1cb8d0e0b69e1bf469315d6dafa2e9694b8b3c5d8c03b815a49d714415020',
+    ],
+    [
+      'crit',
+      [
+        item(5, [
+          affix(
+            'golden-crit',
+            'critical_damage_percent',
+            'CRITICAL_DAMAGE',
+            'ADDITIVE_PERCENT',
+            '1000',
+          ),
+        ]),
+      ],
+      '92890c712b90224edda3ae186aefd7fe386ef1b95456527b6f496b04248734ef',
+    ],
+    [
+      'multiple',
+      [
+        item(6, [affix('golden-multi-damage', 'damage_flat', 'DAMAGE', 'FLAT', '2e1')]),
+        item(
+          7,
+          [affix('golden-multi-health', 'max_health_flat', 'MAX_HEALTH', 'FLAT', '8e1')],
+          'emberguard_helm',
+        ),
+        item(
+          8,
+          [
+            affix(
+              'golden-multi-speed',
+              'attack_speed_percent',
+              'ATTACK_SPEED',
+              'ADDITIVE_PERCENT',
+              '750',
+            ),
+          ],
+          'ashsteel_cuirass',
+        ),
+        item(
+          9,
+          [affix('golden-multi-chance', 'critical_chance_flat', 'CRITICAL_CHANCE', 'FLAT', '500')],
+          'cinderwalk_boots',
+        ),
+        item(
+          10,
+          [
+            affix(
+              'golden-multi-crit',
+              'critical_damage_percent',
+              'CRITICAL_DAMAGE',
+              'ADDITIVE_PERCENT',
+              '1000',
+            ),
+          ],
+          'runed_iron_ring',
+        ),
+      ],
+      '50f3a638563ae7dae0ed0f4e937bcdbcbd78dec11bd5d3fc059a45a08c7906df',
+    ],
+  ] as const)('%s equipment snapshot', (name, equippedItems, expected) => {
+    const stats = resolveEquippedCharacterStats({ baseStats: base, equippedItems });
+    const result = simulateCombat({
+      player: { stats: toCombatStats(stats) },
+      enemy,
+      seed: `v3-${name}`,
+      rulesVersion: 3,
+    });
+    expect(fingerprint(result)).toBe(expected);
   });
 });
 

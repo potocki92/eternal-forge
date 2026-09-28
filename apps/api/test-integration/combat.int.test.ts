@@ -10,6 +10,7 @@ import {
   INITIAL_STAGE_PROGRESS,
   StageNumber,
   calculateStageRewards,
+  deriveBaseCharacterStats,
   getGameRules,
   resolveStage,
 } from '@eternal-forge/game-core';
@@ -69,6 +70,7 @@ async function newApiInstance(seeds?: CombatSeedSource): Promise<INestApplicatio
     players: new PrismaPlayerRepository(prisma),
     combats: new PrismaCombatRepository(prisma),
     selections: new PrismaStageSelectionRepository(prisma),
+    inventory: new PrismaInventoryRepository(prisma),
     seeds: seeds ?? sequentialSeeds(`int-${randomUUID().slice(0, 8)}`),
     clock,
   });
@@ -107,6 +109,23 @@ async function characterRow(characterId: string) {
 
 function gold(row: { goldCoef: bigint; goldExp: number }): HugeNumber {
   return HugeNumber.fromParts(row.goldCoef, row.goldExp);
+}
+
+function snapshotDamage(row: { playerDamageCoef: bigint | null; playerDamageExp: number | null }) {
+  if (row.playerDamageCoef === null || row.playerDamageExp === null) {
+    throw new Error('Expected a persisted combat stat snapshot.');
+  }
+  return HugeNumber.fromParts(row.playerDamageCoef, row.playerDamageExp);
+}
+
+function snapshotHealth(row: {
+  playerMaxHealthCoef: bigint | null;
+  playerMaxHealthExp: number | null;
+}) {
+  if (row.playerMaxHealthCoef === null || row.playerMaxHealthExp === null) {
+    throw new Error('Expected a persisted combat stat snapshot.');
+  }
+  return HugeNumber.fromParts(row.playerMaxHealthCoef, row.playerMaxHealthExp);
 }
 
 /**
@@ -151,7 +170,7 @@ describe('combat against PostgreSQL — the loop', () => {
     expect(runs).toHaveLength(1);
     expect(runs[0]).toMatchObject({
       id: body.combat.id,
-      rulesVersion: 2,
+      rulesVersion: 3,
       stage: 1n,
       highestStageReachedBefore: 1n,
       highestStageClearedBefore: null,
@@ -161,6 +180,185 @@ describe('combat against PostgreSQL — the loop', () => {
       durationMs: body.combat.durationMs,
     });
     expect(runs[0]?.seed).toMatch(/^int-[0-9a-f]{8}-1$/u);
+  });
+
+  it('snapshots equipped persisted power, removes it after unequip, and keeps history', async () => {
+    const { token, characterId } = await provisionedPlayer();
+    const base = combatResponseSchema.parse((await fight(token, characterId).expect(201)).body);
+    const itemId = randomUUID();
+    await prisma.client.$transaction([
+      prisma.client.itemInstance.create({
+        data: {
+          id: itemId,
+          characterId,
+          definitionId: 'forged_iron_sword',
+          rarity: 'MAGIC',
+          generationVersion: 1,
+          affixes: {
+            create: {
+              affixDefinitionId: 'damage_flat',
+              stat: 'DAMAGE',
+              operation: 'FLAT',
+              value: '2e1',
+              generationVersion: 1,
+              position: 0,
+            },
+          },
+        },
+      }),
+      prisma.client.characterEquipment.create({
+        data: { characterId, slot: 'WEAPON', itemInstanceId: itemId },
+      }),
+      prisma.client.character.update({
+        where: { id: characterId },
+        data: { version: { increment: 1 } },
+      }),
+    ]);
+    clock.advance(base.combat.durationMs);
+
+    const powered = combatResponseSchema.parse((await fight(token, characterId).expect(201)).body);
+    const poweredRun = await prisma.client.combatRun.findUniqueOrThrow({
+      where: { id: powered.combat.id },
+    });
+    expect(snapshotDamage(poweredRun).toString()).toBe('3e1');
+    expect(powered.combat.durationMs).toBeLessThan(base.combat.durationMs);
+
+    await prisma.client.$transaction([
+      prisma.client.characterEquipment.delete({
+        where: { characterId_slot: { characterId, slot: 'WEAPON' } },
+      }),
+      prisma.client.character.update({
+        where: { id: characterId },
+        data: { version: { increment: 1 } },
+      }),
+    ]);
+    clock.advance(powered.combat.durationMs);
+    const unpowered = combatResponseSchema.parse(
+      (await fight(token, characterId).expect(201)).body,
+    );
+    const unpoweredRun = await prisma.client.combatRun.findUniqueOrThrow({
+      where: { id: unpowered.combat.id },
+    });
+    expect(snapshotDamage(unpoweredRun).toString()).toBe('1e1');
+    const reloadedPowered = await prisma.client.combatRun.findUniqueOrThrow({
+      where: { id: powered.combat.id },
+    });
+    expect(reloadedPowered.playerDamageCoef).toBe(poweredRun.playerDamageCoef);
+    expect(reloadedPowered.playerDamageExp).toBe(poweredRun.playerDamageExp);
+  });
+
+  it('concurrent equip versus combat commits one coherent pre- or post-equip snapshot', async () => {
+    const { token, characterId } = await provisionedPlayer();
+    const itemId = randomUUID();
+    await prisma.client.itemInstance.create({
+      data: {
+        id: itemId,
+        characterId,
+        definitionId: 'forged_iron_sword',
+        rarity: 'MAGIC',
+        generationVersion: 1,
+        affixes: {
+          create: {
+            affixDefinitionId: 'damage_flat',
+            stat: 'DAMAGE',
+            operation: 'FLAT',
+            value: '2e1',
+            generationVersion: 1,
+            position: 0,
+          },
+        },
+      },
+    });
+    const key = randomUUID();
+    const [equipResponse, initialCombat] = await Promise.all([
+      request(httpServer(app))
+        .post(`/player/characters/${characterId}/equipment/equip`)
+        .set('authorization', `Bearer ${token}`)
+        .send({ itemInstanceId: itemId }),
+      fight(token, characterId, key),
+    ]);
+    expect(equipResponse.status).toBe(200);
+    const combatResponse =
+      initialCombat.status === 201
+        ? initialCombat
+        : await fight(token, characterId, key).expect(201);
+    const body = combatResponseSchema.parse(combatResponse.body);
+    const run = await prisma.client.combatRun.findUniqueOrThrow({ where: { id: body.combat.id } });
+    expect(['1e1', '3e1']).toContain(snapshotDamage(run).toString());
+    expect(await prisma.client.combatRun.count({ where: { characterId } })).toBe(1);
+    const equipment = await prisma.client.characterEquipment.findMany({ where: { characterId } });
+    expect(equipment).toEqual([
+      expect.objectContaining({ slot: 'WEAPON', itemInstanceId: itemId }),
+    ]);
+    const character = await characterRow(characterId);
+    expect(character.version).toBe(2n);
+    expect(gold(character).eq(HugeNumber.fromParts(run.rewardGoldCoef, run.rewardGoldExp))).toBe(
+      true,
+    );
+  });
+
+  it('replacement uses only Sword B while Sword A combat history stays immutable', async () => {
+    const { token, characterId } = await provisionedPlayer();
+    const createSword = (value: string) =>
+      prisma.client.itemInstance.create({
+        data: {
+          characterId,
+          definitionId: 'forged_iron_sword',
+          rarity: 'MAGIC',
+          generationVersion: 1,
+          affixes: {
+            create: {
+              affixDefinitionId: 'damage_flat',
+              stat: 'DAMAGE',
+              operation: 'FLAT',
+              value,
+              generationVersion: 1,
+              position: 0,
+            },
+          },
+        },
+      });
+    const [swordA, swordB] = await Promise.all([createSword('1e1'), createSword('2e1')]);
+    const equip = (itemInstanceId: string) =>
+      request(httpServer(app))
+        .post(`/player/characters/${characterId}/equipment/equip`)
+        .set('authorization', `Bearer ${token}`)
+        .send({ itemInstanceId })
+        .expect(200);
+
+    await equip(swordA.id);
+    const withA = combatResponseSchema.parse((await fight(token, characterId).expect(201)).body);
+    const runA = await prisma.client.combatRun.findUniqueOrThrow({
+      where: { id: withA.combat.id },
+    });
+    expect(snapshotDamage(runA).toString()).toBe('2e1');
+
+    await equip(swordB.id);
+    clock.advance(withA.combat.durationMs);
+    const withB = combatResponseSchema.parse((await fight(token, characterId).expect(201)).body);
+    const runB = await prisma.client.combatRun.findUniqueOrThrow({
+      where: { id: withB.combat.id },
+    });
+    expect(snapshotDamage(runB).toString()).toBe('3e1');
+    expect(
+      snapshotDamage(
+        await prisma.client.combatRun.findUniqueOrThrow({ where: { id: runA.id } }),
+      ).toString(),
+    ).toBe('2e1');
+  });
+
+  it('round-trips late-game HugeNumber stats through PostgreSQL without precision loss', async () => {
+    const { token, characterId } = await provisionedPlayer();
+    await prisma.client.character.update({
+      where: { id: characterId },
+      data: { level: 10_000, version: { increment: 1 } },
+    });
+    const body = combatResponseSchema.parse((await fight(token, characterId).expect(201)).body);
+    const run = await prisma.client.combatRun.findUniqueOrThrow({ where: { id: body.combat.id } });
+    const expected = deriveBaseCharacterStats(10_000, getGameRules(3));
+    expect(snapshotDamage(run).eq(expected.damage)).toBe(true);
+    expect(snapshotHealth(run).eq(expected.maxHealth)).toBe(true);
+    expect(expected.damage.toParts().exponent).toBeGreaterThan(16);
   });
 
   it('keeps progression across a fresh API process (a browser refresh)', async () => {
@@ -240,6 +438,31 @@ describe('combat against PostgreSQL — the loop', () => {
     );
     clock.advance(first.combat.durationMs);
     await fight(token, characterId).expect(201);
+    const itemId = randomUUID();
+    await prisma.client.itemInstance.create({
+      data: {
+        id: itemId,
+        characterId,
+        definitionId: 'forged_iron_sword',
+        rarity: 'MAGIC',
+        generationVersion: 1,
+        affixes: {
+          create: {
+            affixDefinitionId: 'damage_flat',
+            stat: 'DAMAGE',
+            operation: 'FLAT',
+            value: '2.5e1',
+            generationVersion: 1,
+            position: 0,
+          },
+        },
+        equippedAs: { create: { character: { connect: { id: characterId } }, slot: 'WEAPON' } },
+      },
+    });
+    await prisma.client.character.update({
+      where: { id: characterId },
+      data: { version: { increment: 1 } },
+    });
 
     const replay = combatResponseSchema.parse(
       (await fight(token, characterId, key).expect(200)).body,
@@ -525,6 +748,7 @@ describe('PrismaCombatRepository — conditional commit', () => {
         endReason: 'ENEMY_DEFEATED',
         durationMs: 1,
         rewards: { gold: HugeNumber.fromDecimal('1e30'), experience: HugeNumber.ZERO },
+        playerStatsSnapshot: null,
         resolvedAt: new Date(),
       },
     });
@@ -572,6 +796,7 @@ describe('PrismaCombatRepository — conditional commit', () => {
         endReason: 'ENEMY_DEFEATED',
         durationMs: 1,
         rewards: { gold: HugeNumber.fromNumber(1), experience: HugeNumber.ZERO },
+        playerStatsSnapshot: null,
         resolvedAt: new Date(),
       },
     });

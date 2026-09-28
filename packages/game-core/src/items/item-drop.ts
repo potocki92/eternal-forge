@@ -20,9 +20,20 @@ export interface ResolveItemDropInput {
   readonly outcome: CombatOutcome;
 }
 
-function rulesFor(version: number): ItemDropRules | null {
+interface ItemDropRuleBinding {
+  /** Version of the drop rules and their deterministic child RNG stream. */
+  readonly dropRulesVersion: number;
+  readonly rules: ItemDropRules;
+}
+
+const ITEM_DROP_RULES_V2_BINDING: ItemDropRuleBinding = Object.freeze({
+  dropRulesVersion: 2,
+  rules: ITEM_DROP_RULES_V2,
+});
+
+function rulesFor(version: number): ItemDropRuleBinding | null {
   getGameRules(version);
-  return version === 2 ? ITEM_DROP_RULES_V2 : null;
+  return version === 2 || version === 3 ? ITEM_DROP_RULES_V2_BINDING : null;
 }
 
 /** Selects from explicit cumulative weights. Exported for threshold tests. */
@@ -44,20 +55,20 @@ export function selectItemRarity(draw: number, rules: ItemDropRules): ItemRarity
  * definition, then rarity. Losses consume no draws and always return null.
  */
 export function resolveItemDrop(input: ResolveItemDropInput): ItemDrop | null {
-  const rules = rulesFor(input.rulesVersion);
-  if (input.outcome !== 'WIN' || rules === null) return null;
+  const binding = rulesFor(input.rulesVersion);
+  if (input.outcome !== 'WIN' || binding === null) return null;
 
   const seed = deriveSeed(
     input.combatSeed,
     ITEM_DROP_SEED_LABEL,
-    input.rulesVersion,
+    binding.dropRulesVersion,
     input.stage.toString(),
   );
   const rng = createRng(seed);
-  if (!rng.chance(rules.chanceBasisPoints)) return null;
+  if (!rng.chance(binding.rules.chanceBasisPoints)) return null;
 
-  const definitionId = rules.definitionIds[rng.nextInt(rules.definitionIds.length)];
+  const definitionId = binding.rules.definitionIds[rng.nextInt(binding.rules.definitionIds.length)];
   if (definitionId === undefined) throw new RangeError('Item drop pool must not be empty.');
-  const rarity = selectItemRarity(rng.nextInt(10_000), rules);
+  const rarity = selectItemRarity(rng.nextInt(10_000), binding.rules);
   return Object.freeze({ definitionId, rarity });
 }

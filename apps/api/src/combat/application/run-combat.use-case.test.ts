@@ -101,7 +101,7 @@ describe('RunCombatUseCase — victory', () => {
     expect(result.combat.character).toEqual({ ...after, updatedAt: character.updatedAt });
 
     expect(repository.runsOf(character.id)).toEqual([run]);
-    expect(run).toMatchObject({ outcome: 'WIN', rulesVersion: 2, seed: 'unit-1' });
+    expect(run).toMatchObject({ outcome: 'WIN', rulesVersion: 3, seed: 'unit-1' });
     expect(stagesOf(run.before)).toBe('1 / 1 / null');
   });
 

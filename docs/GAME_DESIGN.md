@@ -832,3 +832,7 @@ affix generation are deferred to PR 6.2, equipment-to-combat integration to PR
 ## Item affixes (Phase 6 PR 6.2 — IN PROGRESS)
 
 New items use item-generation V1. COMMON has 0 affixes; MAGIC 1; RARE 2; EPIC 3; LEGENDARY 4; MYTHIC 5. Rarity primarily adds breadth rather than stronger ranges. Initial affixes cover only Max Health, Damage, Attack Speed, Critical Chance and Critical Damage, with slot-specific data-driven eligibility. Every roll is immutable and displayed in stable order. Item definitions have no intrinsic power in this first pass, so COMMON is an intentional zero-modifier baseline. Existing Phase 5 items are legacy V0 with zero affixes. Equipment still has no combat effect until PR 6.3.
+
+## IN PROGRESS — Equipment combat power (Phase 6.3)
+
+Only equipped items affect new online fights. Their immutable rolled affixes contribute Damage, Max Health, Attack Speed, Critical Chance, and Critical Damage through the canonical modifier resolver. Common and legacy items currently add no power. Attack Speed uses 10,000 basis points per attack/second; Critical Chance uses 0–10,000 bp; Critical Damage is a total multiplier where 15,000 is 150%. Offline claims remain level-only pending an aggregate snapshot design (ADR-029).

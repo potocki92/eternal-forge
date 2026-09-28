@@ -146,6 +146,7 @@ export class InMemoryGameRepository
       character: stored.character,
       version: stored.version,
       existingRun: this.runFor(characterId, idempotencyKey) ?? null,
+      equippedItems: [],
     });
   }
 

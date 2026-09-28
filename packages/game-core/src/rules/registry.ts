@@ -3,6 +3,7 @@ import { HugeNumber } from '../huge-number/index.js';
 import type { GameRules } from './game-rules.js';
 import { RULES_V1 } from './v1.js';
 import { RULES_V2 } from './v2.js';
+import { RULES_V3 } from './v3.js';
 
 /** Rule sets are shared, immutable data; freezing makes accidental mutation fail loudly. */
 function deepFreeze<T extends object>(value: T): Readonly<T> {
@@ -23,7 +24,7 @@ function deepFreeze<T extends object>(value: T): Readonly<T> {
  * still reference it.
  */
 const RULES_BY_VERSION: ReadonlyMap<number, GameRules> = new Map(
-  [RULES_V1, RULES_V2].map((rules) => [rules.version, deepFreeze(rules)] as const),
+  [RULES_V1, RULES_V2, RULES_V3].map((rules) => [rules.version, deepFreeze(rules)] as const),
 );
 
 export function getGameRules(version: number): GameRules {

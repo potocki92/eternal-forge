@@ -698,3 +698,7 @@ The client submits no definition, rarity, item ID, chance or seed. Authenticated
 ## Item affix authority — IN PROGRESS (Phase 6 PR 6.2)
 
 The browser cannot submit rarity, affix identity/value, seed, generation version or item power. Affixes are generated in Game Core from a server-held combat seed and persisted with the reward in one transaction. PostgreSQL uniqueness prevents duplicate definitions/positions, RLS is enabled, browser table privileges are revoked, and no mint/reroll endpoint exists. Retries read the single persisted snapshot rather than generating again. Legacy items are deterministically version 0 with no rolls.
+
+## Equipment-powered combat authority — IN PROGRESS (Phase 6.3)
+
+Combat requests still contain no gameplay stats or item selection. The API loads owner-scoped equipped instances and immutable rolls, resolves them in Game Core, and persists the exact stat snapshot. Inventory-only items have no effect. Equipment mutations and combat share the database-backed character version, preventing half-old/half-new commits across API replicas. Retry uses the original CombatRun snapshot and cannot gain power from later gear. Browser table privileges remain revoked and no privileged key is exposed.
