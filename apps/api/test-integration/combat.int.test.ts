@@ -70,6 +70,7 @@ async function newApiInstance(seeds?: CombatSeedSource): Promise<INestApplicatio
     players: new PrismaPlayerRepository(prisma),
     combats: new PrismaCombatRepository(prisma),
     selections: new PrismaStageSelectionRepository(prisma),
+    inventory: new PrismaInventoryRepository(prisma),
     seeds: seeds ?? sequentialSeeds(`int-${randomUUID().slice(0, 8)}`),
     clock,
   });
@@ -285,6 +286,15 @@ describe('combat against PostgreSQL — the loop', () => {
     const run = await prisma.client.combatRun.findUniqueOrThrow({ where: { id: body.combat.id } });
     expect(['1e1', '3e1']).toContain(snapshotDamage(run).toString());
     expect(await prisma.client.combatRun.count({ where: { characterId } })).toBe(1);
+    const equipment = await prisma.client.characterEquipment.findMany({ where: { characterId } });
+    expect(equipment).toEqual([
+      expect.objectContaining({ slot: 'WEAPON', itemInstanceId: itemId }),
+    ]);
+    const character = await characterRow(characterId);
+    expect(character.version).toBe(2n);
+    expect(gold(character).eq(HugeNumber.fromParts(run.rewardGoldCoef, run.rewardGoldExp))).toBe(
+      true,
+    );
   });
 
   it('replacement uses only Sword B while Sword A combat history stays immutable', async () => {
