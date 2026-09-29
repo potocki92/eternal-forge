@@ -4,9 +4,7 @@ import {
   getGameRules,
   resolveStageAttempt,
   resolveItemDrop,
-  deriveBaseCharacterStats,
-  resolveEquippedCharacterStats,
-  toCombatStats,
+  resolvePlayerCombatStats,
   type CharacterProgress,
   type HugeNumber,
   type StageAttemptResult,
@@ -140,15 +138,13 @@ export class RunCombatUseCase {
       return { kind: 'stage-not-playable' };
     }
 
-    const playerStatsSnapshot = toCombatStats(
-      resolveEquippedCharacterStats({
-        baseStats: deriveBaseCharacterStats(
-          target.character.level,
-          getGameRules(GAME_RULES_VERSION),
-        ),
-        equippedItems: target.equippedItems,
-      }),
-    );
+    // The same Game Core pipeline the character-stats query uses, so the
+    // stats a player reads are the stats this combat snapshots.
+    const playerStatsSnapshot = resolvePlayerCombatStats({
+      level: target.character.level,
+      equippedItems: target.equippedItems,
+      rules: getGameRules(GAME_RULES_VERSION),
+    });
     const attempt = resolveStageAttempt({
       progress: progressOf(target.character),
       // The persisted choice, never a request value: the client cannot pick

@@ -4,12 +4,14 @@ import {
   ITEM_GENERATION_VERSION,
   generateItemAffixes,
   ITEM_CATALOG,
-  parseItemInstance,
-  parseRolledAffix,
   type StageMode,
 } from '@eternal-forge/game-core';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
+import {
+  toItemInstance,
+  type ItemInstanceRow,
+} from '../../inventory/infrastructure/item-instance.rows.js';
 import { toCharacter } from '../../player/infrastructure/prisma-player.repository.js';
 import {
   toStageProgress,
@@ -55,20 +57,7 @@ interface CombatRunRow {
   readonly playerAttackSpeedBp: number | null;
   readonly playerCritChanceBp: number | null;
   readonly playerCritDamageBp: number | null;
-  readonly awardedItem?: {
-    readonly id: string;
-    readonly definitionId: string;
-    readonly rarity: string;
-    readonly generationVersion: number;
-    readonly affixes: readonly {
-      readonly id: string;
-      readonly affixDefinitionId: string;
-      readonly stat: string;
-      readonly operation: string;
-      readonly value: string;
-      readonly position: number;
-    }[];
-  } | null;
+  readonly awardedItem?: ItemInstanceRow | null;
 }
 
 /** Thrown inside the transaction to roll it back when the version moved on. */
@@ -266,28 +255,7 @@ function toCombatRun(row: CombatRunRow): CombatRun {
     },
     playerStatsSnapshot: snapshotFromRow(row),
     resolvedAt: row.createdAt,
-    awardedItem:
-      row.awardedItem == null
-        ? null
-        : parseItemInstance(
-            {
-              id: row.awardedItem.id,
-              definitionId: row.awardedItem.definitionId,
-              rarity: row.awardedItem.rarity,
-              generationVersion: row.awardedItem.generationVersion,
-              affixes: row.awardedItem.affixes.map((roll) =>
-                parseRolledAffix({
-                  id: roll.id,
-                  definitionId: roll.affixDefinitionId,
-                  stat: roll.stat,
-                  operation: roll.operation,
-                  value: roll.value,
-                  position: roll.position,
-                }),
-              ),
-            },
-            ITEM_CATALOG,
-          ),
+    awardedItem: row.awardedItem == null ? null : toItemInstance(row.awardedItem),
   };
 }
 
@@ -328,39 +296,4 @@ function snapshotFromRow(row: CombatRunRow) {
     critChanceBp: playerCritChanceBp,
     critDamageBp: playerCritDamageBp,
   };
-}
-
-function toItemInstance(row: {
-  id: string;
-  definitionId: string;
-  rarity: string;
-  generationVersion: number;
-  affixes: readonly {
-    id: string;
-    affixDefinitionId: string;
-    stat: string;
-    operation: string;
-    value: string;
-    position: number;
-  }[];
-}) {
-  return parseItemInstance(
-    {
-      id: row.id,
-      definitionId: row.definitionId,
-      rarity: row.rarity,
-      generationVersion: row.generationVersion,
-      affixes: row.affixes.map((roll) =>
-        parseRolledAffix({
-          id: roll.id,
-          definitionId: roll.affixDefinitionId,
-          stat: roll.stat,
-          operation: roll.operation,
-          value: roll.value,
-          position: roll.position,
-        }),
-      ),
-    },
-    ITEM_CATALOG,
-  );
 }
