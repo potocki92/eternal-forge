@@ -3,17 +3,31 @@
 A browser-first idle action RPG built for deep character progression,
 theorycrafting, competitive rankings and effectively unlimited growth.
 
-> The repository is named `external-forge`; the product is **Eternal Forge**.
+**Current phase: Phase 6 — Item Power & Character Stats.** PRs 6.1–6.3 are
+merged; **PR 6.4 — Character Stats & Gear Comparison is in progress.** See
+[`docs/ROADMAP.md`](docs/ROADMAP.md) for the authoritative state of every phase.
 
-**Current phase: Phase 3 — First Gameplay Loop** (implemented, awaiting CI and
-approval). A signed-in player fights the enemy on their hero's current stage.
-The server resolves every combat with the deterministic Game Core, grants
-gold and experience, levels the hero up, advances a stage on a win and falls
-back a stage on a loss. A defeat never erases the records: the highest stage
-reached and the highest stage cleared are kept separately from the current
-stage (ADR-020). Bosses come every tenth stage. The result is
-persisted atomically and played back on a mobile-first game screen with a
-PixiJS combat scene. See [`docs/ROADMAP.md`](docs/ROADMAP.md).
+What a signed-in player can do today:
+
+- **Fight** the enemy on the hero's current stage, by hand or with online
+  auto-battle. The server resolves every combat with the deterministic Game
+  Core, grants gold and experience, levels the hero up and moves it along the
+  stage ladder. The highest stage reached and the highest stage cleared are
+  records a defeat never erases (ADR-020). Bosses come every tenth stage.
+- **Choose where to fight**: keep climbing, or farm any stage already reached
+  (ADR-021).
+- **Collect offline progress** on return — a capped, server-timed catch-up
+  that only farms stages already cleared (ADR-023).
+- **Find items** on online victories. Each item has a rarity and immutable
+  rolled affixes (ADR-026, ADR-028).
+- **Equip them** on a seven-slot loadout. Equipped affixes change the stats of
+  the next online combat, and every combat records the exact stats it used
+  (ADR-029). Offline progress still uses level-only stats.
+- **Read the build** (PR 6.4, in progress): a character sheet of the five
+  combat stats — Damage, Max Health, Attack Speed, Critical Chance and
+  Critical Damage — with a base / gear / total breakdown, and a comparison of
+  any item against the one it would replace. The server computes every number
+  (ADR-030).
 
 ---
 
@@ -47,6 +61,7 @@ Then open:
 
 - http://localhost:3000 — start page, sign-in and registration
 - http://localhost:3000/play — the game (requires sign-in)
+- http://localhost:3000/play/gear — character sheet, equipment and inventory
 - http://localhost:3000/status — live readiness of the API and its dependencies
 - http://localhost:3001/health — API liveness
 - http://localhost:3001/health/ready — API readiness
@@ -133,6 +148,16 @@ docs/adr/     Architecture Decision Records
   CSPRNG, Game Core decides everything, and one conditional transaction
   records the result. Retries replay, races produce one combat, and combat
   time cannot be skipped ([ADR-019](docs/adr/ADR-019-server-authoritative-combat-transaction.md)).
+- **Items are immutable power.** Rolled affixes are persisted once and never
+  re-rolled on read; equipped items feed one canonical stat pipeline, and each
+  combat stores the stats it fought with
+  ([ADR-027](docs/adr/ADR-027-character-stats-modifier-pipeline.md),
+  [ADR-028](docs/adr/ADR-028-item-affixes-deterministic-generation.md),
+  [ADR-029](docs/adr/ADR-029-equipment-power-combat-stat-snapshots.md)).
+- **Stats the player reads are the stats combat uses.** The character sheet
+  and every item comparison come from the same Game Core function as the
+  combat snapshot, served by read-only queries
+  ([ADR-030](docs/adr/ADR-030-character-stats-and-equipment-preview-queries.md)).
 
 Start with [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), then
 [`docs/adr/`](docs/adr/README.md).

@@ -1,6 +1,6 @@
 # Eternal Forge — Security Model
 
-Status: PARTIALLY IMPLEMENTED (Phases 0–3, Phase 4 PRs 4.1–4.3) / EVOLVING
+Status: PARTIALLY IMPLEMENTED (Phases 0–5, Phase 6 PRs 6.1–6.3; PR 6.4 in progress) / EVOLVING
 
 The principles below are binding from the first line of gameplay code. A
 per-control implementation status is listed at the end of this document.
@@ -687,18 +687,56 @@ Can the client fake it? Can it be replayed? Can it be called concurrently? Can
 rewards be duplicated? Can another player's resource be targeted? Can invalid
 numeric values enter the system? Can the operation leave partial state?
 
-## Inventory/equipment authority — COMPLETE / APPROVED (Phase 5 PR 5.2)
+## Inventory/equipment authority — IMPLEMENTED (Phase 5 PR 5.2)
 
 The browser can read owned state and request equip by opaque item ID or unequip by canonical slot. It cannot submit ownership, definition, rarity, or equip slot and has no item-creation endpoint. Reads and writes are scoped by verified `auth_user_id`; foreign and absent resources share `NOT_FOUND`. Composite foreign keys enforce same-character equipment. RLS is enabled with no browser policies and `anon`/`authenticated` table privileges are revoked; only the privileged API accesses these tables.
 
-## Combat item reward authority — IN PROGRESS (Phase 5 PR 5.3)
+## Combat item reward authority — IMPLEMENTED (Phase 5 PR 5.3)
 
 The client submits no definition, rarity, item ID, chance or seed. Authenticated online combat derives loot under rules v2 and persists it in the combat transaction. A unique reward FK and combat idempotency identity make retries and concurrent replicas converge on one persistent item. Failed, stale, unauthorized and losing commands create none. Existing item RLS and revoked browser privileges apply; no public item-mint route exists. Offline drops are explicitly disabled rather than implemented through an unbounded per-fight insert loop.
 
-## Item affix authority — IN PROGRESS (Phase 6 PR 6.2)
+## Item affix authority — IMPLEMENTED (Phase 6 PR 6.2)
 
 The browser cannot submit rarity, affix identity/value, seed, generation version or item power. Affixes are generated in Game Core from a server-held combat seed and persisted with the reward in one transaction. PostgreSQL uniqueness prevents duplicate definitions/positions, RLS is enabled, browser table privileges are revoked, and no mint/reroll endpoint exists. Retries read the single persisted snapshot rather than generating again. Legacy items are deterministically version 0 with no rolls.
 
-## Equipment-powered combat authority — IN PROGRESS (Phase 6.3)
+## Equipment-powered combat authority — IMPLEMENTED (Phase 6 PR 6.3)
 
 Combat requests still contain no gameplay stats or item selection. The API loads owner-scoped equipped instances and immutable rolls, resolves them in Game Core, and persists the exact stat snapshot. Inventory-only items have no effect. Equipment mutations and combat share the database-backed character version, preventing half-old/half-new commits across API replicas. Retry uses the original CombatRun snapshot and cannot gain power from later gear. Browser table privileges remain revoked and no privileged key is exposed.
+
+## Character stat and preview queries — IN PROGRESS (Phase 6 PR 6.4, ADR-030)
+
+`GET /player/characters/:characterId/stats` and
+`GET /player/characters/:characterId/stats/preview` are read-only queries
+behind the global guard.
+
+- **No gameplay input.** The preview query is a strict shared schema with
+  exactly one intent: `equip=<uuid>` or `unequip=<SLOT>`. A slot for an
+  equip, rarity, affixes, any stat, a seed or a character version is a 400,
+  and so is a repeated parameter. Error bodies never echo the submitted value.
+- **Ownership in the read.** The character is read by id *and* the verified
+  `auth_user_id`; a preview candidate must belong to that character. Another
+  player's character or item — through either character id — is `404
+  NOT_FOUND`, indistinguishable from a missing one.
+- **Read-only by construction.** The repository port has only a read
+  method, run in a `REPEATABLE READ` transaction that writes nothing. A preview
+  never changes equipment, `characters.version`, inventory, affixes or combat
+  history; integration tests compare the persisted state before and after,
+  also while previews race an equip.
+- **One pipeline.** Stats and previews come from the same Game Core function
+  that produces the combat snapshot; the browser computes and submits no stat.
+  A displayed or previewed value cannot grant power: combat re-reads the
+  equipment itself.
+- **Minimal disclosure.** Responses carry no seed, no internal combat detail
+  and no Prisma row. The stat sources expose item name keys, rarity and roll
+  values but no instance or roll UUIDs. Item DTOs in a preview are the
+  caller's own items.
+- **Cost.** One indexed read of at most eight item instances per request; no
+  inventory scan. General rate limiting is still PLANNED (see Known
+  limitations).
+
+Standing review answers: the client cannot fake a stat (none is accepted);
+replaying a query changes nothing; concurrent queries and mutations cannot
+produce mixed persisted state (queries write nothing and read one snapshot);
+no reward exists to duplicate; foreign resources are 404; numeric values are
+canonical HugeNumber strings and integer basis points, validated by the shared
+contract; there is no partial state to leave.

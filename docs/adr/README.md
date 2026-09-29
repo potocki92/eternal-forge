@@ -31,7 +31,13 @@ record; it is never edited away (CLAUDE.md — "ADR").
 | [021](ADR-021-stage-selection-and-farming.md) | Stage selection and farming | Accepted |
 | [022](ADR-022-online-auto-battle.md) | Online auto-battle: a client loop over the authoritative combat | Accepted |
 | [023](ADR-023-offline-progression.md) | Server-authoritative offline progression | Accepted |
-| [024](ADR-024-item-domain-model.md) | Item domain model and static catalog | Proposed |
+| [024](ADR-024-item-domain-model.md) | Item domain model and static catalog | Accepted |
+| [025](ADR-025-inventory-equipment-persistence.md) | Inventory and equipment persistence | Accepted |
+| [026](ADR-026-deterministic-item-drops.md) | Deterministic item drops and exactly-once reward persistence | Accepted |
+| [027](ADR-027-character-stats-modifier-pipeline.md) | Character stats and modifier pipeline | Accepted |
+| [028](ADR-028-item-affixes-deterministic-generation.md) | Item affixes and deterministic item generation | Accepted |
+| [029](ADR-029-equipment-power-combat-stat-snapshots.md) | Equipment power and combat stat snapshots | Accepted |
+| [030](ADR-030-character-stats-and-equipment-preview-queries.md) | Server-authoritative character stats and equipment preview queries | Proposed |
 
 ## Format
 

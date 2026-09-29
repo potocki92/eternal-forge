@@ -1,6 +1,6 @@
 # Eternal Forge — UI & UX System
 
-## Gear experience — IN PROGRESS (Phase 5 PR 5.4)
+## Gear experience — IMPLEMENTED (Phase 5 PR 5.4)
 
 The authenticated `/play/gear` route presents the seven-slot loadout beside the
 owned, unequipped inventory. On phones these become a vertical Equipment →
@@ -8,7 +8,9 @@ Inventory flow with two-column tappable cards and a bottom-anchored native
 dialog; desktop uses a 40/60-style split. Rarity always has a text label in
 addition to its restrained token color. Equipment mutations wait for the
 authoritative API response, update both views together, and refresh on errors.
-Combat drops appear as a non-blocking reward card linking to Gear.
+Combat drops appear as a non-blocking reward card linking to Gear. Phase 6
+PR 6.4 adds the character sheet and item comparison — see "Character sheet and
+gear comparison (Phase 6 PR 6.4)" at the end of this document.
 
 Status: EARLY DESIGN — foundations IMPLEMENTED (Phase 0)
 
@@ -688,3 +690,63 @@ Status: IMPLEMENTED — presentation over the unchanged offline claim (ADR-023).
   `prefers-reduced-motion`. The dialog is scroll-contained for short screens,
   respects safe-area insets, has no horizontal overflow at 390×844, and uses
   the same responsive composition on desktop.
+
+---
+
+# Character sheet and gear comparison (Phase 6 PR 6.4)
+
+Status: IN PROGRESS (ADR-030). Presentation of server-resolved stats only.
+
+```
+phone (390×844)                          desktop
+┌──────────────────────────────┐         ┌──────────────┬──────────────────┐
+│ CHARACTER            Level 24│         │ Character    │ Inventory        │
+│ Ember                        │         │ sheet        │                  │
+│ ┌──────────┐┌──────────────┐ │         ├──────────────┤                  │
+│ │DAMAGE    ││MAX HEALTH    │ │         │ Equipment    │                  │
+│ │143       ││382           │ │         │              │                  │
+│ ├──────────┤├──────────────┤ │         └──────────────┴──────────────────┘
+│ │ATK SPEED ││CRIT CHANCE   │ │
+│ │1.27 / sec││14.35%  MAX   │ │  item sheet (bottom sheet on phones,
+│ ├──────────┴┴──────────────┤ │  centred dialog on desktop):
+│ │CRIT DAMAGE  168.00%      │ │   IF YOU EQUIP THIS
+│ └──────────────────────────┘ │   Replaces MAGIC Forged Iron Sword
+│ Stat breakdown            ▾  │   ┃ Damage                 ↑ +18
+├──────────────────────────────┤   ┃ 143 → 161
+│ Equipment …  Inventory …     │   ┃ Max Health             ↓ -30
+└──────────────────────────────┘   ┃ 382 → 352
+                                   Unchanged: Attack Speed, …
+                                   [            Equip            ]  (sticky)
+```
+
+- **Character sheet.** Above the loadout (left column on desktop): hero name,
+  level and five stat tiles in a two-column grid, the odd last tile full
+  width. Values use the display face and tabular numbers. A stat at a hard
+  maximum carries a text `Max` marker. No DPS, power score or Armor.
+- **Breakdown.** A native `<details>` "Stat breakdown": for each stat Base,
+  Gear (signed, `None` when zero) and Total, then the equipped rolls that fed
+  it by item name and rarity colour, plus one sentence on how flat and
+  percentage bonuses combine. Collapsed by default so the loadout stays close.
+- **Comparison.** Inside the item sheet: what the candidate replaces (or the
+  empty slot it fills), then one row per changed stat — label, current →
+  after, and a signed delta with an arrow. Colour (success/danger via a
+  `--tone` token) is never the only signal: each row has a hidden sentence
+  such as "Damage increases by 18, from 143 to 161." Unchanged stats collapse
+  into one muted line. A zero effect reads "No effective stat change"; a roll
+  into a maximum adds "Critical Chance is already at the maximum — more has
+  no effect." A worn item shows "If you unequip this" instead.
+- **States.** Stats: skeleton tiles with a status message, then a
+  stats-specific error with Retry (inventory still renders). Comparison:
+  skeleton rows while loading, with the slot occupant shown from local data
+  meanwhile; a warning with Try again on failure and no invented numbers —
+  Equip stays available because the server decides the result.
+- **After Equip/Unequip.** The sheet closes, a polite status announces the
+  change, focus moves to the equipped slot (or back to the item's inventory
+  card), and the character sheet refetches. The combat screen's hero health
+  between fights uses the same authoritative stats.
+- **Layout.** No horizontal scroll at 375×667, 390×844 and 430×932. The item
+  sheet scrolls on its own (`overscroll-behavior: contain`) and the Equip
+  action is sticky at its bottom above the safe-area inset. On desktop the
+  dialog is centred with a bounded height.
+- **Motion.** Values do not animate; the only transition is the breakdown
+  marker, covered by the global reduced-motion guard.
