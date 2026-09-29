@@ -1,4 +1,5 @@
 import type {
+  CharacterStatsResponse,
   CombatResponse,
   OfflineProgressResponse,
   PlayerStateResponse,
@@ -42,6 +43,35 @@ export function playerStateFixture(): PlayerStateResponse {
       nextCombatAt: '2026-09-22T10:00:00.000Z',
     },
     serverTime: '2026-09-22T10:00:00.000Z',
+  };
+}
+
+/** A level-1 hero with nothing equipped: base and effective stats agree. */
+export function characterStatsFixture(): CharacterStatsResponse {
+  const values = {
+    maxHealth: '1e2',
+    damage: '1e1',
+    attackSpeedBp: 10_000,
+    criticalChanceBp: 500,
+    criticalDamageBp: 15_000,
+  };
+  return {
+    level: 1,
+    characterVersion: '0',
+    rulesVersion: 3,
+    stats: {
+      base: values,
+      bonus: {
+        maxHealth: '0',
+        damage: '0',
+        attackSpeedBp: 0,
+        criticalChanceBp: 0,
+        criticalDamageBp: 0,
+      },
+      effective: values,
+      atMaximum: [],
+    },
+    sources: [],
   };
 }
 

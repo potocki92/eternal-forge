@@ -6,7 +6,7 @@ import { useCallback, useReducer, useRef } from 'react';
 import { useAuth } from '@/auth/auth-provider';
 import type { PlayerStateResult } from '@/player/player-api';
 import { playerStateKey } from '@/player/use-player';
-import { inventoryKey } from '@/gear/use-gear';
+import { inventoryKey, markGearStateStale } from '@/gear/use-gear';
 import { startCombat } from './combat-api';
 import {
   INITIAL_SESSION,
@@ -70,6 +70,7 @@ export function useCombatSession(userId: string, characterId: string): CombatSes
             }
           : previous,
       );
+      markGearStateStale(queryClient, userId, characterId, response.combat.levelsGained > 0);
       const dropped = response.combat.rewards.item;
       if (dropped !== null) {
         const key = inventoryKey(userId, characterId);

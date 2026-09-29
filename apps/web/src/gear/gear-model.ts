@@ -1,10 +1,12 @@
 import type {
+  CharacterStatSourceDto,
   EquipmentResponse,
   EquipmentSlotDto,
   ItemInstanceDto,
   ItemRarityDto,
 } from '@eternal-forge/contracts';
 import { formatHuge } from '../game/format/format-huge';
+import { STAT_LABEL, formatPercent } from './stats/stat-format';
 
 export const EQUIPMENT_SLOTS: readonly EquipmentSlotDto[] = [
   'HELMET',
@@ -35,7 +37,7 @@ const ITEM_NAMES: Readonly<Record<string, string>> = {
   'item.forgeheart_amulet.name': 'Forgeheart Amulet',
 };
 
-export function itemName(item: ItemInstanceDto): string {
+export function itemName(item: Pick<ItemInstanceDto, 'nameKey' | 'definitionId'>): string {
   return ITEM_NAMES[item.nameKey] ?? item.definitionId.replaceAll('_', ' ');
 }
 
@@ -67,19 +69,15 @@ export function unequippedItems(
     );
 }
 
-const STAT_LABEL: Readonly<Record<ItemInstanceDto['affixes'][number]['stat'], string>> = {
-  MAX_HEALTH: 'Max Health',
-  DAMAGE: 'Damage',
-  ATTACK_SPEED: 'Attack Speed',
-  CRITICAL_CHANCE: 'Critical Chance',
-  CRITICAL_DAMAGE: 'Critical Damage',
-};
-export function affixLabel(affix: ItemInstanceDto['affixes'][number]): string {
+/** The roll as written on the item: `+18 Damage`, `+7.00% Critical Damage`. */
+export function affixLabel(
+  affix: ItemInstanceDto['affixes'][number] | CharacterStatSourceDto,
+): string {
   const percentage =
     affix.operation === 'ADDITIVE_PERCENT' ||
     affix.stat === 'ATTACK_SPEED' ||
     affix.stat === 'CRITICAL_CHANCE' ||
     affix.stat === 'CRITICAL_DAMAGE';
-  const value = percentage ? `${(Number(affix.value) / 100).toFixed(2)}%` : formatHuge(affix.value);
+  const value = percentage ? formatPercent(Number(affix.value)) : formatHuge(affix.value);
   return `+${value} ${STAT_LABEL[affix.stat]}`;
 }

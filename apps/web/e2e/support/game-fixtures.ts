@@ -43,6 +43,54 @@ export async function grantItem(
   }
 }
 
+export interface AffixRollFixture {
+  readonly affixDefinitionId: string;
+  readonly stat: string;
+  readonly operation: 'FLAT' | 'ADDITIVE_PERCENT';
+  /** Canonical persisted value: a HugeNumber string for flat health/damage, else basis points. */
+  readonly value: string;
+}
+
+/**
+ * Trusted setup of an item-generation V1 instance with persisted affix rolls,
+ * as a combat drop would have created it. Equipping, comparing and combat
+ * still go through the real API.
+ */
+export async function grantPoweredItem(
+  heroName: string,
+  definitionId: string,
+  rarity: string,
+  affixes: readonly AffixRollFixture[],
+): Promise<string> {
+  const client = new pg.Client({ connectionString: databaseUrl });
+  await client.connect();
+  const id = randomUUID();
+  try {
+    await client.query('BEGIN');
+    const result = await client.query(
+      `INSERT INTO item_instances (id, character_id, definition_id, rarity, generation_version)
+       SELECT $1, id, $2, $3, 1 FROM characters WHERE name = $4 RETURNING id`,
+      [id, definitionId, rarity, heroName],
+    );
+    if (result.rowCount !== 1) throw new Error(`Expected hero named ${heroName}`);
+    for (const [position, affix] of affixes.entries()) {
+      await client.query(
+        `INSERT INTO item_affix_rolls
+           (item_instance_id, affix_definition_id, stat, operation, value, generation_version, position)
+         VALUES ($1, $2, $3, $4, $5, 1, $6)`,
+        [id, affix.affixDefinitionId, affix.stat, affix.operation, affix.value, position],
+      );
+    }
+    await client.query('COMMIT');
+    return id;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    await client.end();
+  }
+}
+
 /**
  * Moves the hero named `heroName` (unique per test account) to `stage` as a
  * hero pushing its record would stand there: `stage` reached, every earlier
