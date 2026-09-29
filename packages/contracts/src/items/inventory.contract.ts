@@ -42,9 +42,11 @@ export const equipmentSchema = z.strictObject({
   RING: itemInstanceSchema.nullable(),
   AMULET: itemInstanceSchema.nullable(),
 });
+/** The character's optimistic-concurrency version, a canonical decimal string. */
+export const characterVersionSchema = z.string().regex(/^(?:0|[1-9][0-9]*)$/);
 export const equipmentResponseSchema = z.strictObject({
   equipment: equipmentSchema,
-  characterVersion: z.string().regex(/^(?:0|[1-9][0-9]*)$/),
+  characterVersion: characterVersionSchema,
 });
 export const equipItemRequestSchema = z.strictObject({ itemInstanceId: z.uuid() });
 export const unequipItemRequestSchema = z.strictObject({ slot: equipmentSlotSchema });

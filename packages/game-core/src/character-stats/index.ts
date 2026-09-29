@@ -12,6 +12,22 @@ export type {
 } from './character-stats.js';
 export { resolveCharacterStats } from './resolve-character-stats.js';
 export { resolveEquippedCharacterStats, toCombatStats } from './equipment-stats.js';
+export {
+  changedCharacterStats,
+  describeCharacterStats,
+  diffCharacterStats,
+  equippedItemsOf,
+  previewEquipmentChange,
+  resolvePlayerCombatStats,
+} from './character-sheet.js';
+export type {
+  CharacterStatDelta,
+  CharacterStatSheet,
+  EquipmentChange,
+  EquipmentChangePreview,
+  EquipmentLoadout,
+  PlayerStatSource,
+} from './character-sheet.js';
 export { STAT_MODIFIER_OPERATIONS, STAT_MODIFIER_SOURCE_TYPES } from './stat-modifier.js';
 export type {
   AdditivePercentStatModifier,
