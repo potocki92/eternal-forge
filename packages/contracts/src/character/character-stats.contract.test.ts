@@ -142,6 +142,8 @@ describe('stats preview query', () => {
   it('accepts exactly one intent: an item to equip or a slot to empty', () => {
     expect(statsPreviewQuerySchema.parse({ equip: ITEM_ID })).toEqual({ equip: ITEM_ID });
     expect(statsPreviewQuerySchema.parse({ unequip: 'RING' })).toEqual({ unequip: 'RING' });
+    const lower = 'abcdef01-2345-4abc-8def-0123456789ab';
+    expect(statsPreviewQuerySchema.parse({ equip: lower })).toEqual({ equip: lower });
   });
 
   it('rejects client-authoritative fields, both intents and malformed values', () => {
@@ -155,6 +157,7 @@ describe('stats preview query', () => {
       { equip: ITEM_ID, seed: 'x' },
       { equip: ITEM_ID, characterVersion: '99' },
       { equip: 'not-a-uuid' },
+      { equip: 'ABCDEF01-2345-4ABC-8DEF-0123456789AB' },
       { equip: [ITEM_ID, OTHER_ID] },
       { unequip: 'ring' },
     ]) {

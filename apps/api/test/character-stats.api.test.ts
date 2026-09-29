@@ -253,6 +253,8 @@ describe('GET /player/characters/:characterId/stats/preview', () => {
       `?equip=${id}&unequip=WEAPON`,
       `?equip=${id}&equip=${randomUUID()}`,
       '?equip=not-a-uuid',
+      // Valid RFC 4122, but not the canonical lowercase form item IDs use.
+      `?equip=${id.toUpperCase()}`,
       '?unequip=weapon',
     ]) {
       const response = await get(token, `${base}${query}`).expect(400);

@@ -133,6 +133,14 @@ describe('CharacterSheet', () => {
     expect(onRetry).toHaveBeenCalledOnce();
   });
 
+  it('says when a refresh failed instead of passing old totals off as current', () => {
+    const { onRetry } = sheet({ failed: true });
+    expect(screen.getByRole('alert')).toHaveTextContent('Your stats could not be refreshed.');
+    expect(tile('DAMAGE')).toHaveTextContent('143');
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(onRetry).toHaveBeenCalledOnce();
+  });
+
   it('keeps the last known stats visible while they refresh', () => {
     sheet({ refreshing: true });
     expect(tile('DAMAGE')).toHaveTextContent('143');

@@ -99,7 +99,11 @@ export type CharacterStatsResponse = z.infer<typeof characterStatsResponseSchema
  * item and every stat.
  */
 export const statsPreviewQuerySchema = z.union([
-  z.strictObject({ equip: z.uuid() }),
+  // Item instance IDs are canonical lowercase UUIDs (ADR-024); an uppercase
+  // spelling is refused here rather than failing deeper in the domain.
+  z.strictObject({
+    equip: z.uuid().regex(/^[0-9a-f-]+$/u, 'Must be a lowercase canonical UUID.'),
+  }),
   z.strictObject({ unequip: equipmentSlotSchema }),
 ]);
 export type StatsPreviewQuery = z.infer<typeof statsPreviewQuerySchema>;

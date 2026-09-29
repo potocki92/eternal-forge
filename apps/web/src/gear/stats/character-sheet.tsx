@@ -56,11 +56,19 @@ export function CharacterSheet({
         )}
       </header>
 
-      {failed && stats === undefined ? (
+      {failed ? (
         <div className="character-sheet__error">
-          <Alert tone="danger">Your stats could not be loaded.</Alert>
-          <Button variant="secondary" onClick={onRetry}>
-            Retry
+          {stats === undefined ? (
+            <Alert tone="danger">Your stats could not be loaded.</Alert>
+          ) : (
+            // A failed refresh keeps the last answer: say so rather than let
+            // old totals pass for the current build.
+            <Alert tone="warning">
+              Your stats could not be refreshed. These are the last values we received.
+            </Alert>
+          )}
+          <Button variant="secondary" disabled={refreshing} onClick={onRetry}>
+            {refreshing ? 'Retrying…' : 'Retry'}
           </Button>
         </div>
       ) : null}
