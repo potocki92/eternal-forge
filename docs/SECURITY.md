@@ -736,7 +736,10 @@ behind the global guard.
 
 Standing review answers: the client cannot fake a stat (none is accepted);
 replaying a query changes nothing; concurrent queries and mutations cannot
-produce mixed persisted state (queries write nothing and read one snapshot);
+produce mixed persisted state (queries write nothing and read one snapshot),
+and no read can return a mixed state either — the stats, preview, inventory
+and equipment reads each run in one `REPEATABLE READ` snapshot, so a
+`characterVersion` always names the loadout returned with it;
 no reward exists to duplicate; foreign resources are 404; numeric values are
 canonical HugeNumber strings and integer basis points, validated by the shared
 contract; there is no partial state to leave.

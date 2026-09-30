@@ -1212,3 +1212,17 @@ stats and previews (`invalidateGearState`); a failure re-reads all of it. A
 combat or an offline claim marks the whole prefix stale without fetching, and
 refetches stats only after a level-up — the combat screen's idle hero health
 reads the stats query because `progression.hero` is level-only.
+
+### Read coherence
+
+A preview key's `characterVersion` is only meaningful if it names exactly the
+equipment it arrived with. Prisma loads relations with one `SELECT` each, so
+every authoritative gear read runs inside one `REPEATABLE READ` transaction:
+`PrismaCharacterStatsRepository.loadLoadout` (stats and previews) and
+`PrismaInventoryRepository.loadOwned` (`GET /inventory`, `GET /equipment`,
+and the reads inside equip and unequip). Each response is therefore one
+committed state — never version N with N + 1's equipment or items. This is a
+per-read guarantee, not real-time synchronisation: a write from another
+device leaves cached state stale until it is refetched. No row lock is taken.
+`test-integration/inventory-read-snapshot.int.test.ts` proves it by pausing
+the read before each of its statements in turn while an equip commits.

@@ -632,3 +632,12 @@ even though Prisma issues one `SELECT` per relation. It touches only
 `item_instances` (primary key; a preview candidate is fetched by id and owning
 character) and `item_affix_rolls` (index `(item_instance_id, position)`). The
 rest of the inventory is never read. No index was added.
+
+The inventory and equipment read (`GET /inventory`, `GET /equipment` and the
+reads inside equip and unequip) runs the same way since PR 6.4: the version,
+the owned `item_instances`, `character_equipment` and every
+`item_affix_rolls` row come from one `REPEATABLE READ` snapshot, so an
+equipment response's `characterVersion` names exactly the equipment returned
+with it. A read-only `REPEATABLE READ` transaction takes no row lock and
+cannot fail with a serialization error; equip and unequip keep their
+version-conditional write.
