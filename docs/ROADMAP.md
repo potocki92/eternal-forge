@@ -1,6 +1,6 @@
 # Eternal Forge — Development Roadmap
 
-Last updated: 2026-09-24
+Last updated: 2026-09-29
 
 # Current Phase
 
@@ -8,8 +8,11 @@ PHASE 6 — ITEM POWER & CHARACTER STATS
 
 Status:
 
-IN PROGRESS — Phase 5 is COMPLETE. PR 6.1 "Character Stats & Modifier
-Foundation" is COMPLETE / APPROVED (ADR-027); PR 6.2 is COMPLETE / APPROVED (ADR-028); PR 6.3 is IN PROGRESS (ADR-029); PR 6.4 is NOT STARTED.
+IN PROGRESS — Phase 5 is COMPLETE. In Phase 6, PR 6.1 "Character Stats &
+Modifier Foundation" (PR #19, ADR-027), PR 6.2 "Item Power & Affixes" (PR #20,
+ADR-028) and PR 6.3 "Equipment Stats & Combat Integration" (PR #21, ADR-029)
+are COMPLETE / MERGED. PR 6.4 "Character Stats & Gear Comparison" is IN
+PROGRESS (ADR-030) and closes the phase once reviewed and merged.
 
 Phase 4 is COMPLETE / APPROVED. PRs 4.1–4.4 are merged and the return
 experience was manually verified. Phase 5 is complete through merged PR 5.4;
@@ -759,8 +762,8 @@ The polished "welcome back" presentation is PR 4.4.
       `offline.rejected`
 - [x] documentation — ADR-023, ADR-022 accepted, ARCHITECTURE, GAME_DESIGN,
       DATABASE, SECURITY, DEPLOYMENT, UI_SYSTEM
-- [ ] GitHub Actions green on the pull request
-- [ ] user review and approval
+- [x] GitHub Actions green on the pull request
+- [x] user review and approval — merged as PR #11
 
 Validation (2026-09-23, local, PostgreSQL 16 and Redis 7):
 
@@ -889,11 +892,12 @@ Status: COMPLETE.
 
 # Phase 6 — Item Power & Character Stats
 
-Status: IN PROGRESS
+Status: IN PROGRESS — PRs 6.1–6.3 merged; PR 6.4 in review. The owner marks
+the phase COMPLETE after PR 6.4 is merged.
 
 ## PR 6.1 — Character Stats & Modifier Foundation
 
-Status: IN PROGRESS — review pending. Decision: ADR-027.
+Status: COMPLETE / MERGED — PR #19. Decision: ADR-027 (accepted).
 
 - [x] canonical current-combat character stat taxonomy
 - [x] pure, rules-aware base derivation
@@ -901,22 +905,94 @@ Status: IN PROGRESS — review pending. Decision: ADR-027.
 - [x] deterministic resolution, half-to-even rounding and invariant clamps
 - [x] large-number, ordering, validation and immutability tests
 - [x] architecture/game-design documentation
-- [ ] review and approval
+- [x] review and approval — merged as PR #19
 
 ## PR 6.2 — Item Power & Affixes
 
-Status: NOT STARTED
+Status: COMPLETE / MERGED — PR #20. Decision: ADR-028 (accepted).
+
+- [x] immutable V1 affix catalog with data-driven slot eligibility
+- [x] rarity budgets 0 / 1 / 2 / 3 / 4 / 5, `ITEM_GENERATION_VERSION = 1`
+- [x] deterministic generation from a dedicated seed derived after drop identity
+- [x] normalized `item_affix_rolls` persisted in the combat reward transaction
+- [x] legacy Phase 5 items marked generation 0 with no rolls
+- [x] `ItemInstance → StatModifier[]` and affix presentation in item detail
 
 ## PR 6.3 — Equipment Stats & Combat Integration
 
-Status: NOT STARTED
+Status: COMPLETE / MERGED — PR #21. Decision: ADR-029 (accepted).
 
-## PR 6.4 — Character Stats UI
+- [x] equipped items and rolls loaded with the character version
+- [x] `GAME_RULES_VERSION = 3`; V3 shares item drop rules / RNG stream V2
+- [x] immutable combat stat snapshots on `combat_runs`
+      (migration `20260927120000_combat_stat_snapshots`)
+- [x] replay from the snapshot, never from current gear
+- [x] equip/combat concurrency through `characters.version`
+- [x] offline progression intentionally level-only
 
-Status: NOT STARTED
+## PR 6.4 — Character Stats & Gear Comparison
+
+Status: IN PROGRESS — pull request open, awaiting review. Decision: ADR-030
+(proposed). DATABASE MIGRATION: NO. `GAME_RULES_VERSION` stays 3,
+`ITEM_GENERATION_VERSION` stays 1; combat output, item drops and affix balance
+are unchanged. Offline equipment power remains deferred.
+
+- [x] Game Core — `resolvePlayerCombatStats` (the one pipeline, now also used by
+      the combat use case), `describeCharacterStats` (base, combat-effective
+      values after caps, exact bonus, `atMaximum`), `diffCharacterStats`,
+      `previewEquipmentChange` (catalog slot, in-memory replacement)
+- [x] contracts — `characterStatsResponseSchema`, `statsPreviewQuerySchema`
+      (strict: one intent, nothing else), `statsPreviewResponseSchema`
+- [x] API — `GET /player/characters/:characterId/stats` and
+      `GET …/stats/preview?equip=<id>|unequip=<SLOT>`; owner-scoped,
+      read-only port, one `REPEATABLE READ` snapshot of level, version,
+      equipment and at most one candidate; foreign items are 404
+- [x] shared persisted-item row mapper for inventory, combat and stats adapters
+- [x] web — character sheet (five stats, `Max` marker, base / gear / total
+      breakdown with equipped rolls), comparison in item detail (replaces,
+      current → after, signed deltas with arrows and spoken text, unchanged
+      stats collapsed, no-change and cap notes), equipped-item "if you unequip
+      this" preview, sticky Equip on phones, centred dialog on desktop
+- [x] web — gear query keys under one prefix, `invalidateGearState` after
+      equip/unequip, stale marking after combats and offline claims, previews
+      keyed by character version
+- [x] web — the combat screen's idle hero health uses the authoritative
+      gear-aware stats instead of the level-only `progression.hero`
+- [x] the stale "equipment power is not applied to combat yet" note removed
+- [x] tests — Game Core, contracts, use cases, HTTP (auth, ownership,
+      tampered queries), PostgreSQL (stats == next combat snapshot,
+      preview == actual equip/unequip, caps, race with equip), web components,
+      Playwright (happy path, replacement, Common item, phone viewports)
+- [x] documentation — ADR-030, ADR statuses 023–029, README, ARCHITECTURE,
+      GAME_DESIGN, DATABASE, SECURITY, UI_SYSTEM, DEPLOYMENT
+- [ ] GitHub Actions green on the pull request
+- [ ] user review and approval
+
+Validation (2026-09-29, local, PostgreSQL 16 and Redis 7):
+
+- `pnpm run verify` (format check, lint, typecheck, unit tests, production
+  build, with the CI canary service-role key present): pass. Browser bundle
+  scan: clean.
+- Unit tests: 1 385 pass (PR 6.3: 1 296) — `game-core` 621 (+18),
+  `contracts` 172 (+13), `api` 267 (+23), `web` 259 (+35); other packages
+  unchanged. Combat goldens (rules v1 simulations, v3 equipment snapshots),
+  item-drop v2 and item-generation v1 vectors pass unmodified.
+- PostgreSQL integration: 139 pass (was 130), three consecutive runs of the
+  new suite. New `character-stats.int.test.ts`: current stats equal the next
+  `CombatRun` snapshot exactly (powered, bare and legacy loadouts); preview of
+  Sword B over Sword A writes nothing and equals the stats after the real
+  equip; unequip preview equals the real unequip; capped Critical Chance shows
+  no gain; the attack-speed cap is applied; already-equipped and Common
+  candidates; foreign items 404 through either character; 12 previews racing
+  an equip leave one commit and coherent answers.
+- Playwright: 75 pass, 1 skipped (the phone-only test on the desktop
+  project), mobile 390×844 and desktop; the phone test also covers 375×667
+  and 430×932.
+- Prisma schema valid; migrations applied; `prisma migrate diff
+  --exit-code`: no drift. No migration in this PR.
 
 Later effect mechanics such as bleed, poison and fire damage are not character
-stats in PR 6.1 and remain deferred. Content must remain data-driven.
+stats and remain deferred. Content must remain data-driven.
 
 ---
 

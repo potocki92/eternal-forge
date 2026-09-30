@@ -1,5 +1,6 @@
 import { Module, type MiddlewareConsumer, type NestModule } from '@nestjs/common';
 import { AuthModule } from './auth/auth.module.js';
+import { CharacterStatsModule } from './character-stats/character-stats.module.js';
 import { ClockModule } from './common/clock/clock.module.js';
 import { CombatModule } from './combat/combat.module.js';
 import { ApiConfigModule } from './config/api-config.module.js';
@@ -19,6 +20,7 @@ import { PlayerModule } from './player/player.module.js';
     CombatModule,
     OfflineModule,
     InventoryModule,
+    CharacterStatsModule,
   ],
 })
 export class AppModule implements NestModule {

@@ -2,7 +2,8 @@
 
 ## Status
 
-Proposed — 2026-09-24 (Phase 5, PR 5.2).
+Accepted — 2026-09-24. Proposed with Phase 5 PR 5.2; accepted when PR #14 was
+merged (with the ownership-FK mapping fix of PR #16).
 
 ## Context
 

@@ -216,3 +216,12 @@ character read without it.
 ## Phase 5 PR 5.3 migration ordering
 
 **AFTER MERGE: RUN "Deploy Supabase DEV" BEFORE VALIDATING THE NEW APPLICATION CODE AGAINST DEV.** Wait for migration `20260924180000_combat_item_drops` and schema-drift verification to succeed before deploying/restarting the API. The migration is additive and portable to plain PostgreSQL 16; it adds one nullable reward association, unique index and foreign key.
+
+## Phase 6 migration ordering
+
+PR 6.2 (`20260925120000_item_affixes`) and PR 6.3
+(`20260927120000_combat_stat_snapshots`) follow the same order: run **Deploy
+Supabase DEV** after merging, confirm no drift, then deploy the API.
+
+PR 6.4 (character stats and equipment preview) has **no migration**. It is an
+API and web deployment only and reads the schema PR 6.3 left.

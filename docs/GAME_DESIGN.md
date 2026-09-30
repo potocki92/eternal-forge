@@ -793,18 +793,19 @@ Build diversity is a core product requirement.
 
 Inventory means all item instances owned by the character, including equipped items. Equipment is a seven-slot mapping; equipping replaces the prior item atomically and unequipping leaves ownership unchanged. Empty unequip and repeated equip are successful no-ops. Items have no stats or combat effect until Phase 6.
 
-## Item drops — IN PROGRESS (Phase 5 PR 5.3, ADR-026)
+## Item drops — IMPLEMENTED (Phase 5 PR 5.3, ADR-026)
 
-Every eligible online victory, in either PROGRESS or FARM mode, has a rules-v2 10% item chance. The seven initial catalog definitions are selected uniformly. Rarity is COMMON 70%, MAGIC 20%, RARE 7%, EPIC 2%, LEGENDARY 0.9%, and MYTHIC 0.1%. Bosses and stage depth have no modifier. Losses never drop items. Drops enter inventory unequipped and still have no combat effect. Offline item drops are deliberately deferred pending a bounded aggregate reward design.
+Every eligible online victory, in either PROGRESS or FARM mode, has a rules-v2 10% item chance. The seven initial catalog definitions are selected uniformly. Rarity is COMMON 70%, MAGIC 20%, RARE 7%, EPIC 2%, LEGENDARY 0.9%, and MYTHIC 0.1%. Bosses and stage depth have no modifier. Losses never drop items. Drops enter inventory unequipped; since Phase 6 PR 6.3 their rolled affixes affect online combat once equipped. Offline item drops are deliberately deferred pending a bounded aggregate reward design.
 
-## Player gear experience — IN PROGRESS (Phase 5 PR 5.4)
+## Player gear experience — IMPLEMENTED (Phase 5 PR 5.4)
 
 Players can inspect the seven equipment slots and an inventory derived as all
 owned items minus equipped instance IDs. Equip replaces the slot in one server
 operation; Unequip returns the instance to the derived inventory. Cards show
-only canonical name, rarity and slot. No statistics or affixes are implied.
+only canonical name, rarity and slot. (Affixes, stats and comparison were added
+in Phase 6; see below.)
 
-## Character stats and modifiers — IN PROGRESS (Phase 6 PR 6.1, ADR-027)
+## Character stats and modifiers — IMPLEMENTED (Phase 6 PR 6.1, ADR-027)
 
 The canonical initial character stats are Max Health, Damage, Attack Speed,
 Critical Chance and Critical Damage because those are the values the current
@@ -825,14 +826,49 @@ basis-point unit, Critical Chance from 0% through 100%, and Critical Damage >=
 stats are persisted: authoritative progression plus future modifier source
 state is resolved on demand.
 
-This PR does not make items stronger and does not alter combat. Item power and
-affix generation are deferred to PR 6.2, equipment-to-combat integration to PR
-6.3, and the player-facing stat/breakdown UI to PR 6.4.
+PR 6.1 itself made no item stronger and did not alter combat; item affixes
+(PR 6.2), equipment-to-combat integration (PR 6.3) and the player-facing stat
+sheet and comparison (PR 6.4) followed.
 
-## Item affixes (Phase 6 PR 6.2 — IN PROGRESS)
+## Item affixes — IMPLEMENTED (Phase 6 PR 6.2, ADR-028)
 
-New items use item-generation V1. COMMON has 0 affixes; MAGIC 1; RARE 2; EPIC 3; LEGENDARY 4; MYTHIC 5. Rarity primarily adds breadth rather than stronger ranges. Initial affixes cover only Max Health, Damage, Attack Speed, Critical Chance and Critical Damage, with slot-specific data-driven eligibility. Every roll is immutable and displayed in stable order. Item definitions have no intrinsic power in this first pass, so COMMON is an intentional zero-modifier baseline. Existing Phase 5 items are legacy V0 with zero affixes. Equipment still has no combat effect until PR 6.3.
+New items use item-generation V1. COMMON has 0 affixes; MAGIC 1; RARE 2; EPIC 3; LEGENDARY 4; MYTHIC 5. Rarity primarily adds breadth rather than stronger ranges. Initial affixes cover only Max Health, Damage, Attack Speed, Critical Chance and Critical Damage, with slot-specific data-driven eligibility. Every roll is immutable and displayed in stable order. Item definitions have no intrinsic power in this first pass, so COMMON is an intentional zero-modifier baseline. Existing Phase 5 items are legacy V0 with zero affixes. Equipped affixes affect online combat since PR 6.3.
 
-## IN PROGRESS — Equipment combat power (Phase 6.3)
+## Equipment combat power — IMPLEMENTED (Phase 6 PR 6.3, ADR-029)
 
 Only equipped items affect new online fights. Their immutable rolled affixes contribute Damage, Max Health, Attack Speed, Critical Chance, and Critical Damage through the canonical modifier resolver. Common and legacy items currently add no power. Attack Speed uses 10,000 basis points per attack/second; Critical Chance uses 0–10,000 bp; Critical Damage is a total multiplier where 15,000 is 150%. Offline claims remain level-only pending an aggregate snapshot design (ADR-029).
+
+## Character sheet and gear comparison — IN PROGRESS (Phase 6 PR 6.4, ADR-030)
+
+The Gear screen answers "what are my stats, and what would this item change?"
+with numbers the server resolves exactly as combat does. No rule changes: this
+is presentation over the existing stat pipeline.
+
+- **The five stats shown are the ones combat fights with.** Damage, Max
+  Health, Attack Speed, Critical Chance and Critical Damage, for the character's
+  level and equipped items, after the combat caps. They match the next online
+  combat's stat snapshot. Offline claims still use level-only stats
+  (ADR-029); the sheet describes online combat power.
+- **Units.** Attack Speed is attacks per second (10,000 bp = `1.00 / sec`,
+  shown exactly, never as an interval). Critical Chance is a probability
+  (`14.35%`), at most 100%. Critical Damage is the *total* hit multiplier
+  (`150.00%` is the base, not a +150% bonus). Health and damage use the
+  shared large-number formatting (`12.4K`, `1.45e37`).
+- **Breakdown.** For each stat: the level base, the net gear bonus (final
+  minus base, after flat bonuses, the percentage pool, rounding and caps) and
+  the total, plus the equipped rolls that fed it. Rolls are listed as written
+  on the item; percentage rolls combine before they multiply, so they are not
+  presented as separate contributions.
+- **Comparison.** Selecting an inventory item shows which equipped item it
+  replaces (or the empty slot it fills) and current → after for every stat
+  that changes, with signed deltas and arrows; unchanged stats are collapsed
+  into one line. A worn item shows what removing it would do. An item with no
+  effective change (a Common or legacy item, or a roll into a maximum) says
+  "No effective stat change", and a roll into a maximum says the stat is
+  already at its maximum instead of promising a gain.
+- **Deliberately absent.** No DPS, power score, gear score or item level, no
+  Armor and no effect stats (bleed, poison, elemental): none has defined
+  combat semantics yet, and a single score would misstate a capped,
+  timeline-based combat.
+- **More is better** for all five current stats. The presentation states this
+  per stat, so a future stat where less is better must choose explicitly.

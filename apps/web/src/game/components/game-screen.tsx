@@ -2,6 +2,7 @@
 
 import type { EncounterDto, PlayerStateResponse } from '@eternal-forge/contracts';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCharacterStats } from '@/gear/use-gear';
 import { formatStage } from '@/player/format-stage';
 import { useAutoBattle } from '../auto-battle/use-auto-battle';
 import { localReadyAt } from '../combat-session';
@@ -63,6 +64,10 @@ export function GameScreen({
   // game and after the page was hidden: an online fight ends the idle time.
   const offlineClaim = useOfflineClaim(userId, player.character.id, !signingOut);
   const offlinePending = blocksFighting(offlineClaim.state);
+  // Between fights the hero's bar shows the health the next fight starts
+  // with: level and equipped gear, as the server resolves them (ADR-030).
+  // `progression.hero` is level-only and stands in only until they load.
+  const stats = useCharacterStats(userId, player.character.id);
   const response =
     state.phase === 'fighting' || state.phase === 'finished' ? state.response : undefined;
 
@@ -157,7 +162,7 @@ export function GameScreen({
           max: response.combat.hero.maxHealth,
           ratio: frame.heroRatio,
         }
-      : full(player.progression.hero.maxHealth);
+      : full(stats.data?.stats.effective.maxHealth ?? player.progression.hero.maxHealth);
   const enemyHealth: CombatantHealth | undefined =
     showingCombat && frame !== undefined
       ? {

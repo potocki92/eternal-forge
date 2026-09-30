@@ -2,7 +2,9 @@
 
 Status: EARLY DESIGN — infrastructure IMPLEMENTED (Phase 0), identity tables
 IMPLEMENTED (Phase 2), progression and combat history IMPLEMENTED (Phase 3),
-everything else PLANNED
+offline progression IMPLEMENTED (Phase 4), items, equipment and drops
+IMPLEMENTED (Phase 5), item affixes and combat stat snapshots IMPLEMENTED
+(Phase 6 PRs 6.2–6.3), everything else PLANNED. Phase 6 PR 6.4 adds no schema.
 
 Tables are created by the phase that requires them, so the repository carries no
 speculative schema. Phase 2 added `profiles` and `characters` (ADR-017). Phase 3
@@ -591,14 +593,42 @@ Individual offline fights are not stored — neither here nor in
 Core regenerates every fight from the replay inputs (`verifyOfflineRun`).
 The row is the ledger entry for the claim's gold and experience.
 
-# Inventory and equipment — COMPLETE / APPROVED (Phase 5 PR 5.2, ADR-025)
+# Inventory and equipment — IMPLEMENTED (Phase 5 PR 5.2, ADR-025)
 
 `item_instances` persists UUID identity, direct character ownership, canonical definition ID and rarity, and creation time. Inventory is this relation, ordered by `(created_at, id)`. `character_equipment` uses primary key `(character_id, slot)`, unique `item_instance_id`, and a composite owner FK to enforce that equipped items belong to the same character. Canonical rarity/slot values are constrained text. Character deletion cascades; trusted item deletion cascades its equipment row and no player deletion endpoint exists.
 
-# Combat item rewards — IN PROGRESS (Phase 5 PR 5.3, ADR-026)
+# Combat item rewards — IMPLEMENTED (Phase 5 PR 5.3, ADR-026)
 
 Migration `20260924180000_combat_item_drops` adds nullable `item_instances.combat_run_id`, a unique index of the same name, and a cascading composite FK `(combat_run_id, character_id)` to `combat_runs(id, character_id)`. Null preserves trusted non-combat creation; non-null identifies the one authoritative combat that minted the instance and proves matching character ownership. The combat row, optional item and character progression are inserted in one transaction. The existing `(character_id, idempotency_key)` combat uniqueness plus the new one-item-per-combat uniqueness enforce exactly-once materialization.
 
-## IN PROGRESS — Combat stat snapshots (Phase 6.3)
+# Item affix rolls — IMPLEMENTED (Phase 6 PR 6.2, ADR-028)
+
+Migration `20260925120000_item_affixes` adds `item_instances.generation_version`
+(0 for legacy Phase 5 items, 1 for generated items) and the normalized
+`item_affix_rolls` table: UUID, owning item FK (cascade), affix definition ID,
+stat, operation, canonical value string, generation version and position.
+Unique `(item_instance_id, position)` and `(item_instance_id,
+affix_definition_id)` prevent ambiguous order and duplicate affixes; CHECKs
+constrain stat, operation, value format and versions. Rolls are immutable
+snapshots written in the combat reward transaction and eager-loaded ordered by
+position. RLS is enabled with browser privileges revoked.
+
+# Combat stat snapshots — IMPLEMENTED (Phase 6 PR 6.3, ADR-029)
 
 Migration `20260927120000_combat_stat_snapshots` adds the immutable player power used by a combat: HugeNumber coefficient/exponent pairs for max health and damage, and integer basis-point columns for attack speed, critical chance, and critical damage. Historical V1/V2 rows keep the complete group null and replay by their legacy level-only contract; V3 rows require every field. Equipment plus affixes is eager-loaded at the character-version read boundary. See ADR-029.
+
+# Character stats and equipment previews — no schema (Phase 6 PR 6.4, ADR-030)
+
+DATABASE MIGRATION: NO. Current stats and equipment previews are derived query
+data: resolved by Game Core from `characters.level` and the equipped
+`item_instances` with their `item_affix_rolls`, then returned and forgotten.
+Nothing is stored — no stats column, no preview table, no cache.
+
+The read is one owner-scoped Prisma query (character by id *and*
+`profile.auth_user_id`) run inside a `REPEATABLE READ` transaction, so the
+level, the version, the equipment rows and their rolls come from one snapshot
+even though Prisma issues one `SELECT` per relation. It touches only
+`characters`, `character_equipment` (primary key `(character_id, slot)`),
+`item_instances` (primary key; a preview candidate is fetched by id and owning
+character) and `item_affix_rolls` (index `(item_instance_id, position)`). The
+rest of the inventory is never read. No index was added.

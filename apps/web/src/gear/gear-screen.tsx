@@ -13,7 +13,12 @@ import {
   slotLabel,
   unequippedItems,
 } from './gear-model';
-import { useGear } from './use-gear';
+import { CharacterSheet } from './stats/character-sheet';
+import { ItemComparison } from './stats/item-comparison';
+import { useCharacterStats, useGear, useStatsPreview, type StatsPreviewRequest } from './use-gear';
+
+/** Where keyboard focus goes once a change has moved the item it was on. */
+type FocusTarget = { readonly slot: EquipmentSlotDto } | { readonly itemId: string };
 
 export function GearScreen({
   userId,
@@ -29,8 +34,12 @@ export function GearScreen({
   readonly onSignOut: () => void;
 }) {
   const gear = useGear(userId, characterId);
+  const stats = useCharacterStats(userId, characterId);
   const [selected, setSelected] = useState<string | null>(null);
+  const [announcement, setAnnouncement] = useState('');
+  const [focusTarget, setFocusTarget] = useState<FocusTarget | null>(null);
   const dialog = useRef<HTMLDialogElement>(null);
+  const shell = useRef<HTMLDivElement>(null);
   const owned = gear.inventory.data?.ownedItems ?? [];
   const equipment = gear.equipment.data?.equipment;
   const inventory = equipment === undefined ? [] : unequippedItems(owned, equipment);
@@ -40,22 +49,72 @@ export function GearScreen({
       ? undefined
       : EQUIPMENT_SLOTS.find((slot) => equipment[slot]?.id === item.id);
 
+  // The comparison the open item asks the server for: equip an inventory item,
+  // or take off a worn one. Keyed by the version of the equipment on screen.
+  const previewRequest: StatsPreviewRequest | null =
+    item === undefined || gear.equipment.data === undefined
+      ? null
+      : {
+          intent: equippedSlot === undefined ? { equip: item.id } : { unequip: equippedSlot },
+          characterVersion: gear.equipment.data.characterVersion,
+        };
+  const preview = useStatsPreview(userId, characterId, previewRequest);
+
   useEffect(() => {
     if (item === undefined) dialog.current?.close();
     else if (!dialog.current?.open) dialog.current?.showModal();
   }, [item]);
 
+  useEffect(() => {
+    if (focusTarget === null) return;
+    const selector =
+      'slot' in focusTarget
+        ? `[data-equipment-slot="${focusTarget.slot}"]`
+        : `[data-item-id="${focusTarget.itemId}"]`;
+    const target = shell.current?.querySelector<HTMLElement>(selector);
+    if (target !== null && target !== undefined) {
+      target.focus();
+      setFocusTarget(null);
+    }
+    // The target appears once the new equipment has rendered.
+  }, [focusTarget, equipment]);
+
+  // Opening an item starts a fresh decision: an earlier failure is not about it.
+  const open = (id: string) => {
+    gear.equip.reset();
+    gear.unequip.reset();
+    setSelected(id);
+  };
   const pending = gear.equip.isPending || gear.unequip.isPending;
   const mutationError = gear.equip.error ?? gear.unequip.error;
   const loadError = gear.inventory.isError || gear.equipment.isError;
 
+  const equipSelected = (candidate: ItemInstanceDto) => {
+    gear.equip.mutate(candidate.id, {
+      onSuccess: () => {
+        setAnnouncement(`${itemName(candidate)} equipped. Your stats are updating.`);
+        setFocusTarget({ slot: candidate.slot });
+        dialog.current?.close();
+      },
+    });
+  };
+  const unequipSelected = (worn: ItemInstanceDto, slot: EquipmentSlotDto) => {
+    gear.unequip.mutate(slot, {
+      onSuccess: () => {
+        setAnnouncement(`${itemName(worn)} unequipped. Your stats are updating.`);
+        setFocusTarget({ itemId: worn.id });
+        dialog.current?.close();
+      },
+    });
+  };
+
   return (
-    <div className="gear-shell">
+    <div className="gear-shell" ref={shell}>
       <header className="gear-header">
         <div>
           <p className="gear-eyebrow">Eternal Forge · {heroName}</p>
           <h1>Gear</h1>
-          <p>Equipment &amp; inventory</p>
+          <p>Build, equipment &amp; inventory</p>
         </div>
         <div className="flex gap-2">
           <Link className="gear-nav-link" href="/play">
@@ -66,6 +125,9 @@ export function GearScreen({
           </Button>
         </div>
       </header>
+      <p className="sr-only" role="status">
+        {announcement}
+      </p>
       <main className="gear-main">
         {loadError ? (
           <Panel className="gear-error">
@@ -75,10 +137,24 @@ export function GearScreen({
             </Button>
           </Panel>
         ) : null}
-        {mutationError ? <Alert tone="danger">{mutationMessage(mutationError)}</Alert> : null}
-        {gear.inventory.isPending || gear.equipment.isPending ? <GearSkeleton /> : null}
-        {!loadError && equipment !== undefined && gear.inventory.data !== undefined ? (
-          <>
+        {mutationError && item === undefined ? (
+          // The sheet closed under a failed change (its item moved elsewhere):
+          // the outcome still needs saying.
+          <Alert tone="danger" className="gear-error">
+            {mutationMessage(mutationError)}
+          </Alert>
+        ) : null}
+        <div className="gear-build">
+          <CharacterSheet
+            heroName={heroName}
+            stats={stats.data}
+            loading={stats.isPending}
+            refreshing={stats.isFetching && !stats.isPending}
+            failed={stats.isError}
+            onRetry={() => void stats.refetch()}
+          />
+          {gear.equipment.isPending ? <Skeleton className="h-96 w-full" /> : null}
+          {!loadError && equipment !== undefined ? (
             <Panel as="section" aria-labelledby="equipment-heading" className="gear-equipment">
               <SectionHeading
                 id="equipment-heading"
@@ -88,37 +164,42 @@ export function GearScreen({
               />
               <div className="equipment-grid">
                 {EQUIPMENT_SLOTS.map((slot) => (
-                  <EquipmentSlot
-                    key={slot}
-                    slot={slot}
-                    item={equipment[slot]}
-                    onSelect={setSelected}
-                  />
+                  <EquipmentSlot key={slot} slot={slot} item={equipment[slot]} onSelect={open} />
                 ))}
               </div>
             </Panel>
-            <Panel as="section" aria-labelledby="inventory-heading" className="gear-inventory">
-              <SectionHeading
-                id="inventory-heading"
-                eyebrow={`${String(inventory.length)} available`}
-                title="Inventory"
-                detail="Choose an item to equip it. Replacements happen in one step."
-              />
-              {inventory.length === 0 ? (
-                <div className="inventory-empty">
-                  <span aria-hidden="true">◇</span>
-                  <strong>No items waiting</strong>
-                  <p>Defeat enemies to find equipment, or unequip an item from your loadout.</p>
-                </div>
-              ) : (
-                <div className="inventory-grid">
-                  {inventory.map((entry) => (
-                    <ItemCard key={entry.id} item={entry} equipped={false} onSelect={setSelected} />
-                  ))}
-                </div>
-              )}
-            </Panel>
-          </>
+          ) : null}
+        </div>
+        {gear.inventory.isPending || gear.equipment.isPending ? (
+          <div aria-busy="true">
+            <span className="sr-only" role="status">
+              Loading gear…
+            </span>
+            <Skeleton className="h-96 w-full" />
+          </div>
+        ) : null}
+        {!loadError && equipment !== undefined && gear.inventory.data !== undefined ? (
+          <Panel as="section" aria-labelledby="inventory-heading" className="gear-inventory">
+            <SectionHeading
+              id="inventory-heading"
+              eyebrow={`${String(inventory.length)} available`}
+              title="Inventory"
+              detail="Choose an item to compare it with your loadout and equip it."
+            />
+            {inventory.length === 0 ? (
+              <div className="inventory-empty">
+                <span aria-hidden="true">◇</span>
+                <strong>No items waiting</strong>
+                <p>Defeat enemies to find equipment, or unequip an item from your loadout.</p>
+              </div>
+            ) : (
+              <div className="inventory-grid">
+                {inventory.map((entry) => (
+                  <ItemCard key={entry.id} item={entry} onSelect={open} />
+                ))}
+              </div>
+            )}
+          </Panel>
         ) : null}
       </main>
       <dialog
@@ -133,13 +214,21 @@ export function GearScreen({
           <ItemDetail
             item={item}
             equippedSlot={equippedSlot}
+            occupant={equipment?.[item.slot] ?? null}
             pending={pending}
+            error={mutationError}
+            comparison={{
+              preview: preview.data,
+              loading: preview.isPending || (preview.isFetching && preview.data === undefined),
+              failed: preview.isError,
+              onRetry: () => void preview.refetch(),
+            }}
             onClose={() => dialog.current?.close()}
-            onEquip={(id) => {
-              gear.equip.mutate(id);
+            onEquip={() => {
+              equipSelected(item);
             }}
             onUnequip={(slot) => {
-              gear.unequip.mutate(slot);
+              unequipSelected(item, slot);
             }}
           />
         )}
@@ -205,6 +294,7 @@ function EquipmentSlot({
     <button
       type="button"
       className={cn('equipment-slot', rarityPresentation(item.rarity).className)}
+      data-equipment-slot={slot}
       onClick={() => {
         onSelect(item.id);
       }}
@@ -216,21 +306,20 @@ function EquipmentSlot({
 }
 function ItemCard({
   item,
-  equipped,
   onSelect,
 }: {
   readonly item: ItemInstanceDto;
-  readonly equipped: boolean;
   readonly onSelect: (id: string) => void;
 }) {
   return (
     <button
       type="button"
       className={cn('item-card', rarityPresentation(item.rarity).className)}
+      data-item-id={item.id}
       onClick={() => {
         onSelect(item.id);
       }}
-      aria-label={`${item.rarity} ${itemName(item)}, ${slotLabel(item.slot)}, ${equipped ? 'equipped' : 'unequipped'}`}
+      aria-label={`${item.rarity} ${itemName(item)}, ${slotLabel(item.slot)}, unequipped`}
     >
       <span className="item-card__icon" aria-hidden="true">
         {slotGlyph(item.slot)}
@@ -252,18 +341,29 @@ function RarityBadge({ rarity }: { readonly rarity: ItemInstanceDto['rarity'] })
 function ItemDetail({
   item,
   equippedSlot,
+  occupant,
   pending,
+  error,
+  comparison,
   onClose,
   onEquip,
   onUnequip,
 }: {
   readonly item: ItemInstanceDto;
   readonly equippedSlot: EquipmentSlotDto | undefined;
+  /** What the page shows in this item's slot right now. */
+  readonly occupant: ItemInstanceDto | null;
   readonly pending: boolean;
+  readonly error: unknown;
+  readonly comparison: Pick<
+    Parameters<typeof ItemComparison>[0],
+    'preview' | 'loading' | 'failed' | 'onRetry'
+  >;
   readonly onClose: () => void;
-  readonly onEquip: (id: string) => void;
+  readonly onEquip: () => void;
   readonly onUnequip: (slot: EquipmentSlotDto) => void;
 }) {
+  const equipped = equippedSlot !== undefined;
   return (
     <div className={cn('item-detail', rarityPresentation(item.rarity).className)}>
       <div className="item-detail__handle" aria-hidden="true" />
@@ -281,7 +381,7 @@ function ItemDetail({
       <RarityBadge rarity={item.rarity} />
       <h2 id="item-detail-title">{itemName(item)}</h2>
       <p>
-        {slotLabel(item.slot)} · {equippedSlot === undefined ? 'In inventory' : 'Equipped'}
+        {slotLabel(item.slot)} · {equipped ? 'Equipped' : 'In inventory'}
       </p>
       {item.affixes.length === 0 ? (
         <div className="item-detail__note">Baseline item · No rolled affixes</div>
@@ -292,28 +392,25 @@ function ItemDetail({
           ))}
         </ul>
       )}
-      <div className="item-detail__note">Equipment power is not applied to combat yet.</div>
-      <Button
-        fullWidth
-        disabled={pending}
-        onClick={() => {
-          if (equippedSlot === undefined) onEquip(item.id);
-          else onUnequip(equippedSlot);
-        }}
-      >
-        {pending ? 'Updating…' : equippedSlot === undefined ? 'Equip' : 'Unequip'}
-      </Button>
-    </div>
-  );
-}
-function GearSkeleton() {
-  return (
-    <div className="gear-main" aria-busy="true">
-      <span className="sr-only" role="status">
-        Loading gear…
-      </span>
-      <Skeleton className="h-96 w-full" />
-      <Skeleton className="h-96 w-full" />
+      <ItemComparison
+        mode={equipped ? 'unequip' : 'equip'}
+        item={item}
+        localReplaces={equipped ? null : occupant}
+        {...comparison}
+      />
+      <div className="item-detail__actions">
+        {error ? <Alert tone="danger">{mutationMessage(error)}</Alert> : null}
+        <Button
+          fullWidth
+          disabled={pending}
+          onClick={() => {
+            if (equippedSlot === undefined) onEquip();
+            else onUnequip(equippedSlot);
+          }}
+        >
+          {pending ? 'Updating…' : equipped ? 'Unequip' : 'Equip'}
+        </Button>
+      </div>
     </div>
   );
 }

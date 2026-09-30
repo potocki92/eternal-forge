@@ -1,5 +1,6 @@
 import {
   stageSelectionRequestSchema,
+  type CharacterStatsResponse,
   type CombatResponse,
   type OfflineProgressResponse,
   type PlayerStateResponse,
@@ -11,7 +12,12 @@ import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AccessTokenSource } from '@/auth/access-token-source';
 import { usePlayerState } from '@/player/use-player';
-import { combatResponseFixture, offlineProgressFixture, playerStateFixture } from '@/test/fixtures';
+import {
+  characterStatsFixture,
+  combatResponseFixture,
+  offlineProgressFixture,
+  playerStateFixture,
+} from '@/test/fixtures';
 import type { CombatScene, CombatSceneFactory, SceneHit } from '../scene/combat-scene';
 import { GameScreen } from './game-screen';
 
@@ -49,6 +55,8 @@ type OfflineReply =
 let offlineReplies: OfflineReply[];
 const offlineKeys: string[] = [];
 let serverState: PlayerStateResponse;
+/** The server's character stats; `undefined` answers 503 (stats unavailable). */
+let serverStats: CharacterStatsResponse | undefined;
 const combatKeys: string[] = [];
 
 /** How the server answers the next stage selection. */
@@ -157,6 +165,9 @@ const fetchMock = vi.fn(async (url: URL, init: RequestInit) => {
     }
     return Promise.resolve(json(reply.body ?? {}, reply.status));
   }
+  if (url.pathname.endsWith('/stats')) {
+    return serverStats === undefined ? json({}, 503) : json(serverStats, 200);
+  }
   expect(url.pathname).toBe('/player/state');
   const snapshot = serverState;
   if (heldStateRead !== undefined) {
@@ -246,6 +257,7 @@ beforeEach(() => {
     removeEventListener: () => undefined,
   }));
   fetchMock.mockClear();
+  serverStats = characterStatsFixture();
   combatKeys.length = 0;
   combatReplies = [];
   offlineReplies = [];
@@ -279,6 +291,30 @@ describe('GameScreen — before a fight', () => {
     expect(fightButton()).toHaveTextContent('Fight');
     expect(fightButton()).toBeEnabled();
     expect(sceneLog.encounters).toEqual(['husk:REGULAR']);
+  });
+
+  it('shows the hero’s gear-aware health between fights, from the server’s stats', async () => {
+    const stats = characterStatsFixture();
+    serverStats = {
+      ...stats,
+      stats: { ...stats.stats, effective: { ...stats.stats.effective, maxHealth: '1.8e2' } },
+    };
+    renderGame(readyPlayer());
+    await advance(0);
+    expect(screen.getByRole('progressbar', { name: 'Ember health' })).toHaveAttribute(
+      'aria-valuetext',
+      '180 of 180',
+    );
+  });
+
+  it('falls back to the level-only health while stats are unavailable', async () => {
+    serverStats = undefined;
+    renderGame(readyPlayer());
+    await advance(0);
+    expect(screen.getByRole('progressbar', { name: 'Ember health' })).toHaveAttribute(
+      'aria-valuetext',
+      '100 of 100',
+    );
   });
 
   it('treats a boss stage as the server classified it', async () => {
@@ -859,7 +895,10 @@ describe('GameScreen — online auto battle (ADR-022)', () => {
     fireEvent.click(screen.getByTestId('auto-battle-stop'));
   };
   const autoStatus = () => screen.getByTestId('auto-battle-status');
-  const stateReads = () => fetchMock.mock.calls.filter(([, init]) => init.method === 'GET');
+  const stateReads = () =>
+    fetchMock.mock.calls.filter(
+      ([url, init]) => init.method === 'GET' && url.pathname === '/player/state',
+    );
   /** One whole fight on screen: playback, then the next enemy steps in. */
   const playOut = async () => {
     await advance(4_000);

@@ -2,7 +2,8 @@
 
 ## Status
 
-Proposed — 2026-09-24 (Phase 5, PR 5.3).
+Accepted — 2026-09-24. Proposed with Phase 5 PR 5.3; accepted when PR #17 was
+merged.
 
 ## Context
 

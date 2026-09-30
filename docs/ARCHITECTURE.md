@@ -1,6 +1,6 @@
 # Eternal Forge — Software Architecture
 
-Status: PARTIALLY IMPLEMENTED (Phases 0–5, Phase 6 PR 6.1) / EVOLVING
+Status: PARTIALLY IMPLEMENTED (Phases 0–5, Phase 6 PRs 6.1–6.3; PR 6.4 in progress) / EVOLVING
 
 The architectural style, boundaries and package layout described here are
 IMPLEMENTED as of Phase 0. The headless Game Core simulation (HugeNumber, RNG,
@@ -14,8 +14,14 @@ loop over the same combat request, is IMPLEMENTED in Phase 4 PR 4.2
 (ADR-022). Server-authoritative offline progression, a lazy
 catch-up claimed on return, is IMPLEMENTED in Phase 4 PR 4.3 (ADR-023), and
 PR 4.4 supplies its return presentation. The pure item-domain foundation is
-IMPLEMENTED in Phase 5 PR 5.1 (ADR-024). Domain events, CQRS infrastructure
-and leaderboards are PLANNED.
+IMPLEMENTED in Phase 5 PR 5.1 (ADR-024); inventory and equipment persistence
+(ADR-025), deterministic combat item drops (ADR-026) and the gear screen
+followed in PRs 5.2–5.4. Phase 6 added the character stat and modifier
+pipeline (PR 6.1, ADR-027), immutable item affixes (PR 6.2, ADR-028) and
+equipment-powered online combat with stat snapshots (PR 6.3, ADR-029), all
+IMPLEMENTED. Server-authoritative character stat and equipment-preview queries
+with their UI are IN PROGRESS in PR 6.4 (ADR-030). Domain events, CQRS
+infrastructure and leaderboards are PLANNED.
 
 See the "Phase N implementation status" sections at the end of this document
 for exactly what exists today, and `docs/adr/` for the decisions behind it.
@@ -156,7 +162,11 @@ contracts (`PlayerStateResponse`, `ProvisionPlayerRequest`,
 ADR-013 approved), the derived `progression` block and the combat contract
 (`CombatResponse`, `IDEMPOTENCY_KEY_HEADER`). Phase 4 PR 4.1 added the stage
 mode (`stageModeSchema`, `progression.stageMode`) and the stage-selection
-contract (`StageSelectionRequest`, `StageSelectionResponse`).
+contract (`StageSelectionRequest`, `StageSelectionResponse`); PR 4.3 the
+offline-progress contract. Phase 5 added the inventory and equipment
+contracts and the combat item reward; Phase 6 PR 6.2 the item affixes. PR 6.4
+adds the character stat contracts (`CharacterStatsResponse`,
+`StatsPreviewQuery`, `StatsPreviewResponse`).
 
 ---
 
@@ -1106,16 +1116,99 @@ and ID for diagnostics and future breakdowns, but resolution never branches on
 their origin. This lets affixes, equipment, skills, buffs, debuffs and passives
 produce the same `StatModifier[]` without coupling Combat to those systems.
 
-PR 6.1 creates no persistence or transport contract. Equipment produces no
-modifiers yet, Combat still receives its existing level-derived `CombatStats`,
-and `GAME_RULES_VERSION` remains 2. PR 6.2 will define item power/affix source
-state; PR 6.3 will snapshot resolved equipment stats into combat; PR 6.4 will
-present the breakdown. See ADR-027.
+PR 6.1 created no persistence or transport contract. As of PR 6.1 equipment
+produced no modifiers, Combat still received its level-derived `CombatStats`
+and `GAME_RULES_VERSION` remained 2. PR 6.2 then defined item affix source
+state, PR 6.3 snapshot resolved equipment stats into combat, and PR 6.4
+presents the result (sections below). See ADR-027.
 
-## Item power snapshots (Phase 6 PR 6.2 — IN PROGRESS)
+## Phase 6 PR 6.2 implementation status — item power snapshots
 
-Static `ItemDefinition` and `AffixDefinition` catalogs live in pure Game Core. An owned `ItemInstance` records its item-generation version and normalized, ordered rolled-affix snapshots; APIs eagerly load those rows and never reroll on read. Generation uses a dedicated seed derived after loot identity/rarity selection, and instance plus rolls commit inside the combat reward transaction. Rolled items convert to the canonical ADR-027 `StatModifier[]`, but production combat deliberately does not consume those modifiers until PR 6.3. See ADR-028.
+Status: IMPLEMENTED (PR #20). Decision: ADR-028.
 
-## IN PROGRESS — equipment-powered online combat (Phase 6.3)
+Static `ItemDefinition` and `AffixDefinition` catalogs live in pure Game Core. An owned `ItemInstance` records its item-generation version and normalized, ordered rolled-affix snapshots; APIs eagerly load those rows and never reroll on read. Generation uses a dedicated seed derived after loot identity/rarity selection, and instance plus rolls commit inside the combat reward transaction. Rolled items convert to the canonical ADR-027 `StatModifier[]`; as of PR 6.2 production combat did not consume them yet (PR 6.3 enabled it). See ADR-028.
 
-The authoritative online path is `level → deriveBaseCharacterStats → equipped ItemInstances with persisted rolls → getItemStatModifiers → resolveCharacterStats → toCombatStats → immutable CombatRun snapshot → simulateCombat`. The combat engine sees only source-agnostic stats. Character-version optimistic concurrency makes equipment changes and combat commits coherent; replay uses the stored snapshot, never current gear. See ADR-029.
+## Phase 6 PR 6.3 implementation status — equipment-powered online combat
+
+Status: IMPLEMENTED (PR #21). Decision: ADR-029.
+
+The authoritative online path is `level → deriveBaseCharacterStats → equipped ItemInstances with persisted rolls → getItemStatModifiers → resolveCharacterStats → toCombatStats → immutable CombatRun snapshot → simulateCombat`. Since PR 6.4 the first five steps are one Game Core function, `resolvePlayerCombatStats`, shared with the character-stats query. The combat engine sees only source-agnostic stats. Character-version optimistic concurrency makes equipment changes and combat commits coherent; replay uses the stored snapshot, never current gear. Offline claims remain level-only. See ADR-029.
+
+## Phase 6 PR 6.4 implementation status — character stats and equipment preview
+
+Status: IN PROGRESS — pull request open. Decision: ADR-030 (proposed). No
+migration; `GAME_RULES_VERSION` stays 3 and combat output is unchanged.
+
+### Request flow
+
+```
+Browser (Gear screen)
+  │  GET /player/characters/:id/stats
+  │  GET /player/characters/:id/stats/preview?equip=<itemInstanceId>
+  │  GET /player/characters/:id/stats/preview?unequip=<SLOT>
+  │  Authorization: Bearer <token>       (strict query: exactly one intent)
+  v
+apps/api
+  AuthGuard ── verified identity (ADR-016)
+  CharacterStatsController (thin: UUID path, shared Zod query, map result)
+  GetCharacterStatsUseCase / PreviewEquipmentChangeUseCase
+    1. CharacterStatsRepository.loadLoadout(authUserId, characterId, candidate?)
+         one REPEATABLE READ transaction, owner-scoped:
+         level + version + ≤ 7 equipped instances with ordered rolls
+         + at most one owned candidate (never the rest of the inventory)
+    2. candidate requested but not owned → 404 (foreign = missing)
+    3. Game Core, under GAME_RULES_VERSION:
+         describeCharacterStats        base, effective (after combat caps),
+                                       bonus = effective − base, atMaximum
+         previewEquipmentChange        slot from the catalog, in-memory
+                                       replacement, both loadouts described,
+                                       delta = preview − current
+  (no write, no version change, no combat, nothing cached server-side)
+  │
+  │  200 CharacterStatsResponse / StatsPreviewResponse (+ characterVersion)
+  v
+Browser — TanStack Query; formats values, never computes them
+```
+
+The combat use case calls the same `resolvePlayerCombatStats` for its
+snapshot, so for an unchanged loadout the sheet's `effective` values equal the
+next `CombatRun` player snapshot (they differ only above the attack-speed cap,
+where the snapshot keeps the resolved input and the sheet shows the value
+combat applies).
+
+### Module layout
+
+```
+packages/game-core/src/character-stats/character-sheet.ts
+    resolvePlayerCombatStats, describeCharacterStats, diffCharacterStats,
+    changedCharacterStats, previewEquipmentChange, equippedItemsOf
+packages/contracts/src/character/character-stats.contract.ts
+apps/api/src/character-stats/
+  application/       GetCharacterStatsUseCase, PreviewEquipmentChangeUseCase,
+                     CharacterStatsRepository port (read only)
+  infrastructure/    PrismaCharacterStatsRepository
+  presentation/      CharacterStatsController, mapper
+apps/api/src/inventory/infrastructure/item-instance.rows.ts
+    the one persisted-row → ItemInstance mapping (inventory, combat, stats)
+apps/web/src/gear/stats/
+  stat-format.ts     exact presentation of values and deltas
+  stats-api.ts       the two queries
+  character-sheet.tsx, item-comparison.tsx
+apps/web/src/gear/use-gear.ts
+    gear query keys, invalidateGearState, markGearStateStale,
+    useCharacterStats, useStatsPreview
+```
+
+### Client state
+
+```
+['player', userId, 'character', characterId]
+  ├─ 'inventory'      ├─ 'equipment'      └─ 'stats'
+                                               └─ 'preview', characterVersion, intent
+```
+
+Equip/unequip success writes the returned equipment and refetches inventory,
+stats and previews (`invalidateGearState`); a failure re-reads all of it. A
+combat or an offline claim marks the whole prefix stale without fetching, and
+refetches stats only after a level-up — the combat screen's idle hero health
+reads the stats query because `progression.hero` is level-only.

@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useReducer, useRef } from 'react';
 import { useAuth } from '@/auth/auth-provider';
 import type { PlayerStateResult } from '@/player/player-api';
+import { markGearStateStale } from '@/gear/use-gear';
 import { playerStateKey } from '@/player/use-player';
 import { isTransientFailure } from '../combat-session';
 import { usePageVisible } from '../use-page-visible';
@@ -73,8 +74,12 @@ export function useOfflineClaim(
             }
           : previous,
       );
+      // A claim that fought changed the character (and perhaps its level).
+      if (response.offline.fights > 0) {
+        markGearStateStale(queryClient, userId, characterId, response.offline.levelsGained > 0);
+      }
     },
-    [queryClient, stateKey],
+    [characterId, queryClient, stateKey, userId],
   );
 
   const send = useCallback(

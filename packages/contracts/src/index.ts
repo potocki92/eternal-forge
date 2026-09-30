@@ -117,6 +117,7 @@ export type {
 } from './game/offline-progress.contract.js';
 
 export {
+  characterVersionSchema,
   equipmentResponseSchema,
   equipmentSchema,
   equipmentSlotSchema,
@@ -136,3 +137,26 @@ export type {
   ItemRarityDto,
   UnequipItemRequest,
 } from './items/inventory.contract.js';
+
+export {
+  characterStatDeltaSchema,
+  characterStatIdSchema,
+  characterStatSheetSchema,
+  characterStatSourceSchema,
+  characterStatValuesSchema,
+  characterStatsResponseSchema,
+  statsPreviewChangeSchema,
+  statsPreviewQuerySchema,
+  statsPreviewResponseSchema,
+} from './character/character-stats.contract.js';
+export type {
+  CharacterStatDeltaDto,
+  CharacterStatIdDto,
+  CharacterStatSheetDto,
+  CharacterStatSourceDto,
+  CharacterStatValuesDto,
+  CharacterStatsResponse,
+  StatsPreviewChangeDto,
+  StatsPreviewQuery,
+  StatsPreviewResponse,
+} from './character/character-stats.contract.js';

@@ -10,6 +10,15 @@ import {
 import { JoseAccessTokenVerifier } from '../../src/auth/infrastructure/jose-access-token-verifier.js';
 import { AuthGuard } from '../../src/auth/presentation/auth.guard.js';
 import {
+  GetCharacterStatsUseCase,
+  PreviewEquipmentChangeUseCase,
+} from '../../src/character-stats/application/character-stats.use-cases.js';
+import {
+  CHARACTER_STATS_REPOSITORY,
+  type CharacterStatsRepository,
+} from '../../src/character-stats/application/ports/character-stats-repository.port.js';
+import { CharacterStatsController } from '../../src/character-stats/presentation/character-stats.controller.js';
+import {
   COMBAT_REPOSITORY,
   type CombatRepository,
 } from '../../src/combat/application/ports/combat-repository.port.js';
@@ -68,6 +77,8 @@ export interface TestAppOptions {
   readonly offline?: OfflineProgressRepository;
   /** Inventory/equipment routes. The production controller exists only when supplied. */
   readonly inventory?: InventoryRepository;
+  /** Character stat and preview queries. The routes exist only when supplied. */
+  readonly characterStats?: CharacterStatsRepository;
   /** Defaults to {@link sequentialSeeds}, so combats are reproducible. */
   readonly seeds?: CombatSeedSource;
   /** Defaults to {@link sequentialSeeds} with an `offline` prefix. */
@@ -136,6 +147,17 @@ export async function createTestApp(options: TestAppOptions): Promise<INestAppli
             UnequipItemUseCase,
           ],
         };
+  const characterStats =
+    options.characterStats === undefined
+      ? { controllers: [], providers: [] }
+      : {
+          controllers: [CharacterStatsController],
+          providers: [
+            { provide: CHARACTER_STATS_REPOSITORY, useValue: options.characterStats },
+            GetCharacterStatsUseCase,
+            PreviewEquipmentChangeUseCase,
+          ],
+        };
   const moduleRef = await Test.createTestingModule({
     controllers: [
       PlayerController,
@@ -143,6 +165,7 @@ export async function createTestApp(options: TestAppOptions): Promise<INestAppli
       StageSelectionController,
       ...offline.controllers,
       ...inventory.controllers,
+      ...characterStats.controllers,
     ],
     providers: [
       { provide: CLOCK, useValue: clock },
@@ -169,6 +192,7 @@ export async function createTestApp(options: TestAppOptions): Promise<INestAppli
       SelectStageUseCase,
       ...offline.providers,
       ...inventory.providers,
+      ...characterStats.providers,
     ],
   }).compile();
 
