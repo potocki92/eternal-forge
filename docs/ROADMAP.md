@@ -948,6 +948,10 @@ are unchanged. Offline equipment power remains deferred.
       read-only port, one `REPEATABLE READ` snapshot of level, version,
       equipment and at most one candidate; foreign items are 404
 - [x] shared persisted-item row mapper for inventory, combat and stats adapters
+- [x] inventory/equipment read (`GET /inventory`, `GET /equipment`, the reads
+      inside equip/unequip) in one `REPEATABLE READ` snapshot, so the
+      `characterVersion` keying previews always names the equipment returned;
+      deterministic statement-gate regression test
 - [x] web — character sheet (five stats, `Max` marker, base / gear / total
       breakdown with equipped rolls), comparison in item detail (replaces,
       current → after, signed deltas with arrows and spoken text, unchanged
@@ -985,6 +989,13 @@ Validation (2026-09-29, local, PostgreSQL 16 and Redis 7):
   no gain; the attack-speed cap is applied; already-equipped and Common
   candidates; foreign items 404 through either character; 12 previews racing
   an equip leave one commit and coherent answers.
+- Read-coherence follow-up (2026-09-30): PostgreSQL integration 141 pass (two
+  new, three consecutive full runs). `inventory-read-snapshot.int.test.ts`
+  pauses `GET /equipment` before each of its 9 statements while a real
+  `POST /equipment/equip` commits, and `loadOwned` before each statement while
+  a version-bumping item grant commits: every answer is exactly the state
+  before or after. Both tests fail on the previous unsnapshotted read
+  (version 5 returned with version 6's equipment).
 - Playwright: 75 pass, 1 skipped (the phone-only test on the desktop
   project), mobile 390×844 and desktop; the phone test also covers 375×667
   and 430×932.

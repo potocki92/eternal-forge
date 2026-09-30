@@ -144,7 +144,11 @@ export function useCharacterStats(userId: string, characterId: string) {
 
 export interface StatsPreviewRequest {
   readonly intent: StatsPreviewQuery;
-  /** The version of the equipment the player is looking at. */
+  /**
+   * The `characterVersion` of the equipment response the intent was derived
+   * from. The server reads that version and that equipment from one snapshot,
+   * so the key names exactly the loadout on screen (ADR-030).
+   */
   readonly characterVersion: string;
 }
 

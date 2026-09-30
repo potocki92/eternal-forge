@@ -83,6 +83,16 @@ where the numbers come from, and which numbers the player sees.
    table, cache or column. The response carries `characterVersion`, the
    version of exactly the loadout it describes.
 
+   The inventory repository's read (`GET /inventory`, `GET /equipment` and
+   the reads inside equip and unequip) follows the same rule, because the
+   web keys previews by the `characterVersion` of `GET /equipment`: the
+   version, the owned instances, the equipment and every roll come from one
+   `REPEATABLE READ` snapshot. The guarantee is per read — each authoritative
+   equipment response is one committed state. It is not cross-device
+   consistency: a write made elsewhere leaves a cached response stale until
+   it is refetched. Neither read takes a row lock; mutations keep their
+   version-conditional write (ADR-025).
+
 7. **Client caching.** TanStack Query keys nest under
    `['player', userId, 'character', characterId]`; a preview is also keyed by
    the equipment's `characterVersion` and the intent. Equip and unequip use

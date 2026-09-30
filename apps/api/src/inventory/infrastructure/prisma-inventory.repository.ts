@@ -13,20 +13,38 @@ import { toOwnedItem } from './item-instance.rows.js';
 export class PrismaInventoryRepository implements InventoryRepository {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * One owner-scoped read of the version, the owned instances, the equipment
+   * and every roll.
+   *
+   * Prisma reads each relation with its own SELECT. Outside a transaction an
+   * equip or a reward could commit between them, pairing one version with
+   * another version's equipment or items — a state that never existed, under
+   * a version the web uses to key equipment previews (ADR-030). The read
+   * therefore runs inside one REPEATABLE READ transaction: every SELECT sees
+   * the same snapshot. It writes nothing and takes no row lock; mutations
+   * still rely on their version-conditional write (ADR-025).
+   */
   async loadOwned(authUserId: string, characterId: string): Promise<InventoryState | null> {
-    const character = await this.prisma.client.character.findFirst({
-      where: { id: characterId, profile: { authUserId } },
-      select: {
-        version: true,
-        itemInstances: {
-          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-          include: { affixes: { orderBy: { position: 'asc' } } },
-        },
-        equipment: {
-          include: { itemInstance: { include: { affixes: { orderBy: { position: 'asc' } } } } },
-        },
-      },
-    });
+    const character = await this.prisma.client.$transaction(
+      (transaction) =>
+        transaction.character.findFirst({
+          where: { id: characterId, profile: { authUserId } },
+          select: {
+            version: true,
+            itemInstances: {
+              orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+              include: { affixes: { orderBy: { position: 'asc' } } },
+            },
+            equipment: {
+              include: {
+                itemInstance: { include: { affixes: { orderBy: { position: 'asc' } } } },
+              },
+            },
+          },
+        }),
+      { isolationLevel: 'RepeatableRead' },
+    );
     if (character === null) return null;
     const items = character.itemInstances.map(toOwnedItem);
     const equipment = emptyEquipment();
