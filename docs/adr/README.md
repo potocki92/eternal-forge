@@ -37,7 +37,8 @@ record; it is never edited away (CLAUDE.md — "ADR").
 | [027](ADR-027-character-stats-modifier-pipeline.md) | Character stats and modifier pipeline | Accepted |
 | [028](ADR-028-item-affixes-deterministic-generation.md) | Item affixes and deterministic item generation | Accepted |
 | [029](ADR-029-equipment-power-combat-stat-snapshots.md) | Equipment power and combat stat snapshots | Accepted |
-| [030](ADR-030-character-stats-and-equipment-preview-queries.md) | Server-authoritative character stats and equipment preview queries | Proposed |
+| [030](ADR-030-character-stats-and-equipment-preview-queries.md) | Server-authoritative character stats and equipment preview queries | Accepted |
+| [031](ADR-031-active-skill-domain-and-cooldown-model.md) | Active skill domain and deterministic cooldown model | Proposed |
 
 ## Format
 

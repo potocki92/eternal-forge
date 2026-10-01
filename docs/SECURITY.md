@@ -1,6 +1,6 @@
 # Eternal Forge — Security Model
 
-Status: PARTIALLY IMPLEMENTED (Phases 0–5, Phase 6 PRs 6.1–6.3; PR 6.4 in progress) / EVOLVING
+Status: PARTIALLY IMPLEMENTED (Phases 0–6; Phase 7 PR 7.1 in progress) / EVOLVING
 
 The principles below are binding from the first line of gameplay code. A
 per-control implementation status is listed at the end of this document.
@@ -703,7 +703,7 @@ The browser cannot submit rarity, affix identity/value, seed, generation version
 
 Combat requests still contain no gameplay stats or item selection. The API loads owner-scoped equipped instances and immutable rolls, resolves them in Game Core, and persists the exact stat snapshot. Inventory-only items have no effect. Equipment mutations and combat share the database-backed character version, preventing half-old/half-new commits across API replicas. Retry uses the original CombatRun snapshot and cannot gain power from later gear. Browser table privileges remain revoked and no privileged key is exposed.
 
-## Character stat and preview queries — IN PROGRESS (Phase 6 PR 6.4, ADR-030)
+## Character stat and preview queries — IMPLEMENTED (Phase 6 PR 6.4, ADR-030)
 
 `GET /player/characters/:characterId/stats` and
 `GET /player/characters/:characterId/stats/preview` are read-only queries
@@ -743,3 +743,24 @@ and equipment reads each run in one `REPEATABLE READ` snapshot, so a
 no reward exists to duplicate; foreign resources are 404; numeric values are
 canonical HugeNumber strings and integer basis points, validated by the shared
 contract; there is no partial state to leave.
+
+## Active skill domain — IN PROGRESS (Phase 7 PR 7.1, ADR-031)
+
+PR 7.1 adds pure Game Core code only: no endpoint, contract, table or UI, so
+it opens no attack surface. It fixes the authority model the later Phase 7
+PRs must keep:
+
+- **Casts happen only in the server's simulation.** Online combat is
+  committed before the browser plays it back, so no client action during
+  playback can cast a skill or change a result. Real-time manual casting is
+  deferred; a playback "cast" button must never be added as a substitute.
+- **Cooldowns use combat time only** — whole milliseconds inside one
+  simulation. No wall clock, device clock, network latency or animation
+  timing is an input, so neither a changed clock nor a slow or fast client
+  can make a skill ready earlier.
+- **Future inputs are configuration, not results.** PR 7.2's loadout and
+  priority will be an authenticated, owner-scoped command; the client will
+  never submit a skill level, cooldown, cast, damage or seed.
+- **Invalid values are refused, not repaired.** Unknown identities, levels
+  outside 1 … 2^31 − 1, non-integer or negative times, zero cooldowns and
+  curves that leave their range all throw typed `GameCoreError`s.

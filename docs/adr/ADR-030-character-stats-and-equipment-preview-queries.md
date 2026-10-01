@@ -2,7 +2,8 @@
 
 ## Status
 
-Proposed — 2026-09-29 (Phase 6, PR 6.4).
+Accepted — 2026-09-30. Proposed with Phase 6 PR 6.4 on 2026-09-29; accepted
+when PR #22 and its read-coherence follow-up PR #23 were merged.
 
 ## Date
 
