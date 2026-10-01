@@ -98,7 +98,11 @@ branches:
   computed exactly with `bigint`, for milliseconds and basis points.
 - `HugeNumberLevelCurve` `{ base, growth }` → `base × growth^(level − 1)`
   through `HugeNumber.pow`, the same form as character and stage scaling, for
-  values that scale with long-term power. Never a JavaScript `number`.
+  values that scale with long-term power. Never a JavaScript `number`. A zero
+  base resolves to exact `HugeNumber.ZERO` at every level without evaluating
+  the power, because `0 × growth^(level − 1)` is zero even where the power
+  alone would overflow; any non-zero base evaluates it and still fails with
+  `OVERFLOW` beyond the range.
 
 `resolveSkillAtLevel(definition, level, rules)` is a pure function returning a
 frozen `ResolvedSkill { id, level, cooldownMs, parameters }`. Curves are
@@ -120,7 +124,12 @@ Whole **milliseconds of combat time**: the unit `CombatEvent.timeMs`,
 Integer milliseconds are commensurable with the exact attack timeline: a ready
 time `R` ms precedes or equals the landing of attack `k` at speed `s` exactly
 when `R × s ≤ k × 10 000 000`, an integer comparison. PR 7.3 can therefore
-order casts and attacks without rounding.
+order casts and attacks without rounding, and it **must** order them against
+that exact timeline — the same cross-multiplication the engine uses between
+attacks (`landsNoLaterThan`). The reported `CombatEvent.timeMs` is floored for
+presentation and is never an authoritative ordering key: at 3 attacks per
+second, attack 1 lands at 333.33… ms and reports 333, so a skill ready at
+333 ms precedes it although the two reported times are equal.
 
 Legal cooldowns are `1 ms` (`SKILL_COOLDOWN_MIN_MS`) to `2^31 − 1 ms`
 (`SKILL_DURATION_MAX_MS`, about 24.8 days, so a resolved value fits an

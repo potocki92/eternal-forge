@@ -191,6 +191,62 @@ describe('resolveSkillAtLevel', () => {
     );
   });
 
+  it('resolves a zero-base HugeNumber curve to exact zero even where its growth term overflows', () => {
+    const growth = d('1e9');
+    // Proof that the short-circuit is genuine: the growth term alone leaves the range.
+    expectCode(() => growth.pow(SKILL_LEVEL_MAX - 1), 'OVERFLOW');
+
+    const zeroBase = new SkillRules(SKILL_CATALOG, [
+      {
+        skillId: 'execute',
+        cooldownMs: { base: 1_000, perLevel: 0 },
+        parameters: [{ name: 'power', unit: 'HUGE_NUMBER', curve: { base: d('0'), growth } }],
+      },
+    ]);
+    const first = resolveSkillAtLevel(
+      definition('execute'),
+      SkillLevel.of(SKILL_LEVEL_MAX),
+      zeroBase,
+    );
+    const again = resolveSkillAtLevel(
+      definition('execute'),
+      SkillLevel.of(SKILL_LEVEL_MAX),
+      zeroBase,
+    );
+    const power = first.parameters[0];
+    if (power?.unit !== 'HUGE_NUMBER') {
+      throw new Error('Expected one HUGE_NUMBER parameter.');
+    }
+    expect(power.value).toBe(HugeNumber.ZERO);
+    expect(power.value.isZero()).toBe(true);
+    expect(power.value.toString()).toBe(HugeNumber.ZERO.toString());
+    expect(power.value.toParts()).toEqual(HugeNumber.ZERO.toParts());
+    expect(JSON.stringify(again)).toBe(JSON.stringify(first));
+    expect(JSON.stringify(first.parameters)).toBe(
+      JSON.stringify([{ name: 'power', unit: 'HUGE_NUMBER', value: HugeNumber.ZERO }]),
+    );
+  });
+
+  it('still overflows for the smallest non-zero base: only exact zero short-circuits', () => {
+    const tiny = new SkillRules(SKILL_CATALOG, [
+      {
+        skillId: 'execute',
+        cooldownMs: { base: 1_000, perLevel: 0 },
+        parameters: [
+          {
+            name: 'power',
+            unit: 'HUGE_NUMBER',
+            curve: { base: d('1e-1000000'), growth: d('1e9') },
+          },
+        ],
+      },
+    ]);
+    expectCode(
+      () => resolveSkillAtLevel(definition('execute'), SkillLevel.of(SKILL_LEVEL_MAX), tiny),
+      'OVERFLOW',
+    );
+  });
+
   it('refuses a known skill without tuning and an unknown skill', () => {
     expectCode(
       () => resolveSkillAtLevel(definition('whirlwind'), SkillLevel.FIRST, rules),

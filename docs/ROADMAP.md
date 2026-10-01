@@ -1086,8 +1086,10 @@ Validation (2026-10-01, local, PostgreSQL 16 and Redis 7):
 - `pnpm run verify` (format check, lint, typecheck, unit tests, production
   build, with the CI canary service-role key present): pass. Browser bundle
   scan: clean.
-- Unit tests: 1 503 pass (Phase 6 final: 1 386) — `game-core` 738 (+117, all
-  in `src/skills`); other packages unchanged. Combat goldens (rules v1
+- Unit tests: 1 505 pass (Phase 6 final: 1 386) — `game-core` 740 (+119, all
+  in `src/skills`); other packages unchanged. Review follow-up: a zero-base
+  HugeNumber curve resolves to exact zero at `SKILL_LEVEL_MAX` even where its
+  growth term alone overflows; a non-zero base still fails with `OVERFLOW`. Combat goldens (rules v1
   simulations, v3 equipment snapshots), item-drop v2 and item-generation v1
   vectors pass unmodified. Game Core purity guard: pass.
 - PostgreSQL integration: 141 pass (unchanged).

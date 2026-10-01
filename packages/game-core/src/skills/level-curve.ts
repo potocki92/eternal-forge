@@ -1,5 +1,5 @@
 import { GameCoreError } from '../errors.js';
-import type { HugeNumber } from '../huge-number/index.js';
+import { HugeNumber } from '../huge-number/index.js';
 import type { SkillLevel } from './skill-level.js';
 
 /**
@@ -91,8 +91,16 @@ export function integerCurveAt(
 /**
  * The curve's value at `level`, with HugeNumber rounding (half-to-even).
  *
- * @throws {GameCoreError} `OVERFLOW` beyond the HugeNumber range.
+ * A zero base is exactly zero at every level, so the growth term is not
+ * evaluated: `0 × growth^(level − 1)` must not fail because the power alone
+ * would leave the HugeNumber range. Every non-zero base evaluates the power.
+ *
+ * @throws {GameCoreError} `OVERFLOW` when a non-zero curve leaves the
+ *   HugeNumber range.
  */
 export function hugeNumberCurveAt(curve: HugeNumberLevelCurve, level: SkillLevel): HugeNumber {
+  if (curve.base.isZero()) {
+    return HugeNumber.ZERO;
+  }
   return curve.base.mul(curve.growth.pow(level.toNumber() - 1));
 }

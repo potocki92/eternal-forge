@@ -1293,6 +1293,8 @@ packages/game-core/src/skills/
   the purity guard. No clock, no RNG, no framework.
 - Time is combat time in whole milliseconds, commensurable with the exact
   attack timeline (`R × attackSpeedBp ≤ k × 10 000 000`), never wall time.
+  PR 7.3 orders casts against that exact timeline, never against the floored
+  `CombatEvent.timeMs`.
 - Numbers follow the project conventions: HugeNumber for power-scaled values,
   integer basis points, integer milliseconds; integer curves are evaluated
   with `bigint` and range-checked; nothing is clamped silently.
