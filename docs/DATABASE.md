@@ -4,7 +4,8 @@ Status: EARLY DESIGN — infrastructure IMPLEMENTED (Phase 0), identity tables
 IMPLEMENTED (Phase 2), progression and combat history IMPLEMENTED (Phase 3),
 offline progression IMPLEMENTED (Phase 4), items, equipment and drops
 IMPLEMENTED (Phase 5), item affixes and combat stat snapshots IMPLEMENTED
-(Phase 6 PRs 6.2–6.3), everything else PLANNED. Phase 6 PR 6.4 adds no schema.
+(Phase 6 PRs 6.2–6.3), everything else PLANNED. Phase 6 PR 6.4 and Phase 7
+PR 7.1 add no schema.
 
 Tables are created by the phase that requires them, so the repository carries no
 speculative schema. Phase 2 added `profiles` and `characters` (ADR-017). Phase 3
@@ -251,6 +252,14 @@ Represents sockets/runes.
 ---
 
 # Skills
+
+Status: PLANNED. Phase 7 PR 7.1 adds no schema (ADR-031): skill identities,
+levels and cooldowns are pure Game Core. Ownership, levels and the loadout
+arrive with PR 7.2. A persisted skill is its stable `SkillDefinitionId`
+string and a `SkillLevel` integer (1 … 2^31 − 1, an `integer` column);
+definitions and their tuning are static Game Core content, as item
+definitions are. Cooldowns are per-combat state and are never persisted as
+timestamps.
 
 skill_definitions
 

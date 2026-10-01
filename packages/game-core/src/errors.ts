@@ -21,6 +21,14 @@ export type GameCoreErrorCode =
   | 'UNKNOWN_ITEM_DEFINITION'
   /** Static item content attempted to reuse an existing stable identity. */
   | 'DUPLICATE_ITEM_DEFINITION'
+  /** A catalog has no definition for a supplied stable skill identity (ADR-031). */
+  | 'UNKNOWN_SKILL_DEFINITION'
+  /** Static skill content or tuning attempted to reuse an existing stable identity. */
+  | 'DUPLICATE_SKILL_DEFINITION'
+  /** A known skill has no tuning in the supplied skill rule set (ADR-031). */
+  | 'SKILL_UNAVAILABLE'
+  /** A cast was started before the skill's cooldown ended (ADR-031). */
+  | 'SKILL_NOT_READY'
   | 'UNSUPPORTED_RULES_VERSION';
 
 export class GameCoreError extends Error {

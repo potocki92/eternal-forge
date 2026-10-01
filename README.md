@@ -3,8 +3,9 @@
 A browser-first idle action RPG built for deep character progression,
 theorycrafting, competitive rankings and effectively unlimited growth.
 
-**Current phase: Phase 6 — Item Power & Character Stats.** PRs 6.1–6.3 are
-merged; **PR 6.4 — Character Stats & Gear Comparison is in progress.** See
+**Current phase: Phase 7 — Active Skills.** Phase 6 — Item Power & Character
+Stats is complete. **PR 7.1 — Skill Domain & Cooldown Foundation is in
+progress**: a pure Game Core foundation with no player-visible change yet. See
 [`docs/ROADMAP.md`](docs/ROADMAP.md) for the authoritative state of every phase.
 
 What a signed-in player can do today:
@@ -23,11 +24,15 @@ What a signed-in player can do today:
 - **Equip them** on a seven-slot loadout. Equipped affixes change the stats of
   the next online combat, and every combat records the exact stats it used
   (ADR-029). Offline progress still uses level-only stats.
-- **Read the build** (PR 6.4, in progress): a character sheet of the five
+- **Read the build**: a character sheet of the five
   combat stats — Damage, Max Health, Attack Speed, Critical Chance and
   Critical Damage — with a base / gear / total breakdown, and a comparison of
   any item against the one it would replace. The server computes every number
   (ADR-030).
+
+Active skills are not playable yet. PR 7.1 adds only their Game Core domain —
+skill identities, levels and deterministic combat-time cooldowns (ADR-031);
+ownership, combat integration and the Skills screen follow in PRs 7.2–7.4.
 
 ---
 

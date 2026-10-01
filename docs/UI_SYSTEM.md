@@ -695,7 +695,7 @@ Status: IMPLEMENTED — presentation over the unchanged offline claim (ADR-023).
 
 # Character sheet and gear comparison (Phase 6 PR 6.4)
 
-Status: IN PROGRESS (ADR-030). Presentation of server-resolved stats only.
+Status: IMPLEMENTED (ADR-030). Presentation of server-resolved stats only.
 
 ```
 phone (390×844)                          desktop

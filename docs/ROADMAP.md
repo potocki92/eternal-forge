@@ -1,22 +1,23 @@
 # Eternal Forge — Development Roadmap
 
-Last updated: 2026-09-29
+Last updated: 2026-10-01
 
 # Current Phase
 
-PHASE 6 — ITEM POWER & CHARACTER STATS
+PHASE 7 — ACTIVE SKILLS
 
 Status:
 
-IN PROGRESS — Phase 5 is COMPLETE. In Phase 6, PR 6.1 "Character Stats &
-Modifier Foundation" (PR #19, ADR-027), PR 6.2 "Item Power & Affixes" (PR #20,
-ADR-028) and PR 6.3 "Equipment Stats & Combat Integration" (PR #21, ADR-029)
-are COMPLETE / MERGED. PR 6.4 "Character Stats & Gear Comparison" is IN
-PROGRESS (ADR-030) and closes the phase once reviewed and merged.
+IN PROGRESS — the user approved Phase 6 and started Phase 7 on 2026-10-01
+with the PR 7.1 task. PR 7.1 "Skill Domain & Cooldown Foundation" is IN
+PROGRESS (ADR-031, proposed). PRs 7.2–7.4 are NOT STARTED.
+
+Phase 6 is COMPLETE / APPROVED: PRs 6.1–6.4 are merged (PRs #19–#23, ADR-027
+to ADR-030, all accepted) and GitHub Actions is green on `main` (run #67 on
+`aa98112`, the merge of PR #23).
 
 Phase 4 is COMPLETE / APPROVED. PRs 4.1–4.4 are merged and the return
-experience was manually verified. Phase 5 is complete through merged PR 5.4;
-Phase 6 is now the current phase.
+experience was manually verified. Phase 5 is complete through merged PR 5.4.
 
 Phase 3 was merged to `main` as PR #6 (followed by the Supabase deployment
 PRs #7 and #8). The user started Phase 4 on 2026-09-23 with the PR 4.1 task.
@@ -892,8 +893,8 @@ Status: COMPLETE.
 
 # Phase 6 — Item Power & Character Stats
 
-Status: IN PROGRESS — PRs 6.1–6.3 merged; PR 6.4 in review. The owner marks
-the phase COMPLETE after PR 6.4 is merged.
+Status: COMPLETE / APPROVED — PRs 6.1–6.4 merged (PRs #19–#23); approved by
+the user on 2026-10-01, who then started Phase 7.
 
 ## PR 6.1 — Character Stats & Modifier Foundation
 
@@ -932,8 +933,8 @@ Status: COMPLETE / MERGED — PR #21. Decision: ADR-029 (accepted).
 
 ## PR 6.4 — Character Stats & Gear Comparison
 
-Status: IN PROGRESS — pull request open, awaiting review. Decision: ADR-030
-(proposed). DATABASE MIGRATION: NO. `GAME_RULES_VERSION` stays 3,
+Status: COMPLETE / MERGED — PR #22, with the read-coherence follow-up PR #23.
+Decision: ADR-030 (accepted). DATABASE MIGRATION: NO. `GAME_RULES_VERSION` stays 3,
 `ITEM_GENERATION_VERSION` stays 1; combat output, item drops and affix balance
 are unchanged. Offline equipment power remains deferred.
 
@@ -969,8 +970,9 @@ are unchanged. Offline equipment power remains deferred.
       Playwright (happy path, replacement, Common item, phone viewports)
 - [x] documentation — ADR-030, ADR statuses 023–029, README, ARCHITECTURE,
       GAME_DESIGN, DATABASE, SECURITY, UI_SYSTEM, DEPLOYMENT
-- [ ] GitHub Actions green on the pull request
-- [ ] user review and approval
+- [x] GitHub Actions green — on `main` after both merges (run #65 on
+      `d02a04f`, run #67 on `aa98112`)
+- [x] user review and approval — merged as PRs #22 and #23
 
 Validation (2026-09-29, local, PostgreSQL 16 and Redis 7):
 
@@ -1009,7 +1011,7 @@ stats and remain deferred. Content must remain data-driven.
 
 # Phase 7 — Active Skills
 
-Status: NOT STARTED
+Status: IN PROGRESS — PR 7.1 in progress; PRs 7.2–7.4 not started.
 
 Initial candidate skills:
 
@@ -1021,6 +1023,91 @@ Lightning Chain
 Shield
 
 Implement skill levels and cooldown architecture.
+
+Phase 7 is delivered as a sequence of PRs, one at a time. Each waits for the
+user's approval before the next begins.
+
+| PR  | Scope                                         | Status      |
+| --- | --------------------------------------------- | ----------- |
+| 7.1 | Skill Domain & Cooldown Foundation            | IN PROGRESS |
+| 7.2 | Skill Ownership, Levels & Loadout Persistence | NOT STARTED |
+| 7.3 | Deterministic Skill Combat Runtime            | NOT STARTED |
+| 7.4 | Initial Active Skills & Player UI             | NOT STARTED |
+
+**Architectural constraint (ADR-031).** Online combat is resolved by the
+server before the browser plays it back, so a button pressed during playback
+cannot change a fight. The first skill runtime is therefore deterministic and
+automatic — cast when ready, in the player's configured priority order —
+inside the server's simulation. Real-time manual casting is deferred to a
+separate design and is never faked in the client.
+
+## PR 7.1 — Skill Domain & Cooldown Foundation
+
+Status: IN PROGRESS — pull request open, awaiting review. Decision: ADR-031
+(proposed). DATABASE MIGRATION: NO. PUBLIC SKILL API: NO. SKILL PERSISTENCE:
+NOT YET. PRODUCTION COMBAT SKILLS: NOT ENABLED. `GAME_RULES_VERSION` stays 3;
+combat output is unchanged.
+
+Scope: a pure Game Core foundation in `packages/game-core/src/skills`. No
+persistence, endpoint, contract, combat integration or UI.
+
+- [x] Phase 6 documentation closed — README, ROADMAP, ARCHITECTURE,
+      GAME_DESIGN, SECURITY, UI_SYSTEM; ADR-030 accepted
+- [x] `SkillDefinitionId` — stable lowercase machine key (ADR-024 format)
+- [x] `SkillDefinition` (identity + `skill.<id>.name`) and `SkillCatalog`:
+      duplicate rejection, constant-time lookup, frozen, declaration order
+      that is never a cast priority
+- [x] `SKILL_CATALOG` — the six candidate identities, with no invented
+      cooldown, damage or effect
+- [x] `SkillLevel` — whole number 1 … 2^31 − 1 (structural bound only; no
+      invented content cap)
+- [x] level curves — integer (`base + perLevel × (L − 1)`, exact `bigint`) and
+      HugeNumber (`base × growth^(L − 1)`); validated at definition and at
+      every resolved level
+- [x] `SkillRules` (validated tunings over a catalog) and
+      `resolveSkillAtLevel(definition, level, rules)` → frozen `ResolvedSkill`
+      with cooldown and named, unit-typed parameters
+- [x] cooldowns in integer combat milliseconds: ready at 0, cooldown starts at
+      the cast instant, inclusive readiness, minimum 1 ms, no wall clock
+- [x] eligibility (`evaluateSkillCast`, explicit block reasons) and the
+      activation-policy boundary (`selectSkillActivation`: first eligible in
+      the caller's priority order)
+- [x] tests — identity, catalog, level, curves, resolution, overflow,
+      immutability, the cooldown matrix including the exact 5 999 / 6 000 ms
+      boundary, properties, eligibility, priority independence from catalog
+      order; V1/V2/V3 combat goldens unchanged
+- [x] documentation — ADR-031, README, ARCHITECTURE, GAME_DESIGN, DATABASE,
+      SECURITY
+- [ ] GitHub Actions green on the pull request
+- [ ] user review and approval
+
+Validation (2026-10-01, local, PostgreSQL 16 and Redis 7):
+
+- `pnpm run verify` (format check, lint, typecheck, unit tests, production
+  build, with the CI canary service-role key present): pass. Browser bundle
+  scan: clean.
+- Unit tests: 1 505 pass (Phase 6 final: 1 386) — `game-core` 740 (+119, all
+  in `src/skills`); other packages unchanged. Review follow-up: a zero-base
+  HugeNumber curve resolves to exact zero at `SKILL_LEVEL_MAX` even where its
+  growth term alone overflows; a non-zero base still fails with `OVERFLOW`. Combat goldens (rules v1
+  simulations, v3 equipment snapshots), item-drop v2 and item-generation v1
+  vectors pass unmodified. Game Core purity guard: pass.
+- PostgreSQL integration: 141 pass (unchanged).
+- Playwright: 75 pass, 1 skipped (the phone-only test on the desktop
+  project), mobile 390×844 and desktop — unchanged.
+- Prisma schema valid; `prisma migrate diff --exit-code`: no drift. No
+  migration in this PR.
+
+Deferred to PR 7.2: owned skills, acquisition and levelling (and their cost),
+loadout size and priority, migration, authenticated API.
+
+Deferred to PR 7.3: the combat scheduler, cast/attack tie rule, casts per
+instant, effect kinds, new combat events, `RULES_V4`, per-combat skill
+snapshots for replay, RNG stream labels, offline progression's treatment of
+skills.
+
+Deferred to PR 7.4: approved tuning of the first skills, the Skills screen and
+loadout editor, cast presentation in combat playback.
 
 ---
 

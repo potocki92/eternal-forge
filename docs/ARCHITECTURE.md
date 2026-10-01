@@ -1,6 +1,6 @@
 # Eternal Forge — Software Architecture
 
-Status: PARTIALLY IMPLEMENTED (Phases 0–5, Phase 6 PRs 6.1–6.3; PR 6.4 in progress) / EVOLVING
+Status: PARTIALLY IMPLEMENTED (Phases 0–6; Phase 7 PR 7.1 in progress) / EVOLVING
 
 The architectural style, boundaries and package layout described here are
 IMPLEMENTED as of Phase 0. The headless Game Core simulation (HugeNumber, RNG,
@@ -18,9 +18,11 @@ IMPLEMENTED in Phase 5 PR 5.1 (ADR-024); inventory and equipment persistence
 (ADR-025), deterministic combat item drops (ADR-026) and the gear screen
 followed in PRs 5.2–5.4. Phase 6 added the character stat and modifier
 pipeline (PR 6.1, ADR-027), immutable item affixes (PR 6.2, ADR-028) and
-equipment-powered online combat with stat snapshots (PR 6.3, ADR-029), all
-IMPLEMENTED. Server-authoritative character stat and equipment-preview queries
-with their UI are IN PROGRESS in PR 6.4 (ADR-030). Domain events, CQRS
+equipment-powered online combat with stat snapshots (PR 6.3, ADR-029) and
+server-authoritative character stat and equipment-preview queries with their
+UI (PR 6.4, ADR-030), all IMPLEMENTED. The pure active-skill domain — skill
+identities, levels and deterministic combat-time cooldowns — is IN PROGRESS in
+Phase 7 PR 7.1 (ADR-031); skills do not affect combat yet. Domain events, CQRS
 infrastructure and leaderboards are PLANNED.
 
 See the "Phase N implementation status" sections at the end of this document
@@ -1136,8 +1138,8 @@ The authoritative online path is `level → deriveBaseCharacterStats → equippe
 
 ## Phase 6 PR 6.4 implementation status — character stats and equipment preview
 
-Status: IN PROGRESS — pull request open. Decision: ADR-030 (proposed). No
-migration; `GAME_RULES_VERSION` stays 3 and combat output is unchanged.
+Status: IMPLEMENTED (PRs #22 and #23). Decision: ADR-030. No migration;
+`GAME_RULES_VERSION` stays 3 and combat output is unchanged.
 
 ### Request flow
 
@@ -1226,3 +1228,76 @@ per-read guarantee, not real-time synchronisation: a write from another
 device leaves cached state stale until it is refetched. No row lock is taken.
 `test-integration/inventory-read-snapshot.int.test.ts` proves it by pausing
 the read before each of its statements in turn while an equip commits.
+
+# Phase 7 PR 7.1 implementation status — active skill domain foundation
+
+Status: IN PROGRESS — pull request open. Decision: ADR-031 (proposed).
+DATABASE MIGRATION: NO. No endpoint, contract, persistence or UI. Skills are
+not part of any executable rule set: `GAME_RULES_VERSION` stays 3 and combat
+output is byte-identical.
+
+## The constraint the design follows
+
+Online combat is resolved on the server and committed before the browser
+plays it back (ADR-019); auto-battle repeats that request (ADR-022) and
+offline claims simulate many fights at once (ADR-023). A skill can therefore
+only act inside the server's simulation. The first runtime casts
+automatically and deterministically — when ready, in the player's configured
+priority. Real-time manual casting would need a different authoritative
+execution model and is deferred; no client control pretends to cast.
+
+## Model
+
+```
+SkillDefinition { id: SkillDefinitionId, nameKey }       identity, permanent
+        │  SKILL_CATALOG: whirlwind, fireball, execute, blood_strike,
+        │                 lightning_chain, shield   (declaration order ≠ priority)
+        │
+SkillRules ── SkillTuning { cooldownMs: IntegerLevelCurve,
+        │                   parameters: named HUGE_NUMBER | BASIS_POINTS |
+        │                               MILLISECONDS level curves }
+        │     balance; not registered in RULES_V1–V3 (none ever had skills);
+        │     joins a new GameRules version when skills reach combat (PR 7.3)
+        v
+resolveSkillAtLevel(definition, SkillLevel, rules)
+        v
+ResolvedSkill { id, level, cooldownMs, parameters }       frozen, pure
+        v
+SkillCooldownState { skillId, nextReadyAtMs }             per combat, combat ms
+   initial: ready at 0 · cast at t → ready at t + cooldown · ready ⇔ t ≥ next
+        v
+evaluateSkillCast → eligible | ON_COOLDOWN(readyAtMs)
+selectSkillActivation(candidates in caller priority, t) → first eligible | null
+        ┆
+        ┆  PR 7.3 (not implemented): scheduler inside simulateCombat,
+        ┆  effect kinds, combat events, RULES_V4, per-combat skill snapshot
+```
+
+## Module layout
+
+```
+packages/game-core/src/skills/
+  skill-definition-id.ts   SkillDefinitionId
+  skill-definition.ts      SkillDefinition, createSkillDefinition
+  skill-catalog.ts         SkillCatalog, SKILL_CATALOG
+  skill-level.ts           SkillLevel, SKILL_LEVEL_MAX
+  level-curve.ts           integer and HugeNumber level curves
+  skill-rules.ts           SkillRules, SkillTuning, ResolvedSkill, resolveSkillAtLevel
+  skill-cooldown.ts        SkillCooldownState, readiness, startSkillCooldown
+  skill-activation.ts      evaluateSkillCast, selectSkillActivation
+```
+
+## Boundaries
+
+- Pure Game Core: imports only `HugeNumber` and `GameCoreError`; covered by
+  the purity guard. No clock, no RNG, no framework.
+- Time is combat time in whole milliseconds, commensurable with the exact
+  attack timeline (`R × attackSpeedBp ≤ k × 10 000 000`), never wall time.
+  PR 7.3 orders casts against that exact timeline, never against the floored
+  `CombatEvent.timeMs`.
+- Numbers follow the project conventions: HugeNumber for power-scaled values,
+  integer basis points, integer milliseconds; integer curves are evaluated
+  with `bigint` and range-checked; nothing is clamped silently.
+- Replay requirement for PR 7.3: a skill-enabled combat records its rules
+  version and a snapshot of the loadout (priority, identities, levels), so
+  replay never reads current skills, current balance or a clock.

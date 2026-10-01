@@ -448,6 +448,42 @@ Critical modifier
 
 produces a substantially different ability.
 
+## Active skill foundation — IN PROGRESS (Phase 7 PR 7.1, ADR-031)
+
+PR 7.1 defines how skills, levels and cooldowns work. It adds no playable
+skill: the hero has no skills yet and combat is unchanged.
+
+- **What an active skill is.** An ability a combatant uses during combat in
+  addition to its automatic attacks, limited by a cooldown. "Active" is its
+  role in combat, not a promise of a button.
+- **Who casts it.** The server's combat simulation, automatically: a skill is
+  cast when it is ready (and, later, when its conditions hold), in the
+  player's priority order. Combat is resolved before it is shown, so the
+  player's decisions are made *before* the fight — which skills to equip and
+  in what priority — never by tapping during playback. Real-time manual
+  casting is deferred to a separate design.
+- **Candidates.** `whirlwind`, `fireball`, `execute`, `blood_strike`,
+  `lightning_chain` and `shield` exist as identities only. Their cooldowns,
+  damage and effects are not designed yet and nothing pretends otherwise.
+  Two need more than today's combat offers: Whirlwind and Lightning Chain are
+  multi-target ideas in a one-against-one combat, and Shield needs a
+  defensive mechanic that does not exist yet (it is not extra Max Health).
+- **Skill level.** A whole number from 1 upwards, with no design cap (the
+  technical limit is 2,147,483,647). Every level-dependent number is a curve
+  defined as data — a fixed step per level for times and percentages, or a
+  growth factor per level for values that scale with power.
+- **Cooldown.** Measured in milliseconds of *combat time*, from the start of
+  the fight — never the real clock, the network or the animation.
+  - Every skill is ready when the fight starts.
+  - Casting is instant and starts the cooldown at that moment.
+  - A skill is ready again exactly when the cooldown has elapsed: a 5-second
+    cooldown cast at 1.000 s is ready at 6.000 s, not at 5.999 s.
+  - A cooldown is at least 1 ms, so a skill can never be cast twice at the
+    same instant.
+- **Balance history.** Once skills affect combat, their numbers belong to a
+  rules version like all other balance: a rebalance never changes a fight
+  that already happened.
+
 ---
 
 # Passive Tree
@@ -838,7 +874,7 @@ New items use item-generation V1. COMMON has 0 affixes; MAGIC 1; RARE 2; EPIC 3;
 
 Only equipped items affect new online fights. Their immutable rolled affixes contribute Damage, Max Health, Attack Speed, Critical Chance, and Critical Damage through the canonical modifier resolver. Common and legacy items currently add no power. Attack Speed uses 10,000 basis points per attack/second; Critical Chance uses 0–10,000 bp; Critical Damage is a total multiplier where 15,000 is 150%. Offline claims remain level-only pending an aggregate snapshot design (ADR-029).
 
-## Character sheet and gear comparison — IN PROGRESS (Phase 6 PR 6.4, ADR-030)
+## Character sheet and gear comparison — IMPLEMENTED (Phase 6 PR 6.4, ADR-030)
 
 The Gear screen answers "what are my stats, and what would this item change?"
 with numbers the server resolves exactly as combat does. No rule changes: this
