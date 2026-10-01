@@ -448,7 +448,7 @@ Critical modifier
 
 produces a substantially different ability.
 
-## Active skill foundation — IN PROGRESS (Phase 7 PR 7.1, ADR-031)
+## Active skill foundation — IMPLEMENTED (Phase 7 PR 7.1, ADR-031)
 
 PR 7.1 defines how skills, levels and cooldowns work. It adds no playable
 skill: the hero has no skills yet and combat is unchanged.
@@ -483,6 +483,31 @@ skill: the hero has no skills yet and combat is unchanged.
 - **Balance history.** Once skills affect combat, their numbers belong to a
   rules version like all other balance: a rebalance never changes a fight
   that already happened.
+
+## Skill ownership and loadout — IN PROGRESS (Phase 7 PR 7.2, ADR-032)
+
+PR 7.2 stores which skills a hero has and how they are configured. Skills
+still do nothing in combat, and no player can acquire one yet.
+
+- **Owning a skill.** A hero owns a skill at a level from 1 upwards; a skill
+  it does not own simply is not there (there is no level 0). How skills are
+  acquired and levelled — and what that costs — is not designed yet, so the
+  game grants none: existing and new heroes start with **no skills and an
+  empty loadout**. Starter skills arrive with approved tuning (PR 7.4).
+- **The loadout.** Up to **four** owned skills can be equipped. Four is a
+  Phase 7 product decision: enough for a meaningful order, while keeping
+  unequipped skills relevant as more are added. An empty loadout is fine.
+- **Order is priority.** The first equipped skill is the first choice when
+  several are ready; the order of the skill list itself means nothing. From
+  PR 7.3 the combat simulation casts ready skills in this order; this is the
+  player's decision *before* a fight.
+- **Changing it.** The player sends the whole new loadout in order; the
+  server checks that every skill is real, owned and listed once, and saves
+  all of it or nothing. Sending the same loadout again changes nothing. The
+  player never sends a level, a priority number or any skill value.
+- **Levels belong to the skill**, not to the loadout slot: an equipped
+  skill always has the level the hero owns it at.
+
 
 ---
 

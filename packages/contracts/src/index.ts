@@ -160,3 +160,19 @@ export type {
   StatsPreviewQuery,
   StatsPreviewResponse,
 } from './character/character-stats.contract.js';
+
+export {
+  loadoutSkillSchema,
+  ownedSkillSchema,
+  setSkillLoadoutRequestSchema,
+  skillIdSchema,
+  skillLevelSchema,
+  skillStateResponseSchema,
+} from './skills/skill.contract.js';
+export type {
+  LoadoutSkillDto,
+  OwnedSkillDto,
+  SetSkillLoadoutRequest,
+  SkillIdDto,
+  SkillStateResponse,
+} from './skills/skill.contract.js';

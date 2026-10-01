@@ -29,6 +29,12 @@ export type GameCoreErrorCode =
   | 'SKILL_UNAVAILABLE'
   /** A cast was started before the skill's cooldown ended (ADR-031). */
   | 'SKILL_NOT_READY'
+  /** A skill loadout would exceed `SKILL_LOADOUT_MAX_SIZE` (ADR-032). */
+  | 'SKILL_LOADOUT_TOO_LARGE'
+  /** A skill is owned twice, or listed twice in one loadout (ADR-032). */
+  | 'DUPLICATE_SKILL'
+  /** A loadout names a known skill the character does not own (ADR-032). */
+  | 'SKILL_NOT_OWNED'
   | 'UNSUPPORTED_RULES_VERSION';
 
 export class GameCoreError extends Error {

@@ -66,6 +66,15 @@ import { ProvisionPlayerUseCase } from '../../src/player/application/provision-p
 import { SelectStageUseCase } from '../../src/player/application/select-stage.use-case.js';
 import { PlayerController } from '../../src/player/presentation/player.controller.js';
 import { StageSelectionController } from '../../src/player/presentation/stage-selection.controller.js';
+import {
+  SKILL_REPOSITORY,
+  type SkillRepository,
+} from '../../src/skills/application/ports/skill-repository.port.js';
+import {
+  GetSkillStateUseCase,
+  SetSkillLoadoutUseCase,
+} from '../../src/skills/application/skill.use-cases.js';
+import { SkillController } from '../../src/skills/presentation/skill.controller.js';
 import { TEST_AUDIENCE, TEST_ISSUER, type TestTokenIssuer } from './token-issuer.js';
 
 export interface TestAppOptions {
@@ -79,6 +88,8 @@ export interface TestAppOptions {
   readonly inventory?: InventoryRepository;
   /** Character stat and preview queries. The routes exist only when supplied. */
   readonly characterStats?: CharacterStatsRepository;
+  /** Skill state and loadout routes (ADR-032). The routes exist only when supplied. */
+  readonly skills?: SkillRepository;
   /** Defaults to {@link sequentialSeeds}, so combats are reproducible. */
   readonly seeds?: CombatSeedSource;
   /** Defaults to {@link sequentialSeeds} with an `offline` prefix. */
@@ -158,6 +169,17 @@ export async function createTestApp(options: TestAppOptions): Promise<INestAppli
             PreviewEquipmentChangeUseCase,
           ],
         };
+  const skills =
+    options.skills === undefined
+      ? { controllers: [], providers: [] }
+      : {
+          controllers: [SkillController],
+          providers: [
+            { provide: SKILL_REPOSITORY, useValue: options.skills },
+            GetSkillStateUseCase,
+            SetSkillLoadoutUseCase,
+          ],
+        };
   const moduleRef = await Test.createTestingModule({
     controllers: [
       PlayerController,
@@ -166,6 +188,7 @@ export async function createTestApp(options: TestAppOptions): Promise<INestAppli
       ...offline.controllers,
       ...inventory.controllers,
       ...characterStats.controllers,
+      ...skills.controllers,
     ],
     providers: [
       { provide: CLOCK, useValue: clock },
@@ -193,6 +216,7 @@ export async function createTestApp(options: TestAppOptions): Promise<INestAppli
       ...offline.providers,
       ...inventory.providers,
       ...characterStats.providers,
+      ...skills.providers,
     ],
   }).compile();
 

@@ -3,6 +3,13 @@ export { createSkillDefinition } from './skill-definition.js';
 export type { SkillDefinition, SkillDefinitionInput } from './skill-definition.js';
 export { SKILL_CATALOG, SkillCatalog } from './skill-catalog.js';
 export { SKILL_LEVEL_MAX, SkillLevel } from './skill-level.js';
+export {
+  SKILL_LOADOUT_MAX_SIZE,
+  createCharacterSkills,
+  replaceSkillLoadout,
+  sameSkillLoadout,
+} from './skill-loadout.js';
+export type { CharacterSkills, CharacterSkillsInput, OwnedSkill } from './skill-loadout.js';
 export type { HugeNumberLevelCurve, IntegerLevelCurve } from './level-curve.js';
 export {
   SKILL_PARAMETER_NAME_MAX_LENGTH,

@@ -4,8 +4,9 @@ Status: EARLY DESIGN — infrastructure IMPLEMENTED (Phase 0), identity tables
 IMPLEMENTED (Phase 2), progression and combat history IMPLEMENTED (Phase 3),
 offline progression IMPLEMENTED (Phase 4), items, equipment and drops
 IMPLEMENTED (Phase 5), item affixes and combat stat snapshots IMPLEMENTED
-(Phase 6 PRs 6.2–6.3), everything else PLANNED. Phase 6 PR 6.4 and Phase 7
-PR 7.1 add no schema.
+(Phase 6 PRs 6.2–6.3), skill ownership and loadout IN PROGRESS (Phase 7 PR
+7.2), everything else PLANNED. Phase 6 PR 6.4 and Phase 7 PR 7.1 add no
+schema.
 
 Tables are created by the phase that requires them, so the repository carries no
 speculative schema. Phase 2 added `profiles` and `characters` (ADR-017). Phase 3
@@ -253,17 +254,52 @@ Represents sockets/runes.
 
 # Skills
 
-Status: PLANNED. Phase 7 PR 7.1 adds no schema (ADR-031): skill identities,
-levels and cooldowns are pure Game Core. Ownership, levels and the loadout
-arrive with PR 7.2. A persisted skill is its stable `SkillDefinitionId`
-string and a `SkillLevel` integer (1 … 2^31 − 1, an `integer` column);
-definitions and their tuning are static Game Core content, as item
-definitions are. Cooldowns are per-combat state and are never persisted as
-timestamps.
+Status: `character_skills` and `character_skill_loadout` IN PROGRESS (Phase 7
+PR 7.2, migration `20261001120000_skill_ownership_loadout`, ADR-032).
+Passive nodes PLANNED. Phase 7 PR 7.1 added no schema (ADR-031).
 
-skill_definitions
+A persisted skill is its stable `SkillDefinitionId` string and a `SkillLevel`
+integer (1 … 2^31 − 1). Definitions and their tuning are static Game Core
+content, as item definitions are: there is **no `skill_definitions` table**.
+Cooldowns, resolved values and skill power are derived or per-combat and are
+never persisted.
 
-character_skills
+character_skills — one row per owned skill; no row means not owned
+
+| Column                | Type             | Rules                                                     |
+| --------------------- | ---------------- | --------------------------------------------------------- |
+| `character_id`        | `uuid`           | PK part; FK → `characters` ON DELETE CASCADE              |
+| `skill_definition_id` | `varchar(64)`    | PK part; CHECK canonical key format (as `item_instances`) |
+| `level`               | `integer`        | CHECK ≥ 1; the type bounds it at 2^31 − 1                  |
+| `created_at`          | `timestamptz(3)` | default `now()`                                           |
+
+character_skill_loadout — the ordered active loadout
+
+| Column                | Type          | Rules                                                                 |
+| --------------------- | ------------- | --------------------------------------------------------------------- |
+| `character_id`        | `uuid`        | PK part; FK → `characters` ON DELETE CASCADE                          |
+| `position`            | `smallint`    | PK part; CHECK ≥ 0; 0 is the highest cast priority                    |
+| `skill_definition_id` | `varchar(64)` | UNIQUE with `character_id`; composite FK → `character_skills` (NO ACTION) |
+
+- The composite FK `(character_id, skill_definition_id) → character_skills`
+  makes PostgreSQL refuse an unowned skill, including another character's.
+  It is NO ACTION (checked at the end of the statement): an equipped skill's
+  ownership row cannot be deleted, while deleting the character cascades
+  through both tables.
+- The maximum loadout size is Game Core's `SKILL_LOADOUT_MAX_SIZE` (4) and is
+  deliberately not repeated as a CHECK. Positions are always `0 … n − 1`
+  because the application only writes a whole loadout: one transaction that
+  advances `characters.version` (conditional on the read version), deletes
+  every row and inserts the new ones.
+- Every ownership or level write advances `characters.version` too; there is
+  no skill-specific version.
+- The read is one owner-scoped query in a `REPEATABLE READ` transaction, so
+  `characterVersion` names exactly the skills returned. The primary keys serve
+  it; no index was added.
+- Backfill: none. Existing characters have zero owned skills and an empty
+  loadout; provisioning grants nothing.
+- RLS enabled on both tables with no policies; `anon` and `authenticated`
+  revoked when those roles exist.
 
 passive_nodes
 
@@ -504,6 +540,13 @@ Implemented example (Phase 4 PR 4.1, ADR-021): stage selection uses the same
 combat simulated before a selection cannot commit after it, and a selection
 that loses to a combat re-validates against the fresh row. An integration
 test races selections, climbs and combats across two API instances.
+
+Implemented example (Phase 7 PR 7.2, ADR-032): a skill loadout replacement
+starts with the same version-conditional `UPDATE`, which also takes the
+character's row lock, then deletes and re-inserts the whole loadout in the
+same transaction. Two concurrent replacements never interleave: the final
+loadout is exactly one request's, which integration tests prove for two
+repository instances and for 24 concurrent `PUT`s.
 
 Example:
 

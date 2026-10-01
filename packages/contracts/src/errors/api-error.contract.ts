@@ -35,6 +35,12 @@ export const API_ERROR_CODES = [
    */
   'CONCURRENT_UPDATE',
   /**
+   * A requested loadout names a skill the character does not own (ADR-032).
+   * Nothing was written; the owned skills are listed by
+   * `GET /player/characters/:characterId/skills`.
+   */
+  'SKILL_NOT_OWNED',
+  /**
    * The API cannot verify credentials right now (e.g. the signing-key endpoint
    * is unreachable). Retry later; this does not mean the session is invalid.
    */

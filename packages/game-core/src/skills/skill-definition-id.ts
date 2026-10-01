@@ -18,9 +18,17 @@ export class SkillDefinitionId {
     Object.freeze(this);
   }
 
+  /**
+   * Whether `value` is a canonical key, without throwing. The wire schema
+   * delegates to this so the format exists once (ADR-032).
+   */
+  public static isCanonical(value: string): boolean {
+    return value.length <= SKILL_DEFINITION_ID_MAX_LENGTH && DEFINITION_ID_PATTERN.test(value);
+  }
+
   /** @throws {GameCoreError} `INVALID_FORMAT` unless the value is a canonical key. */
   public static parse(value: string): SkillDefinitionId {
-    if (value.length > SKILL_DEFINITION_ID_MAX_LENGTH || !DEFINITION_ID_PATTERN.test(value)) {
+    if (!SkillDefinitionId.isCanonical(value)) {
       throw new GameCoreError(
         'INVALID_FORMAT',
         'Skill definition ID must be 1–64 lowercase letters, digits or single underscores, starting with a letter.',

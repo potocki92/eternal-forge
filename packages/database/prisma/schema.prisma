@@ -96,6 +96,8 @@ model Character {
   offlineRuns         OfflineRun[]
   itemInstances       ItemInstance[]
   equipment           CharacterEquipment[]
+  skills              CharacterSkill[]
+  skillLoadout        CharacterSkillLoadoutEntry[]
 
   @@unique([profileId, slot], map: "characters_profile_id_slot_key")
   @@map("characters")
@@ -148,6 +150,48 @@ model CharacterEquipment {
   @@id([characterId, slot])
   @@unique([itemInstanceId, characterId], map: "character_equipment_item_character_key")
   @@map("character_equipment")
+}
+
+// One active skill a character owns, at its level (ADR-032).
+//
+// Source state only: the stable Game Core `SkillDefinitionId` and the
+// `SkillLevel`. Definitions and tuning are static Game Core content and have
+// no table; a resolved skill, cooldown or parameter is never stored. An
+// unowned skill has no row — there is no level 0. The migration constrains
+// the ID format and `level >= 1`; the `integer` type bounds it at 2^31 − 1,
+// `SKILL_LEVEL_MAX`.
+model CharacterSkill {
+  characterId       String                      @map("character_id") @db.Uuid
+  skillDefinitionId String                      @map("skill_definition_id") @db.VarChar(64)
+  level             Int
+  /// When the character first acquired the skill (server clock).
+  createdAt         DateTime                    @default(now()) @map("created_at") @db.Timestamptz(3)
+  character         Character                   @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  loadoutEntry      CharacterSkillLoadoutEntry?
+
+  @@id([characterId, skillDefinitionId])
+  @@map("character_skills")
+}
+
+// The ordered active-skill loadout (ADR-032): `position` 0 is the highest
+// cast priority. Replaced as a whole inside one version-conditional
+// transaction, so positions are always 0 … n − 1 with no hole.
+//
+// The composite foreign key to `character_skills` makes PostgreSQL itself
+// refuse an unowned skill. It is NO ACTION, so an equipped skill cannot lose
+// its ownership row while deleting the character still cascades through both
+// tables in one statement. The maximum size is a Game Core rule
+// (`SKILL_LOADOUT_MAX_SIZE`) and is not repeated here.
+model CharacterSkillLoadoutEntry {
+  characterId       String         @map("character_id") @db.Uuid
+  position          Int            @db.SmallInt
+  skillDefinitionId String         @map("skill_definition_id") @db.VarChar(64)
+  character         Character      @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  skill             CharacterSkill @relation(fields: [characterId, skillDefinitionId], references: [characterId, skillDefinitionId], onDelete: NoAction, onUpdate: NoAction, map: "character_skill_loadout_owned_skill_fkey")
+
+  @@id([characterId, position])
+  @@unique([characterId, skillDefinitionId], map: "character_skill_loadout_character_skill_key")
+  @@map("character_skill_loadout")
 }
 
 // What a victory does to the current stage (ADR-021). PROGRESS climbs on to

@@ -1,6 +1,6 @@
 # Eternal Forge — Security Model
 
-Status: PARTIALLY IMPLEMENTED (Phases 0–6; Phase 7 PR 7.1 in progress) / EVOLVING
+Status: PARTIALLY IMPLEMENTED (Phases 0–6, Phase 7 PR 7.1; PR 7.2 in progress) / EVOLVING
 
 The principles below are binding from the first line of gameplay code. A
 per-control implementation status is listed at the end of this document.
@@ -744,7 +744,7 @@ no reward exists to duplicate; foreign resources are 404; numeric values are
 canonical HugeNumber strings and integer basis points, validated by the shared
 contract; there is no partial state to leave.
 
-## Active skill domain — IN PROGRESS (Phase 7 PR 7.1, ADR-031)
+## Active skill domain — IMPLEMENTED (Phase 7 PR 7.1, ADR-031)
 
 PR 7.1 adds pure Game Core code only: no endpoint, contract, table or UI, so
 it opens no attack surface. It fixes the authority model the later Phase 7
@@ -764,3 +764,45 @@ PRs must keep:
 - **Invalid values are refused, not repaired.** Unknown identities, levels
   outside 1 … 2^31 − 1, non-integer or negative times, zero cooldowns and
   curves that leave their range all throw typed `GameCoreError`s.
+
+## Skill ownership and loadout — IN PROGRESS (Phase 7 PR 7.2, ADR-032)
+
+`GET /player/characters/:characterId/skills` and
+`PUT /player/characters/:characterId/skills/loadout`, behind the global
+guard.
+
+- **The client sends configuration, never values.** The loadout body is a
+  strict shared schema: `{ "skillIds": [...] }`, canonical IDs only, at most
+  `SKILL_LOADOUT_MAX_SIZE`, no duplicates. A level, priority number,
+  position, cooldown, ownership claim or any other field is a 400. The server
+  derives positions from the order and levels from persisted ownership.
+- **Ownership is checked three times.** Game Core refuses an unknown (400) or
+  unowned (409 `SKILL_NOT_OWNED`) skill before anything is written; the
+  composite foreign key to `character_skills` refuses an unowned skill in
+  PostgreSQL even if application code were bypassed; and every read validates
+  the persisted state again through Game Core.
+- **Character ownership in SQL.** The read and the conditional write filter
+  on the character id *and* the verified `auth_user_id`; another player's
+  character is `404 NOT_FOUND`, indistinguishable from a missing one.
+- **No public grant or level-up.** No route acquires, removes or levels a
+  skill (tests assert those paths do not exist). The only ownership write is
+  a trusted repository method with no HTTP caller. A free level-up endpoint
+  would be an economy hole; acquisition and its cost need a design first.
+- **Atomic and concurrent-safe.** A replacement is one transaction behind a
+  version-conditional `UPDATE`: never half-written, never interleaved with
+  another replacement, a combat or an equip. No process-local lock; it holds
+  across API replicas.
+- **Corrupt state fails closed.** A persisted unknown skill, duplicate or
+  position hole is a logged 500 with a generic body; it is never repaired,
+  dropped or echoed.
+- **RLS** enabled on `character_skills` and `character_skill_loadout` with no
+  policies; `anon` and `authenticated` revoked on Supabase. Verified by an
+  integration test querying as a non-owner role.
+
+Standing review answers: the client cannot fake a level or ownership (none is
+accepted); replaying the command sets the same state and writes nothing the
+second time; concurrent commands produce exactly one complete loadout; there
+is no reward to duplicate; foreign characters are 404; numeric values are not
+accepted at all (levels come from the database, positions from array order);
+and the operation commits whole or not at all.
+

@@ -9,6 +9,7 @@ import { HealthModule } from './health/health.module.js';
 import { InventoryModule } from './inventory/inventory.module.js';
 import { OfflineModule } from './offline/offline.module.js';
 import { PlayerModule } from './player/player.module.js';
+import { SkillsModule } from './skills/skills.module.js';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { PlayerModule } from './player/player.module.js';
     OfflineModule,
     InventoryModule,
     CharacterStatsModule,
+    SkillsModule,
   ],
 })
 export class AppModule implements NestModule {

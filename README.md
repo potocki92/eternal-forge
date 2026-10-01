@@ -4,8 +4,9 @@ A browser-first idle action RPG built for deep character progression,
 theorycrafting, competitive rankings and effectively unlimited growth.
 
 **Current phase: Phase 7 — Active Skills.** Phase 6 — Item Power & Character
-Stats is complete. **PR 7.1 — Skill Domain & Cooldown Foundation is in
-progress**: a pure Game Core foundation with no player-visible change yet. See
+Stats is complete. PR 7.1 — Skill Domain & Cooldown Foundation is merged.
+**PR 7.2 — Skill Ownership, Levels & Loadout Persistence is in progress**:
+server state and API only, with no player-visible change yet. See
 [`docs/ROADMAP.md`](docs/ROADMAP.md) for the authoritative state of every phase.
 
 What a signed-in player can do today:
@@ -30,9 +31,12 @@ What a signed-in player can do today:
   any item against the one it would replace. The server computes every number
   (ADR-030).
 
-Active skills are not playable yet. PR 7.1 adds only their Game Core domain —
-skill identities, levels and deterministic combat-time cooldowns (ADR-031);
-ownership, combat integration and the Skills screen follow in PRs 7.2–7.4.
+Active skills are not playable yet. PR 7.1 added their Game Core domain —
+skill identities, levels and deterministic combat-time cooldowns (ADR-031).
+PR 7.2 persists which skills a character owns, at what level, and an ordered
+loadout of up to four, readable and configurable through the API (ADR-032);
+no skill can be acquired by a player yet and skills do not affect combat.
+Combat integration and the Skills screen follow in PRs 7.3–7.4.
 
 ---
 

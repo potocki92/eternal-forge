@@ -2,7 +2,8 @@
 
 ## Status
 
-Proposed — 2026-10-01 (Phase 7, PR 7.1).
+Accepted — 2026-10-01 (Phase 7, PR 7.1, merged as PR #24). PR 7.2 builds on it
+in ADR-032.
 
 ## Date
 

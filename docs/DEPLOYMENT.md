@@ -225,3 +225,15 @@ Supabase DEV** after merging, confirm no drift, then deploy the API.
 
 PR 6.4 (character stats and equipment preview) has **no migration**. It is an
 API and web deployment only and reads the schema PR 6.3 left.
+
+## Phase 7 migration ordering
+
+PR 7.1 (skill domain) had **no migration**.
+
+**PR 7.2 — AFTER MERGE: RUN "Deploy Supabase DEV" BEFORE DEPLOYING THE API.**
+Wait for migration `20261001120000_skill_ownership_loadout` and the drift
+check to succeed first. The migration is additive (two new tables, no change
+to existing rows) and portable to plain PostgreSQL 16; the previous API
+version keeps working against the migrated schema. The new API version fails
+only on the skill routes without it.
+

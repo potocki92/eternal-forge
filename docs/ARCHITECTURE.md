@@ -1,6 +1,6 @@
 # Eternal Forge — Software Architecture
 
-Status: PARTIALLY IMPLEMENTED (Phases 0–6; Phase 7 PR 7.1 in progress) / EVOLVING
+Status: PARTIALLY IMPLEMENTED (Phases 0–6, Phase 7 PR 7.1; PR 7.2 in progress) / EVOLVING
 
 The architectural style, boundaries and package layout described here are
 IMPLEMENTED as of Phase 0. The headless Game Core simulation (HugeNumber, RNG,
@@ -21,8 +21,10 @@ pipeline (PR 6.1, ADR-027), immutable item affixes (PR 6.2, ADR-028) and
 equipment-powered online combat with stat snapshots (PR 6.3, ADR-029) and
 server-authoritative character stat and equipment-preview queries with their
 UI (PR 6.4, ADR-030), all IMPLEMENTED. The pure active-skill domain — skill
-identities, levels and deterministic combat-time cooldowns — is IN PROGRESS in
-Phase 7 PR 7.1 (ADR-031); skills do not affect combat yet. Domain events, CQRS
+identities, levels and deterministic combat-time cooldowns — is IMPLEMENTED in
+Phase 7 PR 7.1 (ADR-031). Persistence of skill ownership, levels and the
+ordered loadout, with its authenticated API, is IN PROGRESS in PR 7.2
+(ADR-032); skills do not affect combat yet. Domain events, CQRS
 infrastructure and leaderboards are PLANNED.
 
 See the "Phase N implementation status" sections at the end of this document
@@ -139,6 +141,9 @@ Status: IMPLEMENTED (Phase 1) — see "Phase 1 implementation status".
 Allowed consumers of the pure `HugeNumber` value type (ADR-013): `packages/contracts`
 for the wire schema, and `apps/web` for parsing, comparison and formatting input
 only. Neither may use Game Core to decide a gameplay outcome (ADR-003).
+Since Phase 7 PR 7.2, `packages/contracts` may also read
+`SkillDefinitionId.isCanonical` and `SKILL_LOADOUT_MAX_SIZE` for the skill wire
+schemas (ADR-032); `apps/web` still imports only `HugeNumber`.
 
 ---
 
@@ -168,7 +173,9 @@ contract (`StageSelectionRequest`, `StageSelectionResponse`); PR 4.3 the
 offline-progress contract. Phase 5 added the inventory and equipment
 contracts and the combat item reward; Phase 6 PR 6.2 the item affixes. PR 6.4
 adds the character stat contracts (`CharacterStatsResponse`,
-`StatsPreviewQuery`, `StatsPreviewResponse`).
+`StatsPreviewQuery`, `StatsPreviewResponse`). Phase 7 PR 7.2 adds the skill
+contracts (`SkillStateResponse`, `SetSkillLoadoutRequest`), which delegate the
+skill identity format and the loadout size to Game Core (ADR-032).
 
 ---
 
@@ -1231,7 +1238,7 @@ the read before each of its statements in turn while an equip commits.
 
 # Phase 7 PR 7.1 implementation status — active skill domain foundation
 
-Status: IN PROGRESS — pull request open. Decision: ADR-031 (proposed).
+Status: IMPLEMENTED — merged as PR #24. Decision: ADR-031 (accepted).
 DATABASE MIGRATION: NO. No endpoint, contract, persistence or UI. Skills are
 not part of any executable rule set: `GAME_RULES_VERSION` stays 3 and combat
 output is byte-identical.
@@ -1301,3 +1308,84 @@ packages/game-core/src/skills/
 - Replay requirement for PR 7.3: a skill-enabled combat records its rules
   version and a snapshot of the loadout (priority, identities, levels), so
   replay never reads current skills, current balance or a clock.
+
+# Phase 7 PR 7.2 implementation status — skill ownership, levels and loadout
+
+Status: IN PROGRESS — pull request open. Decision: ADR-032 (proposed).
+DATABASE MIGRATION: YES (`20261001120000_skill_ownership_loadout`). Skills
+still do not affect combat: `GAME_RULES_VERSION` stays 3 and combat output is
+unchanged.
+
+## Request flow
+
+```
+Browser
+  │  GET /player/characters/:id/skills
+  │  PUT /player/characters/:id/skills/loadout   { "skillIds": ["execute", "fireball"] }
+  │  Authorization: Bearer <token>        (strict body: ordered IDs only)
+  v
+apps/api
+  AuthGuard ── verified identity (ADR-016)
+  SkillController (thin: UUID path, shared Zod contract, map result)
+  GetSkillStateUseCase / SetSkillLoadoutUseCase
+    1. SkillRepository.loadSkillState(authUserId, characterId)
+         one owner-scoped REPEATABLE READ snapshot: version, owned skills,
+         loadout ordered by position → Game Core createCharacterSkills
+         (corrupt persisted state throws; never repaired)
+    2. Game Core replaceSkillLoadout(state, requested)
+         size ≤ SKILL_LOADOUT_MAX_SIZE, no duplicate, known, owned
+    3. same loadout, same order → no write, version unchanged
+    4. replaceLoadout — one transaction:
+         UPDATE characters SET version + 1 WHERE id AND version AND owner
+         DELETE character_skill_loadout WHERE character_id
+         INSERT positions 0 … n − 1
+       conflict → re-read and re-validate (≤ 3) → 409 CONCURRENT_UPDATE
+  PrismaSkillRepository ──> PostgreSQL (character_skills,
+                            character_skill_loadout; composite owner FK; RLS)
+  │
+  │  200 SkillStateResponse { characterVersion, maxLoadoutSize, owned, loadout }
+  v
+Browser (no UI yet — PR 7.4)
+```
+
+## Model
+
+```
+character_skills (character_id, skill_definition_id) → level ≥ 1     source state
+        ▲ composite FK (NO ACTION): only an owned skill can be equipped
+character_skill_loadout (character_id, position ≥ 0) → skill          priority order
+        │
+        v  Game Core
+CharacterSkills { owned: catalog order, loadout: priority order }    validated, frozen
+        ┆
+        ┆  PR 7.3: read at the same character version as equipment,
+        ┆  snapshotted per combat, consumed by selectSkillActivation
+```
+
+Every skill write — loadout, ownership, level — advances
+`characters.version`, the token combat, offline claims, stage selection and
+equipment share. Ownership and levels have no public write: the only path is
+the trusted `SkillRepository.saveTrustedSkill` (and test fixtures), because
+acquisition and levelling are not designed yet.
+
+## Module layout
+
+```
+packages/game-core/src/skills/skill-loadout.ts
+    SKILL_LOADOUT_MAX_SIZE, OwnedSkill, CharacterSkills,
+    createCharacterSkills, replaceSkillLoadout, sameSkillLoadout
+packages/contracts/src/skills/skill.contract.ts
+apps/api/src/skills/
+  domain/            SkillState
+  application/       GetSkillStateUseCase, SetSkillLoadoutUseCase,
+                     SkillRepository port
+  infrastructure/    PrismaSkillRepository
+  presentation/      SkillController, mapper
+```
+
+## NOT IMPLEMENTED
+
+Skill acquisition and levelling for players (and their costs), starter
+skills, the combat runtime and per-combat skill snapshots (PR 7.3), the Skills
+screen (PR 7.4).
+

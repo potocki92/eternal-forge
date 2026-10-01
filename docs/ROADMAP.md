@@ -9,8 +9,10 @@ PHASE 7 — ACTIVE SKILLS
 Status:
 
 IN PROGRESS — the user approved Phase 6 and started Phase 7 on 2026-10-01
-with the PR 7.1 task. PR 7.1 "Skill Domain & Cooldown Foundation" is IN
-PROGRESS (ADR-031, proposed). PRs 7.2–7.4 are NOT STARTED.
+with the PR 7.1 task. PR 7.1 "Skill Domain & Cooldown Foundation" is MERGED
+(PR #24, ADR-031 accepted). PR 7.2 "Skill Ownership, Levels & Loadout
+Persistence" is IN PROGRESS (ADR-032, proposed). PRs 7.3–7.4 are NOT
+STARTED.
 
 Phase 6 is COMPLETE / APPROVED: PRs 6.1–6.4 are merged (PRs #19–#23, ADR-027
 to ADR-030, all accepted) and GitHub Actions is green on `main` (run #67 on
@@ -1011,7 +1013,7 @@ stats and remain deferred. Content must remain data-driven.
 
 # Phase 7 — Active Skills
 
-Status: IN PROGRESS — PR 7.1 in progress; PRs 7.2–7.4 not started.
+Status: IN PROGRESS — PR 7.1 merged; PR 7.2 in progress; PRs 7.3–7.4 not started.
 
 Initial candidate skills:
 
@@ -1029,8 +1031,8 @@ user's approval before the next begins.
 
 | PR  | Scope                                         | Status      |
 | --- | --------------------------------------------- | ----------- |
-| 7.1 | Skill Domain & Cooldown Foundation            | IN PROGRESS |
-| 7.2 | Skill Ownership, Levels & Loadout Persistence | NOT STARTED |
+| 7.1 | Skill Domain & Cooldown Foundation            | MERGED      |
+| 7.2 | Skill Ownership, Levels & Loadout Persistence | IN PROGRESS |
 | 7.3 | Deterministic Skill Combat Runtime            | NOT STARTED |
 | 7.4 | Initial Active Skills & Player UI             | NOT STARTED |
 
@@ -1043,10 +1045,9 @@ separate design and is never faked in the client.
 
 ## PR 7.1 — Skill Domain & Cooldown Foundation
 
-Status: IN PROGRESS — pull request open, awaiting review. Decision: ADR-031
-(proposed). DATABASE MIGRATION: NO. PUBLIC SKILL API: NO. SKILL PERSISTENCE:
-NOT YET. PRODUCTION COMBAT SKILLS: NOT ENABLED. `GAME_RULES_VERSION` stays 3;
-combat output is unchanged.
+Status: MERGED — PR #24; GitHub Actions green on `main` (run #70 on `9b38c54`). Decision: ADR-031 (accepted).
+DATABASE MIGRATION: NO. PUBLIC SKILL API: NO. PRODUCTION COMBAT SKILLS: NOT
+ENABLED. `GAME_RULES_VERSION` stays 3; combat output is unchanged.
 
 Scope: a pure Game Core foundation in `packages/game-core/src/skills`. No
 persistence, endpoint, contract, combat integration or UI.
@@ -1078,8 +1079,8 @@ persistence, endpoint, contract, combat integration or UI.
       order; V1/V2/V3 combat goldens unchanged
 - [x] documentation — ADR-031, README, ARCHITECTURE, GAME_DESIGN, DATABASE,
       SECURITY
-- [ ] GitHub Actions green on the pull request
-- [ ] user review and approval
+- [x] GitHub Actions green on the pull request
+- [x] user review and approval — merged as PR #24; PR 7.2 started 2026-10-01
 
 Validation (2026-10-01, local, PostgreSQL 16 and Redis 7):
 
@@ -1108,6 +1109,76 @@ skills.
 
 Deferred to PR 7.4: approved tuning of the first skills, the Skills screen and
 loadout editor, cast presentation in combat playback.
+
+## PR 7.2 — Skill Ownership, Levels & Loadout Persistence
+
+Status: IN PROGRESS — pull request open, awaiting review. Decision: ADR-032
+(proposed). DATABASE MIGRATION: YES (`20261001120000_skill_ownership_loadout`,
+additive). PUBLIC SKILL API: read + loadout command only. PRODUCTION COMBAT
+SKILLS: NOT ENABLED. `GAME_RULES_VERSION` stays 3; combat output is unchanged.
+
+**AFTER MERGE: run the GitHub Action "Deploy Supabase DEV"** before deploying
+the API (docs/DEPLOYMENT.md).
+
+Scope: authoritative skill source state — owned skills, levels and an ordered
+loadout — persisted, readable and configurable. No acquisition economy, no
+public grant or level-up, no starter skills, no combat effect, no UI.
+
+- [x] preflight — PR #24 merged, CI green on `main` (run #70); baseline
+      verify and integration suites green
+- [x] product decision — `SKILL_LOADOUT_MAX_SIZE = 4`, one Game Core constant
+      (ADR-032); loadout order is cast priority, catalog order is not
+- [x] Game Core — `OwnedSkill`, `CharacterSkills`, `createCharacterSkills`
+      (catalog order for owned, priority order for the loadout, deterministic
+      error order), `replaceSkillLoadout`, `sameSkillLoadout`,
+      `SkillDefinitionId.isCanonical`; error codes `SKILL_LOADOUT_TOO_LARGE`,
+      `DUPLICATE_SKILL`, `SKILL_NOT_OWNED`
+- [x] persistence — `character_skills` (PK character + skill, level ≥ 1, ID
+      format CHECK) and `character_skill_loadout` (PK character + position,
+      unique skill, composite NO ACTION FK to ownership); no
+      `skill_definitions` table; RLS and conditional revokes; no backfill
+- [x] repository — one `REPEATABLE READ` owner-scoped read validated through
+      Game Core (corrupt state throws); whole-loadout replacement behind a
+      version-conditional `UPDATE`; trusted grant/level path that advances the
+      version, with no HTTP caller
+- [x] use cases — `GetSkillStateUseCase`; `SetSkillLoadoutUseCase` (set
+      semantics, no-op without a version change, bounded re-validation on
+      conflict)
+- [x] API — `GET /player/characters/:characterId/skills`,
+      `PUT /player/characters/:characterId/skills/loadout`; 400
+      `VALIDATION_FAILED`, 409 `SKILL_NOT_OWNED` (new code), 404, 409
+      `CONCURRENT_UPDATE`
+- [x] contracts — `skillStateResponseSchema`, `setSkillLoadoutRequestSchema`
+      (strict; delegate format and size to Game Core)
+- [x] tests — Game Core, contracts, use cases, HTTP (auth, ownership,
+      tampering, no public grant/level routes), PostgreSQL (persistence,
+      constraints, cascade, concurrent replacements, 24 concurrent PUTs,
+      stale-version conflict after a combat, rollback, statement-gated
+      snapshot read, RLS, combat unchanged with a full loadout)
+- [x] documentation — ADR-032, ADR-031 accepted, README, ARCHITECTURE,
+      GAME_DESIGN, DATABASE, SECURITY, DEPLOYMENT
+- [ ] GitHub Actions green on the pull request
+- [ ] user review and approval
+
+Validation (2026-10-01, local, PostgreSQL 16 and Redis 7):
+
+- `pnpm run verify` (format check, lint, typecheck, unit tests, production
+  build): pass.
+- Unit tests: 1 586 pass (PR 7.1: 1 505) — `game-core` 759 (+19),
+  `contracts` 184 (+12), `api` 317 (+50); other packages unchanged. Combat
+  goldens, item-drop v2 and item-generation v1 vectors pass unmodified.
+- PostgreSQL integration: 162 pass (was 141). The snapshot-read test fails
+  when the read is switched to `READ COMMITTED`.
+- Playwright: 75 pass, 1 skipped (the phone-only test on the desktop
+  project), mobile 390×844 and desktop — unchanged; no web change.
+- Prisma schema valid; migration applied; `prisma migrate diff --exit-code`:
+  no drift.
+
+Deferred to PR 7.3: reading skills at the combat's character version and the
+per-combat skill snapshot, the scheduler, `RULES_V4`, offline treatment.
+
+Deferred to PR 7.4: approved tuning, starter skills, acquisition and
+levelling with their costs, the Skills screen and loadout editor.
 
 ---
 
